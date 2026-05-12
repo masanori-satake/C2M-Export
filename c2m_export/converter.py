@@ -28,7 +28,8 @@ class MarkdownConverter:
 
         # Headings
         if re.match(r'h[1-6]', name):
-            h_level = int(name[1]) + level - 1
+            # Limit heading level to 6
+            h_level = min(6, int(name[1]) + level - 1)
             return f"\n{'#' * h_level} {self._walk(tag, level)}\n"
 
         if name == 'p':
@@ -117,11 +118,16 @@ class MarkdownConverter:
     def _handle_structured_macro(self, tag: Tag) -> str:
         macro_name = tag.get('ac:name')
         if macro_name == 'code':
+            # Extract language parameter
+            lang = ""
+            lang_param = tag.find('ac:parameter', attrs={'ac:name': 'language'})
+            if lang_param:
+                lang = lang_param.get_text().strip()
+
             plain_text_body = tag.find('ac:plain-text-body')
             if plain_text_body:
-                # Use CDATA if present
                 content = plain_text_body.get_text()
-                return f"\n```\n{content}\n```\n"
+                return f"\n```{lang}\n{content}\n```\n"
         elif macro_name == 'plantuml':
             plain_text_body = tag.find('ac:plain-text-body')
             if plain_text_body:

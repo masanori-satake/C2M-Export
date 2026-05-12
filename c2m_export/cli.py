@@ -8,12 +8,6 @@ from .confluence import ConfluenceClient
 from .converter import MarkdownConverter
 from .utils import get_unique_filename, bytes_to_mb, is_within_size_limit
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s [%(levelname)s] %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S'
-)
 logger = logging.getLogger(__name__)
 
 def export_tree(client: ConfluenceClient, converter: MarkdownConverter, root_page_id: str, stop_threshold_mb: float):
@@ -23,7 +17,7 @@ def export_tree(client: ConfluenceClient, converter: MarkdownConverter, root_pag
     page_count = 0
 
     while pages_to_process:
-        page_id, level = pages_to_process.pop(0)
+        page_id, level = pages_to_process.pop()
 
         try:
             logger.info(f"Fetching page {page_id} (Level {level})...")
@@ -51,13 +45,11 @@ def export_tree(client: ConfluenceClient, converter: MarkdownConverter, root_pag
             total_bytes += md_bytes
             page_count += 1
 
-            # Get children and add to the front of pages_to_process for DFS-like (Parent -> Child)
-            # Actually, to maintain parent-child order in the file, we should process parent, then its children.
-            # Using a list and inserting at the front works for DFS.
+            # Get children and add to pages_to_process.
+            # To maintain original order (DFS), we reverse children and use append/pop.
             children = client.get_child_pages(page_id)
-            # Reverse children to maintain original order when popping from front
             for child in reversed(children):
-                pages_to_process.insert(0, (child['id'], level + 1))
+                pages_to_process.append((child['id'], level + 1))
 
             logger.info(f"Processed '{title}'. Current size: {bytes_to_mb(total_bytes):.2f}MB, Pages: {page_count}")
 
@@ -70,6 +62,12 @@ def export_tree(client: ConfluenceClient, converter: MarkdownConverter, root_pag
     return "".join(processed_md), total_bytes, page_count
 
 def main():
+    # Configure logging inside main to avoid global configuration
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s [%(levelname)s] %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
+    )
     config = Config()
     try:
         config.load()

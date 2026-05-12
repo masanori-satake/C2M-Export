@@ -29,3 +29,23 @@ def test_convert_macros():
     md_puml = converter.convert(html_puml)
     assert "```plantuml" in md_puml
     assert "alice -> bob" in md_puml
+
+def test_heading_limit():
+    converter = MarkdownConverter("https://example.com/wiki")
+    # level 2 means h1 becomes ##, h6 becomes ######## (which should be limited to ######)
+    html = "<h6>Deep Header</h6>"
+    md = converter.convert(html, level=2)
+    assert "###### Deep Header" in md
+    assert "########" not in md
+
+def test_code_macro_language():
+    converter = MarkdownConverter("https://example.com/wiki")
+    html = '''
+    <ac:structured-macro ac:name="code">
+        <ac:parameter ac:name="language">python</ac:parameter>
+        <ac:plain-text-body><![CDATA[print("hi")]]></ac:plain-text-body>
+    </ac:structured-macro>
+    '''
+    md = converter.convert(html)
+    assert "```python" in md
+    assert 'print("hi")' in md

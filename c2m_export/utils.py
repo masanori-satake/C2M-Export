@@ -30,8 +30,11 @@ def get_unique_filename(directory: str, space_key: str, title: str, page_id: str
     【<spaceKey>】 <トップページタイトル>.md
     If exists, append (<pageId>)
     """
+    # Handle None space_key
+    display_space_key = space_key if space_key else "UNKNOWN"
+
     safe_title = sanitize_filename(title)
-    base_name = f"【{space_key}】 {safe_title}"
+    base_name = f"【{display_space_key}】 {safe_title}"
     filename = f"{base_name}.md"
     filepath = Path(directory) / filename
 
