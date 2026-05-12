@@ -17,7 +17,7 @@ def test_convert_expand_macro():
 
 def test_convert_admonition_macros():
     converter = MarkdownConverter("https://example.com/wiki")
-    for name in ["note", "info", "tip"]:
+    for name in ["note", "info", "tip", "warning"]:
         html = f'''
         <ac:structured-macro ac:name="{name}">
             <ac:rich-text-body>
@@ -65,7 +65,7 @@ def test_convert_status_macro():
     </ac:structured-macro>
     '''
     md = converter.convert(html)
-    assert "IN PROGRESS" in md
+    assert "【ステータス: IN PROGRESS】" in md
 
 def test_convert_jira_macro():
     converter = MarkdownConverter("https://example.com/wiki")
@@ -76,7 +76,7 @@ def test_convert_jira_macro():
     </ac:structured-macro>
     '''
     md_single = converter.convert(html_single)
-    assert "PROJ-123" in md_single
+    assert "【JIRA課題: PROJ-123】" in md_single
 
     # JQL Query
     html_jql = '''
@@ -85,7 +85,7 @@ def test_convert_jira_macro():
     </ac:structured-macro>
     '''
     md_jql = converter.convert(html_jql)
-    assert "project = PROJ" in md_jql
+    assert "【JIRAクエリ: project = PROJ】" in md_jql
 
 def test_convert_plantumlrender_macro():
     converter = MarkdownConverter("https://example.com/wiki")
@@ -97,6 +97,17 @@ def test_convert_plantumlrender_macro():
     md = converter.convert(html)
     assert "```plantuml" in md
     assert "alice -> bob" in md
+
+def test_convert_noformat_macro():
+    converter = MarkdownConverter("https://example.com/wiki")
+    html = '''
+    <ac:structured-macro ac:name="noformat">
+        <ac:plain-text-body><![CDATA[plain text here]]></ac:plain-text-body>
+    </ac:structured-macro>
+    '''
+    md = converter.convert(html)
+    assert "```" in md
+    assert "plain text here" in md
 
 def test_convert_include_macro():
     converter = MarkdownConverter("https://example.com/wiki")
@@ -110,7 +121,7 @@ def test_convert_include_macro():
     </ac:structured-macro>
     '''
     md = converter.convert(html)
-    assert "Included Page Name" in md
+    assert "他ページからの埋め込み内容: Included Page Name" in md
 
 def test_convert_irrelevant_macros():
     converter = MarkdownConverter("https://example.com/wiki")
@@ -119,3 +130,16 @@ def test_convert_irrelevant_macros():
         html = f'<ac:structured-macro ac:name="{name}"></ac:structured-macro>'
         md = converter.convert(html)
         assert md.strip() == ""
+
+def test_header_level_shift_inside_macro():
+    converter = MarkdownConverter("https://example.com/wiki")
+    # level=2 means h1 should become ##
+    html = '''
+    <ac:structured-macro ac:name="expand">
+        <ac:rich-text-body>
+            <h1>Heading in Macro</h1>
+        </ac:rich-text-body>
+    </ac:structured-macro>
+    '''
+    md = converter.convert(html, level=2)
+    assert "## Heading in Macro" in md
