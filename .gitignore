@@ -25,7 +25,7 @@ wheels/
 .pytest_cache/
 
 # Local configuration
-.confluence_exporter.yaml
+c2m_config.yaml
 .env
 
 # Output
