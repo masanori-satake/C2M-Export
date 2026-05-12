@@ -10,21 +10,25 @@ from .utils import get_unique_filename, bytes_to_mb, is_within_size_limit
 
 logger = logging.getLogger(__name__)
 
-def export_tree(client: ConfluenceClient, converter: MarkdownConverter, root_page_id: str, stop_threshold_mb: float):
+def export_tree(client: ConfluenceClient, converter: MarkdownConverter, root_page_id: str, stop_threshold_mb: float, initial_page_data: Dict = None):
     """
     指定されたルートページから子孫をDFS(深さ優先探索)で巡回し、Markdownに統合する。
     """
-    pages_to_process = [(root_page_id, 1)] # (page_id, level) のスタック
+    pages_to_process = [(root_page_id, 1, initial_page_data)] # (page_id, level, pre_fetched_data) のスタック
     processed_md = []
     total_bytes = 0
     page_count = 0
 
     while pages_to_process:
-        page_id, level = pages_to_process.pop()
+        page_id, level, pre_fetched_data = pages_to_process.pop()
 
         try:
-            logger.info(f"Fetching page {page_id} (Level {level})...")
-            page_data = client.get_page(page_id)
+            if pre_fetched_data:
+                page_data = pre_fetched_data
+            else:
+                logger.info(f"Fetching page {page_id} (Level {level})...")
+                page_data = client.get_page(page_id)
+
             title = page_data.get('title')
             space_key = page_data.get('space', {}).get('key')
             body = page_data.get('body', {}).get('storage', {}).get('value', '')
@@ -52,7 +56,7 @@ def export_tree(client: ConfluenceClient, converter: MarkdownConverter, root_pag
             # 子ページの取得とスタックへの追加。DFSを実現するために reversed で追加。
             children = client.get_child_pages(page_id)
             for child in reversed(children):
-                pages_to_process.append((child['id'], level + 1))
+                pages_to_process.append((child['id'], level + 1, None))
 
             logger.info(f"Processed '{title}'. Current size: {bytes_to_mb(total_bytes):.2f}MB, Pages: {page_count}")
 
@@ -97,7 +101,7 @@ def main():
             logger.error(f"Failed to fetch root page {root_page_id}: {e}")
             continue
 
-        full_md, total_bytes, page_count = export_tree(client, converter, root_page_id, config.stop_threshold_mb)
+        full_md, total_bytes, page_count = export_tree(client, converter, root_page_id, config.stop_threshold_mb, initial_page_data=root_page)
 
         if not full_md:
             logger.error(f"No content exported for page ID {root_page_id}.")

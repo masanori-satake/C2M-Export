@@ -77,6 +77,12 @@ class Config:
 
         if cli_args.base_url: self.base_url = cli_args.base_url
         if cli_args.root_page_id: self.root_page_ids = cli_args.root_page_id
+
+        # 重複を除去
+        if self.root_page_ids:
+            seen = set()
+            self.root_page_ids = [x for x in self.root_page_ids if not (x in seen or seen.add(x))]
+
         if cli_args.output_dir: self.output_dir = cli_args.output_dir
         if cli_args.max_mb is not None: self.max_mb = cli_args.max_mb
         if cli_args.stop_threshold_mb is not None: self.stop_threshold_mb = cli_args.stop_threshold_mb
@@ -90,7 +96,7 @@ class Config:
         if not self.base_url:
             raise ValueError("base_url is required (use --base-url or config file)")
         if not self.root_page_ids:
-            raise ValueError("root_page_id is required (use --root-page-id or config file)")
+            raise ValueError("At least one root_page_id is required (use --root-page-id or config file)")
         if not self.token:
             raise ValueError("token is required (use --token or config file)")
 
