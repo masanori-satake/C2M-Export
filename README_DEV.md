@@ -44,26 +44,32 @@ classDiagram
     class Config {
         +base_url: str
         +root_page_id: str
-        +token: str
-        +proxy: str
+        +output_dir: str
         +max_mb: float
+        +stop_threshold_mb: float
+        +proxy: str
+        +token: str
         +load()
         +validate()
     }
 
     class ConfluenceClient {
         +base_url: str
+        +headers: dict
+        +proxies: dict
         +session: requests.Session
         +get_page(page_id: str)
-        +get_child_pages(page_id: str)
-        -_request(method, path, params)
+        +get_child_pages(page_id: str, limit: int)
+        -_request(method, path, params, retries, backoff)
     }
 
     class MarkdownConverter {
         +base_url: str
+        +macro_handlers: dict
         +convert(html_content: str, level: int)
         -_walk(node, level)
         -_process_tag(tag, level)
+        -_handle_table(table, level)
         -_handle_macro(tag)
         -_handle_structured_macro(tag)
     }
