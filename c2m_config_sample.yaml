@@ -1,0 +1,24 @@
+# Confluence to Markdown Exporter 設定サンプル
+# このファイルを "c2m_config.yaml" にリネームして利用してください。
+
+# ConfluenceのベースURL (例: https://your-domain/wiki)
+# base_url: "https://confluence.example.com/wiki"
+
+# 起点となるページのID
+root_page_id: "12345678"
+
+# Bearerトークン
+token: "your_bearer_token_here"
+
+# 出力先ディレクトリ (既定: カレントディレクトリ)
+output_dir: "."
+
+# 出力ファイルの最大サイズ (MB) (既定: 100.0)
+max_mb: 100.0
+
+# 処理を停止する閾値 (MB) (既定: 95.0)
+# このサイズを超えると新しいページの取得を停止します。
+stop_threshold_mb: 95.0
+
+# HTTP/HTTPS プロキシURL
+# proxy: "http://proxy.example.com:8080"

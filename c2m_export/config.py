@@ -4,8 +4,8 @@ import argparse
 from pathlib import Path
 from typing import Optional
 
-# Windows環境でのデフォルト設定ファイルの保存場所
-DEFAULT_CONFIG_PATH = Path.home() / ".confluence_exporter.yaml"
+# デフォルト設定ファイルの保存場所 (ツールと同じディレクトリ)
+DEFAULT_CONFIG_PATH = Path(__file__).resolve().parent.parent / "c2m_config.yaml"
 
 class Config:
     """
@@ -20,11 +20,11 @@ class Config:
         self.max_mb: float = 100.0
         self.stop_threshold_mb: float = 95.0
         self.proxy: Optional[str] = None
-        self.token: Optional[str] = os.environ.get("CONFLUENCE_TOKEN")
+        self.token: Optional[str] = None
 
     def load(self):
         """
-        設定を読み込む。優先順位は CLI > 環境変数 > 設定ファイル > デフォルト。
+        設定を読み込む。優先順位は CLI > 設定ファイル > デフォルト。
         """
         # 設定ファイルパスを特定するために一度パース
         pre_parser = argparse.ArgumentParser(add_help=False)
@@ -45,14 +45,11 @@ class Config:
                         self.max_mb = float(file_config.get("max_mb", self.max_mb))
                         self.stop_threshold_mb = float(file_config.get("stop_threshold_mb", self.stop_threshold_mb))
                         self.proxy = file_config.get("proxy", self.proxy)
+                        self.token = file_config.get("token", self.token)
             except Exception as e:
                 print(f"Warning: Failed to load config file {config_path}: {e}")
 
-        # 2. 環境変数からの読み込み（トークンやProxyなど秘匿性・環境依存性の高いもの）
-        env_token = os.environ.get("CONFLUENCE_TOKEN")
-        if env_token:
-            self.token = env_token
-
+        # 2. 環境変数からの読み込み（Proxyなど環境依存性の高いもの）
         env_https_proxy = os.environ.get("HTTPS_PROXY")
         env_http_proxy = os.environ.get("HTTP_PROXY")
         if env_https_proxy:
@@ -68,7 +65,7 @@ class Config:
         parser.add_argument("--max-mb", type=float, help="Maximum allowed size of the output file in MB (default: 100)")
         parser.add_argument("--stop-threshold-mb", type=float, help="Stop processing if size exceeds this MB (default: 95)")
         parser.add_argument("--proxy", type=str, help="HTTP/HTTPS Proxy URL")
-        parser.add_argument("--config", type=str, help=f"Path to config file (default: {DEFAULT_CONFIG_PATH})")
+        parser.add_argument("--config", type=str, help=f"Path to config file (default: c2m_config.yaml)")
         parser.add_argument("--token", type=str, help="Confluence Bearer Token")
 
         cli_args = parser.parse_args()
@@ -90,7 +87,7 @@ class Config:
         if not self.root_page_id:
             raise ValueError("root_page_id is required (use --root-page-id or config file)")
         if not self.token:
-            raise ValueError("token is required (use CONFLUENCE_TOKEN environment variable or --token)")
+            raise ValueError("token is required (use --token or config file)")
 
         # 後続のパス結合時に重複を防ぐための正規化
         if self.base_url.endswith("/"):
