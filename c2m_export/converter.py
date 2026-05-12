@@ -127,17 +127,13 @@ class MarkdownConverter:
         旧来の形式のマクロ（conf-macro）を処理。
         """
         macro_name = tag.get('data-macro-name')
-        if macro_name == 'code':
+        if macro_name in ['code', 'noformat']:
             content = tag.find('pre')
             if content:
                 return f"\n```\n{content.get_text()}\n```\n"
-            return ""
-        elif macro_name == 'noformat':
-            content = tag.find('pre')
-            if content:
-                return f"\n```\n{content.get_text()}\n```\n"
-            return ""
-        return f"\n[Macro: {macro_name}]\n"
+
+        # 未知の旧マクロはAIナレッジ向けに不要なケースが多いため空文字を返す
+        return ""
 
     def _handle_structured_macro(self, tag: Tag, level: int) -> str:
         """
@@ -146,55 +142,14 @@ class MarkdownConverter:
         """
         macro_name = tag.get('ac:name')
 
-        # 1. コードブロック系マクロ
-        if macro_name in ['code', 'noformat']:
-            lang = ""
-            lang_param = tag.find('ac:parameter', attrs={'ac:name': 'language'})
-            if lang_param:
-                lang = lang_param.get_text().strip()
-            plain_text_body = tag.find('ac:plain-text-body')
-            if plain_text_body:
-                content = plain_text_body.get_text()
-                return f"\n```{lang}\n{content}\n```\n"
-            return ""
-
-        elif macro_name in ['plantuml', 'plantumlrender']:
-            plain_text_body = tag.find('ac:plain-text-body')
-            if plain_text_body:
-                content = plain_text_body.get_text()
-                return f"\n```plantuml\n{content}\n```\n"
-            return ""
-
-        # 2. リッチテキストボディを持つマクロ (再帰的に処理)
-        elif macro_name in ['expand', 'note', 'info', 'tip', 'warning', 'panel', 'details']:
-            title = ""
-            title_param = tag.find('ac:parameter', attrs={'ac:name': 'title'})
-            if title_param:
-                title = title_param.get_text().strip()
-
-            body_md = ""
-            rich_text_body = tag.find('ac:rich-text-body')
-            if rich_text_body:
-                # ボディ内を再帰的にMarkdown変換 (levelを引き継ぐ)
-                body_md = self._walk(rich_text_body, level).strip()
-
-            # AIへのインプットとして有用な形式で組み立て
-            result = "\n"
-            if title:
-                result += f"**{title}**\n"
-            if body_md:
-                result += f"{body_md}\n"
-            return result
-
-        # 3. 単一のパラメータや単純な情報を抽出するマクロ
-        elif macro_name == 'status':
+        # 1. 特殊な情報抽出が必要なマクロ
+        if macro_name == 'status':
             title_param = tag.find('ac:parameter', attrs={'ac:name': 'title'})
             if title_param:
                 return f" 【ステータス: {title_param.get_text().strip()}】 "
             return ""
 
-        elif macro_name == 'jira':
-            # キーまたはJQLを抽出
+        if macro_name == 'jira':
             key_param = tag.find('ac:parameter', attrs={'ac:name': 'key'})
             if key_param:
                 return f" 【JIRA課題: {key_param.get_text().strip()}】 "
@@ -203,16 +158,48 @@ class MarkdownConverter:
                 return f" 【JIRAクエリ: {jql_param.get_text().strip()}】 "
             return ""
 
-        elif macro_name == 'include':
-            # 埋め込み先のページタイトルを抽出
+        if macro_name == 'include':
             ri_page = tag.find('ri:page')
             if ri_page and ri_page.get('ri:content-title'):
                 return f"\n(他ページからの埋め込み内容: {ri_page.get('ri:content-title')})\n"
             return ""
 
-        # 4. AIインプットとして不要、または動的すぎてStorage Formatから抽出困難なマクロ
-        elif macro_name in ['toc', 'anchor', 'pagetree', 'children', 'contentbylabel']:
+        # 2. AIインプットとして不要なナビゲーション・動的マクロ
+        if macro_name in ['toc', 'anchor', 'pagetree', 'children', 'contentbylabel']:
             return ""
 
-        # 未知のマクロはプレースホルダを返す
-        return f"\n[Structured Macro: {macro_name}]\n"
+        # 3. 汎用的なボディ処理 (名前を問わず構造に基づいて変換)
+
+        # プレーンテキストボディ (Code, PlantUML等)
+        plain_text_body = tag.find('ac:plain-text-body')
+        if plain_text_body:
+            lang = ""
+            if macro_name in ['plantuml', 'plantumlrender']:
+                lang = "plantuml"
+            else:
+                lang_param = tag.find('ac:parameter', attrs={'ac:name': 'language'})
+                if lang_param:
+                    lang = lang_param.get_text().strip()
+
+            content = plain_text_body.get_text()
+            return f"\n```{lang}\n{content}\n```\n"
+
+        # リッチテキストボディ (expand, note, info, panel, details等)
+        rich_text_body = tag.find('ac:rich-text-body')
+        if rich_text_body:
+            title = ""
+            title_param = tag.find('ac:parameter', attrs={'ac:name': 'title'})
+            if title_param:
+                title = title_param.get_text().strip()
+
+            body_md = self._walk(rich_text_body, level).strip()
+
+            result = "\n"
+            if title:
+                result += f"**{title}**\n"
+            if body_md:
+                result += f"{body_md}\n"
+            return result
+
+        # 4. ボディも特殊パラメータもないマクロは空文字を返す
+        return ""

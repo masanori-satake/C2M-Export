@@ -154,6 +154,35 @@ def test_convert_empty_macros():
     html_legacy = '<div class="conf-macro" data-macro-name="code"></div>'
     assert converter.convert(html_legacy).strip() == ""
 
+def test_convert_unknown_macros_generalized():
+    converter = MarkdownConverter("https://example.com/wiki")
+
+    # Unknown macro with rich-text-body
+    html_rich = '''
+    <ac:structured-macro ac:name="unknown-rich">
+        <ac:parameter ac:name="title">Some Title</ac:parameter>
+        <ac:rich-text-body><p>Content from unknown macro</p></ac:rich-text-body>
+    </ac:structured-macro>
+    '''
+    md_rich = converter.convert(html_rich)
+    assert "**Some Title**" in md_rich
+    assert "Content from unknown macro" in md_rich
+
+    # Unknown macro with plain-text-body
+    html_plain = '''
+    <ac:structured-macro ac:name="unknown-plain">
+        <ac:parameter ac:name="language">sql</ac:parameter>
+        <ac:plain-text-body><![CDATA[SELECT * FROM table;]]></ac:plain-text-body>
+    </ac:structured-macro>
+    '''
+    md_plain = converter.convert(html_plain)
+    assert "```sql" in md_plain
+    assert "SELECT * FROM table;" in md_plain
+
+    # Unknown macro with no body
+    html_none = '<ac:structured-macro ac:name="unknown-none"></ac:structured-macro>'
+    assert converter.convert(html_none).strip() == ""
+
 def test_header_level_shift_inside_macro():
     converter = MarkdownConverter("https://example.com/wiki")
     # level=2 means h1 should become ##
