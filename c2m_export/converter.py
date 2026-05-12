@@ -131,10 +131,12 @@ class MarkdownConverter:
             content = tag.find('pre')
             if content:
                 return f"\n```\n{content.get_text()}\n```\n"
+            return ""
         elif macro_name == 'noformat':
             content = tag.find('pre')
             if content:
                 return f"\n```\n{content.get_text()}\n```\n"
+            return ""
         return f"\n[Macro: {macro_name}]\n"
 
     def _handle_structured_macro(self, tag: Tag, level: int) -> str:
@@ -154,12 +156,14 @@ class MarkdownConverter:
             if plain_text_body:
                 content = plain_text_body.get_text()
                 return f"\n```{lang}\n{content}\n```\n"
+            return ""
 
         elif macro_name in ['plantuml', 'plantumlrender']:
             plain_text_body = tag.find('ac:plain-text-body')
             if plain_text_body:
                 content = plain_text_body.get_text()
                 return f"\n```plantuml\n{content}\n```\n"
+            return ""
 
         # 2. リッチテキストボディを持つマクロ (再帰的に処理)
         elif macro_name in ['expand', 'note', 'info', 'tip', 'warning', 'panel', 'details']:
@@ -197,13 +201,14 @@ class MarkdownConverter:
             jql_param = tag.find('ac:parameter', attrs={'ac:name': 'jqlQuery'})
             if jql_param:
                 return f" 【JIRAクエリ: {jql_param.get_text().strip()}】 "
-            return f" [Structured Macro: {macro_name}] "
+            return ""
 
         elif macro_name == 'include':
             # 埋め込み先のページタイトルを抽出
             ri_page = tag.find('ri:page')
             if ri_page and ri_page.get('ri:content-title'):
                 return f"\n(他ページからの埋め込み内容: {ri_page.get('ri:content-title')})\n"
+            return ""
 
         # 4. AIインプットとして不要、または動的すぎてStorage Formatから抽出困難なマクロ
         elif macro_name in ['toc', 'anchor', 'pagetree', 'children', 'contentbylabel']:

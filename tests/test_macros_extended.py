@@ -131,6 +131,29 @@ def test_convert_irrelevant_macros():
         md = converter.convert(html)
         assert md.strip() == ""
 
+def test_convert_empty_macros():
+    converter = MarkdownConverter("https://example.com/wiki")
+
+    # Code macro with no body
+    html_code = '<ac:structured-macro ac:name="code"></ac:structured-macro>'
+    assert converter.convert(html_code).strip() == ""
+
+    # PlantUML macro with no body
+    html_puml = '<ac:structured-macro ac:name="plantumlrender"></ac:structured-macro>'
+    assert converter.convert(html_puml).strip() == ""
+
+    # Jira macro with no params
+    html_jira = '<ac:structured-macro ac:name="jira"></ac:structured-macro>'
+    assert converter.convert(html_jira).strip() == ""
+
+    # Include macro with no content-title
+    html_include = '<ac:structured-macro ac:name="include"></ac:structured-macro>'
+    assert converter.convert(html_include).strip() == ""
+
+    # Legacy code macro with no pre
+    html_legacy = '<div class="conf-macro" data-macro-name="code"></div>'
+    assert converter.convert(html_legacy).strip() == ""
+
 def test_header_level_shift_inside_macro():
     converter = MarkdownConverter("https://example.com/wiki")
     # level=2 means h1 should become ##
