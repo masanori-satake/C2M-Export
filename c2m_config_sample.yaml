@@ -4,8 +4,12 @@
 # ConfluenceのベースURL (例: https://your-domain/wiki)
 # base_url: "https://confluence.example.com/wiki"
 
-# 起点となるページのID
+# 起点となるページのID（複数指定する場合はリスト形式で記述可能）
 root_page_id: "12345678"
+# 複数指定の例:
+# root_page_id:
+#   - "12345678"
+#   - "98765432"
 
 # Bearerトークン
 token: "your_bearer_token_here"

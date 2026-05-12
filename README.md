@@ -54,6 +54,12 @@ python -m c2m_export.cli
 python -m c2m_export.cli --root-page-id 98765432
 ```
 
+複数のページIDを一度に指定して実行することも可能です（スペース区切り）。
+
+```cmd
+python -m c2m_export.cli --root-page-id 12345678 98765432
+```
+
 #### 設定を上書きして実行
 コマンドライン引数を指定することで、設定ファイルの内容を一時的に上書きして実行できます。
 
@@ -63,7 +69,7 @@ python -m c2m_export.cli --base-url https://other-confluence/wiki --token other_
 
 ### パラメータ
 - `--base-url`: ConfluenceのベースURL (例: `https://host/wiki`)
-- `--root-page-id`: 起点となるページのID
+- `--root-page-id`: 起点となるページのID（複数指定可能）
 - `--output-dir`: 出力先ディレクトリ (既定: カレントディレクトリ)
 - `--max-mb`: 出力ファイルの最大サイズ(MB) (既定: 100.0)
 - `--stop-threshold-mb`: 処理を停止する閾値(MB) (既定: 95.0)
