@@ -84,39 +84,41 @@ def main():
     client = ConfluenceClient(config.base_url, config.token, config.proxy)
     converter = MarkdownConverter(config.base_url)
 
-    logger.info(f"Starting export from root page ID: {config.root_page_id}")
+    for root_page_id in config.root_page_ids:
+        logger.info("-" * 50)
+        logger.info(f"Starting export from root page ID: {root_page_id}")
 
-    # 出力ファイル名に使用するためルートページの基本情報をまず取得
-    try:
-        root_page = client.get_page(config.root_page_id)
-        root_title = root_page.get('title')
-        space_key = root_page.get('space', {}).get('key')
-    except Exception as e:
-        logger.error(f"Failed to fetch root page: {e}")
-        sys.exit(1)
+        # 出力ファイル名に使用するためルートページの基本情報をまず取得
+        try:
+            root_page = client.get_page(root_page_id)
+            root_title = root_page.get('title')
+            space_key = root_page.get('space', {}).get('key')
+        except Exception as e:
+            logger.error(f"Failed to fetch root page {root_page_id}: {e}")
+            continue
 
-    full_md, total_bytes, page_count = export_tree(client, converter, config.root_page_id, config.stop_threshold_mb)
+        full_md, total_bytes, page_count = export_tree(client, converter, root_page_id, config.stop_threshold_mb)
 
-    if not full_md:
-        logger.error("No content exported.")
-        sys.exit(1)
+        if not full_md:
+            logger.error(f"No content exported for page ID {root_page_id}.")
+            continue
 
-    output_path = get_unique_filename(config.output_dir, space_key, root_title, config.root_page_id)
+        output_path = get_unique_filename(config.output_dir, space_key, root_title, root_page_id)
 
-    try:
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(output_path, "w", encoding="utf-8") as f:
-            f.write(full_md)
-        logger.info(f"Successfully exported {page_count} pages to '{output_path}'")
-        logger.info(f"Final file size: {bytes_to_mb(total_bytes):.2f}MB")
+        try:
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(output_path, "w", encoding="utf-8") as f:
+                f.write(full_md)
+            logger.info(f"Successfully exported {page_count} pages to '{output_path}'")
+            logger.info(f"Final file size: {bytes_to_mb(total_bytes):.2f}MB")
 
-        # 最終的なファイルサイズが最大制限を超えていないか確認
-        if bytes_to_mb(total_bytes) > config.max_mb:
-            logger.warning(f"Final file size ({bytes_to_mb(total_bytes):.2f}MB) exceeds max-mb ({config.max_mb}MB)")
+            # 最終的なファイルサイズが最大制限を超えていないか確認
+            if bytes_to_mb(total_bytes) > config.max_mb:
+                logger.warning(f"Final file size ({bytes_to_mb(total_bytes):.2f}MB) exceeds max-mb ({config.max_mb}MB)")
 
-    except Exception as e:
-        logger.error(f"Failed to write output file: {e}")
-        sys.exit(1)
+        except Exception as e:
+            logger.error(f"Failed to write output file for page ID {root_page_id}: {e}")
+            continue
 
 if __name__ == "__main__":
     main()
