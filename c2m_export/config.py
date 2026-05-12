@@ -4,9 +4,15 @@ import argparse
 from pathlib import Path
 from typing import Optional
 
+# Windows環境でのデフォルト設定ファイルの保存場所
 DEFAULT_CONFIG_PATH = Path.home() / ".confluence_exporter.yaml"
 
 class Config:
+    """
+    ツールの設定を管理するクラス。
+    CLI引数、環境変数、設定ファイルの順で優先順位を制御し、
+    企業環境（Proxy等）での実行に必要な設定を保持する。
+    """
     def __init__(self):
         self.base_url: Optional[str] = None
         self.root_page_id: Optional[str] = None
@@ -17,14 +23,17 @@ class Config:
         self.token: Optional[str] = os.environ.get("CONFLUENCE_TOKEN")
 
     def load(self):
-        # Preliminary parse to get config path
+        """
+        設定を読み込む。優先順位は CLI > 環境変数 > 設定ファイル > デフォルト。
+        """
+        # 設定ファイルパスを特定するために一度パース
         pre_parser = argparse.ArgumentParser(add_help=False)
         pre_parser.add_argument("--config", type=str, default=str(DEFAULT_CONFIG_PATH))
         pre_args, _ = pre_parser.parse_known_args()
 
         config_path = Path(pre_args.config)
 
-        # 1. Load from Config File (Lower priority than ENV and CLI)
+        # 1. 設定ファイルからの読み込み（優先度：低）
         if config_path.exists():
             try:
                 with open(config_path, "r", encoding="utf-8") as f:
@@ -39,7 +48,7 @@ class Config:
             except Exception as e:
                 print(f"Warning: Failed to load config file {config_path}: {e}")
 
-        # 2. Load from Environment Variables
+        # 2. 環境変数からの読み込み（トークンやProxyなど秘匿性・環境依存性の高いもの）
         env_token = os.environ.get("CONFLUENCE_TOKEN")
         if env_token:
             self.token = env_token
@@ -51,7 +60,7 @@ class Config:
         elif env_http_proxy:
             self.proxy = env_http_proxy
 
-        # 3. Load from CLI Arguments (Highest priority)
+        # 3. CLI引数からの読み込み（優先度：最高）
         parser = argparse.ArgumentParser(description="Confluence to Markdown Exporter")
         parser.add_argument("--base-url", type=str, help="Confluence base URL (e.g. https://host/wiki)")
         parser.add_argument("--root-page-id", type=str, help="Root page ID to start export from")
@@ -73,6 +82,9 @@ class Config:
         if cli_args.token: self.token = cli_args.token
 
     def validate(self):
+        """
+        必須設定の有無を確認し、URLの正規化を行う。
+        """
         if not self.base_url:
             raise ValueError("base_url is required (use --base-url or config file)")
         if not self.root_page_id:
@@ -80,6 +92,6 @@ class Config:
         if not self.token:
             raise ValueError("token is required (use CONFLUENCE_TOKEN environment variable or --token)")
 
-        # Normalize base_url: remove trailing slash if exists
+        # 後続のパス結合時に重複を防ぐための正規化
         if self.base_url.endswith("/"):
             self.base_url = self.base_url[:-1]

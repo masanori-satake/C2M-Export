@@ -6,6 +6,10 @@ from typing import Dict, List, Optional, Any
 logger = logging.getLogger(__name__)
 
 class ConfluenceClient:
+    """
+    Confluence Data Center REST APIとの通信を担当するクライアントクラス。
+    Bearer認証、Proxy経由の接続、および一時的なエラーに対するリトライロジックを実装。
+    """
     def __init__(self, base_url: str, token: str, proxy: Optional[str] = None):
         self.base_url = base_url
         self.headers = {
@@ -24,6 +28,9 @@ class ConfluenceClient:
             self.session.proxies.update(self.proxies)
 
     def _request(self, method: str, path: str, params: Optional[Dict] = None, retries: int = 3, backoff: float = 2.0) -> Dict:
+        """
+        共通のリクエスト処理。5xxエラーやネットワークエラーに対して指数バックオフを伴うリトライを行う。
+        """
         url = f"{self.base_url}{path}"
         for i in range(retries):
             try:
@@ -46,7 +53,8 @@ class ConfluenceClient:
 
     def get_page(self, page_id: str) -> Dict:
         """
-        GET /rest/api/content/{id}?expand=body.storage,space
+        指定されたページIDの情報を取得する。
+        storage形式の本文とスペース情報を取得するために expand パラメータを使用。
         """
         path = f"/rest/api/content/{page_id}"
         params = {"expand": "body.storage,space"}
@@ -54,7 +62,8 @@ class ConfluenceClient:
 
     def get_child_pages(self, page_id: str, limit: int = 25) -> List[Dict]:
         """
-        GET /rest/api/content/{id}/child/page?limit=N&start=S
+        指定されたページの子ページ一覧を取得する。
+        大規模なツリーに対応するため、内部でページング処理を完結させて全件を返す。
         """
         path = f"/rest/api/content/{page_id}/child/page"
         children = []
@@ -65,6 +74,7 @@ class ConfluenceClient:
             results = data.get("results", [])
             children.extend(results)
 
+            # 結果がlimit未満であれば全件取得完了と判断
             if len(results) < limit:
                 break
             start += len(results)

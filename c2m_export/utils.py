@@ -4,14 +4,13 @@ from pathlib import Path
 
 def sanitize_filename(filename: str) -> str:
     """
-    Sanitizes a string to be a safe Windows filename.
+    文字列をWindowsのファイル名として安全な形式に変換する。
     """
-    # Remove invalid characters: < > : " / \ | ? *
-    # Also remove control characters
+    # 制御文字およびWindowsで禁止されている記号をアンダースコアに置換
     s = re.sub(r'[<>:"/\\|?*\x00-\x1f]', '_', filename)
-    # Remove trailing dots and spaces
+    # 末尾のドットとスペースはOS制限により削除
     s = s.rstrip('. ')
-    # Avoid reserved names
+    # Windows予約語との衝突回避（例: CON, PRN 等）
     reserved = {
         "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5",
         "COM6", "COM7", "COM8", "COM9", "LPT1", "LPT2", "LPT3", "LPT4",
@@ -19,18 +18,17 @@ def sanitize_filename(filename: str) -> str:
     }
     if s.upper() in reserved:
         s = "_" + s
-    # Limit length (Windows has a 255 char limit for components)
+    # Windowsのファイル名長制限(255文字)を考慮して切り詰め
     if len(s) > 200:
         s = s[:200]
     return s
 
 def get_unique_filename(directory: str, space_key: str, title: str, page_id: str) -> Path:
     """
-    Generates a unique filename following the rules:
-    【<spaceKey>】 <トップページタイトル>.md
-    If exists, append (<pageId>)
+    【spaceKey】 Title.md 形式のファイル名を生成する。
+    既存ファイルがある場合は (pageId) を付与して衝突を回避する。
     """
-    # Handle None space_key
+    # スペースキーが取得できない場合のフォールバック
     display_space_key = space_key if space_key else "UNKNOWN"
 
     safe_title = sanitize_filename(title)
@@ -46,7 +44,7 @@ def get_unique_filename(directory: str, space_key: str, title: str, page_id: str
 
 def is_within_size_limit(current_bytes: int, stop_threshold_mb: float) -> bool:
     """
-    Checks if current size is within the stop threshold.
+    現在のバイト数が指定された閾値(MB)以下であるか判定する。
     """
     threshold_bytes = stop_threshold_mb * 1024 * 1024
     return current_bytes <= threshold_bytes

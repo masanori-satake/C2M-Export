@@ -3,6 +3,10 @@ import html
 import re
 
 class MarkdownConverter:
+    """
+    ConfluenceのStorage Format (XHTML) を Markdownに変換するクラス。
+    再帰的なタグ探索と、特定のマクロ（Code, PlantUML）に対するカスタムハンドラを実装。
+    """
     def __init__(self, base_url: str):
         self.base_url = base_url
         self.macro_handlers = {
@@ -11,10 +15,17 @@ class MarkdownConverter:
         }
 
     def convert(self, html_content: str, level: int = 1) -> str:
+        """
+        HTML文字列をMarkdownに変換するエントリーポイント。
+        level引数は、ページツリーの深さに応じて見出しレベルを調整するために使用。
+        """
         soup = BeautifulSoup(html_content, "html.parser")
         return self._walk(soup, level)
 
     def _walk(self, node, level: int) -> str:
+        """
+        DOMツリーを再帰的に巡回してMarkdown文字列を組み立てる。
+        """
         md = ""
         for child in node.children:
             if isinstance(child, Tag):
@@ -24,11 +35,13 @@ class MarkdownConverter:
         return md
 
     def _process_tag(self, tag: Tag, level: int) -> str:
+        """
+        タグごとの変換ルールを定義。
+        """
         name = tag.name
 
-        # Headings
+        # 見出し: ページ階層に応じて#の数を増やす。ただしMarkdownの仕様上、最大6まで。
         if re.match(r'h[1-6]', name):
-            # Limit heading level to 6
             h_level = min(6, int(name[1]) + level - 1)
             return f"\n{'#' * h_level} {self._walk(tag, level)}\n"
 
@@ -56,7 +69,7 @@ class MarkdownConverter:
         if name == 'li':
             parent = tag.parent
             if parent and parent.name == 'ol':
-                # Simple implementation, doesn't track index perfectly for nested
+                # ネストされたリストでのインデックス制御は簡易実装
                 return f"1. {self._walk(tag, level)}\n"
             else:
                 return f"- {self._walk(tag, level)}\n"
@@ -66,26 +79,31 @@ class MarkdownConverter:
 
         if name == 'a':
             href = tag.get('href', '')
+            # コンテキストパスを含む絶対URLに変換
             if href.startswith('/'):
                 href = self.base_url + href
             return f"[{self._walk(tag, level)}]({href})"
 
-        # Confluence Macros
+        # クラス名によるマクロ判定
         if tag.get('class') and 'conf-macro' in tag.get('class'):
             return self._handle_macro(tag)
 
+        # 名前空間付きマクロタグの処理
         if name == 'ac:structured-macro':
             return self._handle_structured_macro(tag)
 
-        # Default: just process children
+        # 未定義のタグは中身を再帰的に処理
         return self._walk(tag, level)
 
     def _handle_table(self, table: Tag, level: int) -> str:
+        """
+        HTMLテーブルをMarkdownテーブルに変換。
+        セル内の改行はテーブル構造を壊さないよう<br>に置換。
+        """
         rows = []
         for tr in table.find_all('tr', recursive=False):
             cols = []
             for cell in tr.find_all(['th', 'td'], recursive=False):
-                # Clean up cell content for markdown table
                 cell_text = self._walk(cell, level).strip().replace('\n', '<br>')
                 cols.append(cell_text)
             rows.append(cols)
@@ -94,13 +112,10 @@ class MarkdownConverter:
             return ""
 
         md = "\n"
-        # Header
         md += "| " + " | ".join(rows[0]) + " |\n"
-        # Separator
         md += "| " + " | ".join(["---"] * len(rows[0])) + " |\n"
-        # Body
         for row in rows[1:]:
-            # Pad row if it has fewer columns than header
+            # 列数が不足している場合の補正
             if len(row) < len(rows[0]):
                 row += [""] * (len(rows[0]) - len(row))
             md += "| " + " | ".join(row[:len(rows[0])]) + " |\n"
@@ -108,6 +123,9 @@ class MarkdownConverter:
         return md + "\n"
 
     def _handle_macro(self, tag: Tag) -> str:
+        """
+        旧来の形式のマクロ（conf-macro）を処理。
+        """
         macro_name = tag.get('data-macro-name')
         if macro_name == 'code':
             content = tag.find('pre')
@@ -116,9 +134,13 @@ class MarkdownConverter:
         return f"\n[Macro: {macro_name}]\n"
 
     def _handle_structured_macro(self, tag: Tag) -> str:
+        """
+        名前空間付きの構造化マクロを処理。
+        AIナレッジ向けにコードと言語情報を適切に抽出。
+        """
         macro_name = tag.get('ac:name')
         if macro_name == 'code':
-            # Extract language parameter
+            # 言語設定の抽出（シンタックスハイライト用）
             lang = ""
             lang_param = tag.find('ac:parameter', attrs={'ac:name': 'language'})
             if lang_param:
@@ -129,6 +151,7 @@ class MarkdownConverter:
                 content = plain_text_body.get_text()
                 return f"\n```{lang}\n{content}\n```\n"
         elif macro_name == 'plantuml':
+            # PlantUML定義をコードブロックとして出力
             plain_text_body = tag.find('ac:plain-text-body')
             if plain_text_body:
                 content = plain_text_body.get_text()

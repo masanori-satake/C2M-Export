@@ -11,7 +11,10 @@ from .utils import get_unique_filename, bytes_to_mb, is_within_size_limit
 logger = logging.getLogger(__name__)
 
 def export_tree(client: ConfluenceClient, converter: MarkdownConverter, root_page_id: str, stop_threshold_mb: float):
-    pages_to_process = [(root_page_id, 1)] # (page_id, level)
+    """
+    指定されたルートページから子孫をDFS(深さ優先探索)で巡回し、Markdownに統合する。
+    """
+    pages_to_process = [(root_page_id, 1)] # (page_id, level) のスタック
     processed_md = []
     total_bytes = 0
     page_count = 0
@@ -28,7 +31,7 @@ def export_tree(client: ConfluenceClient, converter: MarkdownConverter, root_pag
             webui = page_data.get('_links', {}).get('webui', '')
             full_url = f"{client.base_url}{webui}"
 
-            # Convert to Markdown
+            # 統合ファイル内での各ページのヘッダーセクション。メタ情報をAIが参照できるように付与。
             page_md = f"\n---\n# {title}\n"
             page_md += f"- **Page ID**: {page_id}\n"
             page_md += f"- **Space Key**: {space_key}\n"
@@ -37,6 +40,7 @@ def export_tree(client: ConfluenceClient, converter: MarkdownConverter, root_pag
 
             md_bytes = len(page_md.encode('utf-8'))
 
+            # サイズ制限のチェック。閾値を超えた場合は、中途半端な取得を避けるためその時点で停止。
             if not is_within_size_limit(total_bytes + md_bytes, stop_threshold_mb):
                 logger.warning(f"Stop threshold ({stop_threshold_mb}MB) reached. Stopping export.")
                 break
@@ -45,8 +49,7 @@ def export_tree(client: ConfluenceClient, converter: MarkdownConverter, root_pag
             total_bytes += md_bytes
             page_count += 1
 
-            # Get children and add to pages_to_process.
-            # To maintain original order (DFS), we reverse children and use append/pop.
+            # 子ページの取得とスタックへの追加。DFSを実現するために reversed で追加。
             children = client.get_child_pages(page_id)
             for child in reversed(children):
                 pages_to_process.append((child['id'], level + 1))
@@ -54,15 +57,17 @@ def export_tree(client: ConfluenceClient, converter: MarkdownConverter, root_pag
             logger.info(f"Processed '{title}'. Current size: {bytes_to_mb(total_bytes):.2f}MB, Pages: {page_count}")
 
         except Exception as e:
+            # 個別ページの失敗はログに記録し、全体の処理は継続。
             logger.error(f"Failed to process page {page_id}: {e}")
-            # Continue with other pages? Or stop?
-            # For a CLI tool, continuing might be better if it's just one page failing.
             continue
 
     return "".join(processed_md), total_bytes, page_count
 
 def main():
-    # Configure logging inside main to avoid global configuration
+    """
+    CLIのエントリーポイント。設定の読み込み、クライアントの初期化、エクスポートの実行を行う。
+    """
+    # 外部からインポートされた際の副作用を防ぐため、実行時にのみログ設定を行う
     logging.basicConfig(
         level=logging.INFO,
         format='%(asctime)s [%(levelname)s] %(message)s',
@@ -81,7 +86,7 @@ def main():
 
     logger.info(f"Starting export from root page ID: {config.root_page_id}")
 
-    # We need root page info first for filename
+    # 出力ファイル名に使用するためルートページの基本情報をまず取得
     try:
         root_page = client.get_page(config.root_page_id)
         root_title = root_page.get('title')
@@ -99,13 +104,13 @@ def main():
     output_path = get_unique_filename(config.output_dir, space_key, root_title, config.root_page_id)
 
     try:
-        # Ensure output directory exists
         output_path.parent.mkdir(parents=True, exist_ok=True)
         with open(output_path, "w", encoding="utf-8") as f:
             f.write(full_md)
         logger.info(f"Successfully exported {page_count} pages to '{output_path}'")
         logger.info(f"Final file size: {bytes_to_mb(total_bytes):.2f}MB")
 
+        # 最終的なファイルサイズが最大制限を超えていないか確認
         if bytes_to_mb(total_bytes) > config.max_mb:
             logger.warning(f"Final file size ({bytes_to_mb(total_bytes):.2f}MB) exceeds max-mb ({config.max_mb}MB)")
 
