@@ -86,11 +86,11 @@ class MarkdownConverter:
 
         # クラス名によるマクロ判定
         if tag.get('class') and 'conf-macro' in tag.get('class'):
-            return self._handle_macro(tag)
+            return self._handle_macro(tag, level)
 
         # 名前空間付きマクロタグの処理
         if name == 'ac:structured-macro':
-            return self._handle_structured_macro(tag)
+            return self._handle_structured_macro(tag, level)
 
         # 未定義のタグは中身を再帰的に処理
         return self._walk(tag, level)
@@ -122,7 +122,7 @@ class MarkdownConverter:
 
         return md + "\n"
 
-    def _handle_macro(self, tag: Tag) -> str:
+    def _handle_macro(self, tag: Tag, level: int) -> str:
         """
         旧来の形式のマクロ（conf-macro）を処理。
         """
@@ -131,30 +131,83 @@ class MarkdownConverter:
             content = tag.find('pre')
             if content:
                 return f"\n```\n{content.get_text()}\n```\n"
+        elif macro_name == 'noformat':
+            content = tag.find('pre')
+            if content:
+                return f"\n```\n{content.get_text()}\n```\n"
         return f"\n[Macro: {macro_name}]\n"
 
-    def _handle_structured_macro(self, tag: Tag) -> str:
+    def _handle_structured_macro(self, tag: Tag, level: int) -> str:
         """
         名前空間付きの構造化マクロを処理。
-        AIナレッジ向けにコードと言語情報を適切に抽出。
+        AIナレッジ向けに有用な情報を抽出し、Markdownに変換。
         """
         macro_name = tag.get('ac:name')
-        if macro_name == 'code':
-            # 言語設定の抽出（シンタックスハイライト用）
+
+        # 1. コードブロック系マクロ
+        if macro_name in ['code', 'noformat']:
             lang = ""
             lang_param = tag.find('ac:parameter', attrs={'ac:name': 'language'})
             if lang_param:
                 lang = lang_param.get_text().strip()
-
             plain_text_body = tag.find('ac:plain-text-body')
             if plain_text_body:
                 content = plain_text_body.get_text()
                 return f"\n```{lang}\n{content}\n```\n"
-        elif macro_name == 'plantuml':
-            # PlantUML定義をコードブロックとして出力
+
+        elif macro_name in ['plantuml', 'plantumlrender']:
             plain_text_body = tag.find('ac:plain-text-body')
             if plain_text_body:
                 content = plain_text_body.get_text()
                 return f"\n```plantuml\n{content}\n```\n"
 
+        # 2. リッチテキストボディを持つマクロ (再帰的に処理)
+        elif macro_name in ['expand', 'note', 'info', 'tip', 'warning', 'panel', 'details']:
+            title = ""
+            title_param = tag.find('ac:parameter', attrs={'ac:name': 'title'})
+            if title_param:
+                title = title_param.get_text().strip()
+
+            body_md = ""
+            rich_text_body = tag.find('ac:rich-text-body')
+            if rich_text_body:
+                # ボディ内を再帰的にMarkdown変換 (levelを引き継ぐ)
+                body_md = self._walk(rich_text_body, level).strip()
+
+            # AIへのインプットとして有用な形式で組み立て
+            result = "\n"
+            if title:
+                result += f"**{title}**\n"
+            if body_md:
+                result += f"{body_md}\n"
+            return result
+
+        # 3. 単一のパラメータや単純な情報を抽出するマクロ
+        elif macro_name == 'status':
+            title_param = tag.find('ac:parameter', attrs={'ac:name': 'title'})
+            if title_param:
+                return f" 【ステータス: {title_param.get_text().strip()}】 "
+            return ""
+
+        elif macro_name == 'jira':
+            # キーまたはJQLを抽出
+            key_param = tag.find('ac:parameter', attrs={'ac:name': 'key'})
+            if key_param:
+                return f" 【JIRA課題: {key_param.get_text().strip()}】 "
+            jql_param = tag.find('ac:parameter', attrs={'ac:name': 'jqlQuery'})
+            if jql_param:
+                return f" 【JIRAクエリ: {jql_param.get_text().strip()}】 "
+            return f" [Structured Macro: {macro_name}] "
+
+        elif macro_name == 'include':
+            # 埋め込み先のページタイトルを抽出
+            ri_page = tag.find('ri:page')
+            if ri_page and ri_page.get('ri:content-title'):
+                return f"\n(他ページからの埋め込み内容: {ri_page.get('ri:content-title')})\n"
+
+        # 4. AIインプットとして不要、または動的すぎてStorage Formatから抽出困難なマクロ
+        elif macro_name in ['toc', 'anchor', 'pagetree', 'children', 'contentbylabel']:
+            return ""
+
+        # 未知のマクロはプレースホルダを返す
         return f"\n[Structured Macro: {macro_name}]\n"
