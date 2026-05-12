@@ -136,25 +136,74 @@ class MarkdownConverter:
     def _handle_structured_macro(self, tag: Tag) -> str:
         """
         名前空間付きの構造化マクロを処理。
-        AIナレッジ向けにコードと言語情報を適切に抽出。
+        AIナレッジ向けに有用な情報を抽出し、Markdownに変換。
         """
         macro_name = tag.get('ac:name')
+
+        # 1. コードブロック系マクロ
         if macro_name == 'code':
-            # 言語設定の抽出（シンタックスハイライト用）
             lang = ""
             lang_param = tag.find('ac:parameter', attrs={'ac:name': 'language'})
             if lang_param:
                 lang = lang_param.get_text().strip()
-
             plain_text_body = tag.find('ac:plain-text-body')
             if plain_text_body:
                 content = plain_text_body.get_text()
                 return f"\n```{lang}\n{content}\n```\n"
-        elif macro_name == 'plantuml':
-            # PlantUML定義をコードブロックとして出力
+
+        elif macro_name in ['plantuml', 'plantumlrender']:
             plain_text_body = tag.find('ac:plain-text-body')
             if plain_text_body:
                 content = plain_text_body.get_text()
                 return f"\n```plantuml\n{content}\n```\n"
 
+        # 2. リッチテキストボディを持つマクロ (再帰的に処理)
+        elif macro_name in ['expand', 'note', 'info', 'tip', 'panel', 'details']:
+            title = ""
+            title_param = tag.find('ac:parameter', attrs={'ac:name': 'title'})
+            if title_param:
+                title = title_param.get_text().strip()
+
+            body_md = ""
+            rich_text_body = tag.find('ac:rich-text-body')
+            if rich_text_body:
+                # ボディ内を再帰的にMarkdown変換
+                body_md = self._walk(rich_text_body, 1).strip()
+
+            # AIへのインプットとして有用な形式で組み立て
+            result = "\n"
+            if title:
+                result += f"**{title}**\n"
+            if body_md:
+                result += f"{body_md}\n"
+            return result
+
+        # 3. 単一のパラメータや単純な情報を抽出するマクロ
+        elif macro_name == 'status':
+            title_param = tag.find('ac:parameter', attrs={'ac:name': 'title'})
+            if title_param:
+                return f" [{title_param.get_text().strip()}] "
+            return ""
+
+        elif macro_name == 'jira':
+            # キーまたはJQLを抽出
+            key_param = tag.find('ac:parameter', attrs={'ac:name': 'key'})
+            if key_param:
+                return f" [{key_param.get_text().strip()}] "
+            jql_param = tag.find('ac:parameter', attrs={'ac:name': 'jqlQuery'})
+            if jql_param:
+                return f" [JIRA: {jql_param.get_text().strip()}] "
+            return f" [Macro: {macro_name}] "
+
+        elif macro_name == 'include':
+            # 埋め込み先のページタイトルを抽出
+            ri_page = tag.find('ri:page')
+            if ri_page and ri_page.get('ri:content-title'):
+                return f"\n[Include: {ri_page.get('ri:content-title')}]\n"
+
+        # 4. AIインプットとして不要、または動的すぎてStorage Formatから抽出困難なマクロ
+        elif macro_name in ['toc', 'anchor', 'pagetree', 'children', 'contentbylabel']:
+            return ""
+
+        # 未知のマクロはプレースホルダを返す
         return f"\n[Structured Macro: {macro_name}]\n"
