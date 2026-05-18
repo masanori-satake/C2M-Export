@@ -11,7 +11,7 @@ from c2m_export.config import Config
 from c2m_export.confluence import ConfluenceClient
 from c2m_export.converter import MarkdownConverter
 from c2m_export.cli import export_tree
-from c2m_export.utils import create_zip_file, sanitize_filename, bytes_to_mb
+from c2m_export.utils import create_zip_file, sanitize_filename, bytes_to_mb, get_unique_in_memory_filename
 
 # グローバルロック
 export_lock = threading.Lock()
@@ -161,8 +161,7 @@ def main():
 
                         # 同一名称の回避
                         existing_names = [f[0] for f in exported_files]
-                        if filename in existing_names:
-                            filename = f"【{display_space}】 {safe_title} ({root_page_id}).md"
+                        filename = get_unique_in_memory_filename(existing_names, filename, root_page_id)
 
                         exported_files.append((filename, full_md))
                         logger.info(f"Successfully processed {page_count} pages.")

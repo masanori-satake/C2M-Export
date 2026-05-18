@@ -57,6 +57,18 @@ def mb_to_bytes(mb: float) -> int:
 def bytes_to_mb(b: int) -> float:
     return b / (1024 * 1024)
 
+def get_unique_in_memory_filename(existing_names: List[str], filename: str, page_id: str) -> str:
+    """
+    メモリ内のファイル名リストに対して重複を避け、重複がある場合は (page_id) を付与する。
+    """
+    if filename not in existing_names:
+        return filename
+
+    path = Path(filename)
+    base = path.stem
+    ext = path.suffix
+    return f"{base} ({page_id}){ext}"
+
 def create_zip_file(zip_path: Path, files: List[Tuple[str, str]]):
     """
     指定されたファイル名と内容のリストからZipファイルを作成する。

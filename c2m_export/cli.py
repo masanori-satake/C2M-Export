@@ -6,7 +6,7 @@ from typing import List, Dict
 from .config import Config
 from .confluence import ConfluenceClient
 from .converter import MarkdownConverter
-from .utils import get_unique_filename, bytes_to_mb, is_within_size_limit, create_zip_file
+from .utils import get_unique_filename, bytes_to_mb, is_within_size_limit, create_zip_file, get_unique_in_memory_filename
 
 logger = logging.getLogger(__name__)
 
@@ -118,7 +118,10 @@ def main():
         output_path = get_unique_filename(config.output_dir, space_key, root_title, root_page_id)
 
         if config.zip_output:
-            exported_files.append((output_path.name, full_md))
+            # ZIP出力時はメモリ内での名前重複も考慮
+            existing_names = [f[0] for f in exported_files]
+            final_filename = get_unique_in_memory_filename(existing_names, output_path.name, root_page_id)
+            exported_files.append((final_filename, full_md))
             logger.info(f"Successfully exported {page_count} pages (Queued for Zip)")
         else:
             try:
