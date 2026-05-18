@@ -54,6 +54,8 @@ def main():
     # セッション状態の初期化
     if "root_page_ids" not in st.session_state:
         st.session_state.root_page_ids = config.root_page_ids if config.root_page_ids else [""]
+    if "export_result" not in st.session_state:
+        st.session_state.export_result = None
 
     # サイドバー：基本設定
     st.sidebar.header("Confluence 設定")
@@ -99,7 +101,22 @@ def main():
 
     start_button = st.button("エクスポート開始", disabled=is_locked)
 
+    # 前回の実行結果がある場合はダウンロードボタンを表示
+    if st.session_state.export_result:
+        res = st.session_state.export_result
+        st.download_button(
+            label=res["label"],
+            data=res["data"],
+            file_name=res["file_name"],
+            mime=res["mime"],
+            key="download_result"
+        )
+        if st.button("結果をクリア"):
+            st.session_state.export_result = None
+            st.rerun()
+
     if start_button:
+        st.session_state.export_result = None
         # 入力チェック
         active_ids = [pid.strip() for pid in st.session_state.root_page_ids if pid.strip()]
         if not active_ids:
@@ -174,29 +191,30 @@ def main():
                         st.error("エクスポートされたコンテンツがありません。")
                         return
 
-                    # ダウンロードファイルの作成
+                    # ダウンロード用データをセッション状態に保存
                     if zip_output:
                         zip_filename = generate_zip_filename(first_space_key, first_root_title)
                         zip_path = Path(tmp_dir) / zip_filename
                         create_zip_file(zip_path, exported_files)
 
                         with open(zip_path, "rb") as f:
-                            st.download_button(
-                                label="Zipファイルをダウンロード",
-                                data=f,
-                                file_name=zip_filename,
-                                mime="application/zip"
-                            )
+                            st.session_state.export_result = {
+                                "label": "Zipファイルをダウンロード",
+                                "data": f.read(),
+                                "file_name": zip_filename,
+                                "mime": "application/zip"
+                            }
                     else:
                         # 単一ファイルの場合
                         filename, content = exported_files[0]
-                        st.download_button(
-                            label="Markdownファイルをダウンロード",
-                            data=content,
-                            file_name=filename,
-                            mime="text/markdown"
-                        )
-                    st.success("エクスポートが完了しました。上記のボタンからダウンロードしてください。")
+                        st.session_state.export_result = {
+                            "label": "Markdownファイルをダウンロード",
+                            "data": content,
+                            "file_name": filename,
+                            "mime": "text/markdown"
+                        }
+                    st.success("エクスポートが完了しました。ダウンロードボタンが表示されました。")
+                    st.rerun()
 
         except Exception as e:
             st.error(f"エラーが発生しました: {e}")
