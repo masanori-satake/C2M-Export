@@ -1,12 +1,13 @@
 import sys
 import logging
+from datetime import datetime
 from pathlib import Path
 from typing import List, Dict
 
 from .config import Config
 from .confluence import ConfluenceClient
 from .converter import MarkdownConverter
-from .utils import get_unique_filename, bytes_to_mb, is_within_size_limit, create_zip_file, get_unique_in_memory_filename, generate_zip_filename
+from .utils import get_unique_filename, bytes_to_mb, is_within_size_limit, create_zip_file, get_unique_in_memory_filename, generate_zip_filename, sanitize_filename
 
 logger = logging.getLogger(__name__)
 
