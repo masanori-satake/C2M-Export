@@ -67,6 +67,16 @@ python -m c2m_export.cli --root-page-id 12345678 98765432
 python -m c2m_export.cli --base-url https://other-confluence/wiki --token other_token --root-page-id 12345678 --proxy http://proxy.example.com:8080
 ```
 
+### Web UI での実行
+Streamlitを使用したブラウザベースのインターフェースも利用可能です。
+
+```cmd
+python -m c2m_export.web
+```
+
+起動後、ブラウザで表示されるURL（既定では `http://localhost:8501`）にアクセスしてください。
+Web UIでは、複数のRoot Page IDの動的な追加、進捗のリアルタイム表示、およびエクスポート結果のZipダウンロードが可能です。
+
 ### パラメータ
 - `--base-url`: ConfluenceのベースURL (例: `https://host/wiki`)
 - `--root-page-id`: 起点となるページのID（複数指定可能）
@@ -76,6 +86,7 @@ python -m c2m_export.cli --base-url https://other-confluence/wiki --token other_
 - `--proxy`: プロキシURL
 - `--config`: 設定ファイルパス (既定: `c2m_config.yaml`)
 - `--token`: Bearerトークン
+- `--zip`: エクスポート結果をZip圧縮する
 
 ## ファイル名規則
 出力ファイル名は以下の形式になります：

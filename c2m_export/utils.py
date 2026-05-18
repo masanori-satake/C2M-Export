@@ -1,6 +1,9 @@
 import re
 import os
+import zipfile
+from datetime import datetime
 from pathlib import Path
+from typing import List, Tuple, Union, Optional
 
 def sanitize_filename(filename: str) -> str:
     """
@@ -31,7 +34,7 @@ def get_unique_filename(directory: str, space_key: str, title: str, page_id: str
     # スペースキーが取得できない場合のフォールバック
     display_space_key = space_key if space_key else "UNKNOWN"
 
-    safe_title = sanitize_filename(title)
+    safe_title = sanitize_filename(title or "untitled")
     base_name = f"【{display_space_key}】 {safe_title}"
     filename = f"{base_name}.md"
     filepath = Path(directory) / filename
@@ -54,3 +57,33 @@ def mb_to_bytes(mb: float) -> int:
 
 def bytes_to_mb(b: int) -> float:
     return b / (1024 * 1024)
+
+def get_unique_in_memory_filename(existing_names: Union[List[str], set], filename: str, page_id: str) -> str:
+    """
+    メモリ内のファイル名リストに対して重複を避け、重複がある場合は (page_id) を付与する。
+    """
+    if filename not in existing_names:
+        return filename
+
+    path = Path(filename)
+    base = path.stem
+    ext = path.suffix
+    return f"{base} ({page_id}){ext}"
+
+def generate_zip_filename(space_key: Optional[str], title: Optional[str]) -> str:
+    """
+    【spaceKey】 Title_YYMMDD_HHMM.zip 形式のファイル名を生成する。
+    """
+    timestamp = datetime.now().strftime("%y%m%d_%H%M")
+    display_space = space_key if space_key else "UNKNOWN"
+    safe_title = sanitize_filename(title or "untitled")
+    return f"【{display_space}】 {safe_title}_{timestamp}.zip"
+
+def create_zip_file(zip_path: Path, files: List[Tuple[str, str]]):
+    """
+    指定されたファイル名と内容のリストからZipファイルを作成する。
+    files: [(filename, content), ...]
+    """
+    with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+        for filename, content in files:
+            zipf.writestr(filename, content)

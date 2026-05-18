@@ -1,12 +1,13 @@
 import sys
 import logging
+from datetime import datetime
 from pathlib import Path
 from typing import List, Dict
 
 from .config import Config
 from .confluence import ConfluenceClient
 from .converter import MarkdownConverter
-from .utils import get_unique_filename, bytes_to_mb, is_within_size_limit
+from .utils import get_unique_filename, bytes_to_mb, is_within_size_limit, create_zip_file, get_unique_in_memory_filename, generate_zip_filename, sanitize_filename
 
 logger = logging.getLogger(__name__)
 
@@ -88,6 +89,11 @@ def main():
     client = ConfluenceClient(config.base_url, config.token, config.proxy)
     converter = MarkdownConverter(config.base_url)
 
+    exported_files = []
+    exported_filenames = set()
+    first_root_title = None
+    first_space_key = None
+
     for root_page_id in config.root_page_ids:
         logger.info("-" * 50)
         logger.info(f"Starting export from root page ID: {root_page_id}")
@@ -97,6 +103,9 @@ def main():
             root_page = client.get_page(root_page_id)
             root_title = root_page.get('title')
             space_key = root_page.get('space', {}).get('key')
+            if first_root_title is None:
+                first_root_title = root_title
+                first_space_key = space_key
         except Exception as e:
             logger.error(f"Failed to fetch root page {root_page_id}: {e}")
             continue
@@ -107,22 +116,39 @@ def main():
             logger.error(f"No content exported for page ID {root_page_id}.")
             continue
 
+        # 個別ファイルのパスを決定（既存ファイルとの衝突回避も含む）
         output_path = get_unique_filename(config.output_dir, space_key, root_title, root_page_id)
 
+        if config.zip_output:
+            # ZIP出力時はメモリ内での名前重複も考慮
+            final_filename = get_unique_in_memory_filename(exported_filenames, output_path.name, root_page_id)
+            exported_files.append((final_filename, full_md))
+            exported_filenames.add(final_filename)
+            logger.info(f"Successfully exported {page_count} pages (Queued for Zip)")
+        else:
+            try:
+                output_path.parent.mkdir(parents=True, exist_ok=True)
+                with open(output_path, "w", encoding="utf-8") as f:
+                    f.write(full_md)
+                logger.info(f"Successfully exported {page_count} pages to '{output_path}'")
+                logger.info(f"Final file size: {bytes_to_mb(total_bytes):.2f}MB")
+
+                if bytes_to_mb(total_bytes) > config.max_mb:
+                    logger.warning(f"Final file size ({bytes_to_mb(total_bytes):.2f}MB) exceeds max-mb ({config.max_mb}MB)")
+            except Exception as e:
+                logger.error(f"Failed to write output file for page ID {root_page_id}: {e}")
+
+    # Zip圧縮が指定されている場合、全ファイルをまとめて出力
+    if config.zip_output and exported_files:
+        zip_filename = generate_zip_filename(first_space_key, first_root_title)
+        zip_path = Path(config.output_dir) / zip_filename
+
         try:
-            output_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(output_path, "w", encoding="utf-8") as f:
-                f.write(full_md)
-            logger.info(f"Successfully exported {page_count} pages to '{output_path}'")
-            logger.info(f"Final file size: {bytes_to_mb(total_bytes):.2f}MB")
-
-            # 最終的なファイルサイズが最大制限を超えていないか確認
-            if bytes_to_mb(total_bytes) > config.max_mb:
-                logger.warning(f"Final file size ({bytes_to_mb(total_bytes):.2f}MB) exceeds max-mb ({config.max_mb}MB)")
-
+            zip_path.parent.mkdir(parents=True, exist_ok=True)
+            create_zip_file(zip_path, exported_files)
+            logger.info(f"Successfully created zip file: '{zip_path}'")
         except Exception as e:
-            logger.error(f"Failed to write output file for page ID {root_page_id}: {e}")
-            continue
+            logger.error(f"Failed to create zip file: {e}")
 
 if __name__ == "__main__":
     main()
