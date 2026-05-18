@@ -142,7 +142,7 @@ def main():
         timestamp = datetime.now().strftime("%y%m%d_%H%M")
         display_space_key = first_space_key if first_space_key else "UNKNOWN"
         from .utils import sanitize_filename
-        safe_title = sanitize_filename(first_root_title)
+        safe_title = sanitize_filename(first_root_title or "untitled")
         zip_filename = f"【{display_space_key}】 {safe_title}_{timestamp}.zip"
         zip_path = Path(config.output_dir) / zip_filename
 

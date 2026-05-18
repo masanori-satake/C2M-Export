@@ -155,7 +155,7 @@ def main():
                             continue
 
                         # ファイル名生成（ここではtmp_dir内なので、重複はあまり気にしなくて良いが、一応一意にする）
-                        safe_title = sanitize_filename(root_title)
+                        safe_title = sanitize_filename(root_title or "untitled")
                         display_space = space_key if space_key else "UNKNOWN"
                         filename = f"【{display_space}】 {safe_title}.md"
 
@@ -174,7 +174,7 @@ def main():
                     if zip_output:
                         timestamp = datetime.now().strftime("%y%m%d_%H%M")
                         display_space = first_space_key if first_space_key else "UNKNOWN"
-                        safe_title = sanitize_filename(first_root_title)
+                        safe_title = sanitize_filename(first_root_title or "untitled")
                         zip_filename = f"【{display_space}】 {safe_title}_{timestamp}.zip"
                         zip_path = Path(tmp_dir) / zip_filename
                         create_zip_file(zip_path, exported_files)

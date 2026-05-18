@@ -33,7 +33,7 @@ def get_unique_filename(directory: str, space_key: str, title: str, page_id: str
     # スペースキーが取得できない場合のフォールバック
     display_space_key = space_key if space_key else "UNKNOWN"
 
-    safe_title = sanitize_filename(title)
+    safe_title = sanitize_filename(title or "untitled")
     base_name = f"【{display_space_key}】 {safe_title}"
     filename = f"{base_name}.md"
     filepath = Path(directory) / filename
