@@ -130,6 +130,7 @@ def main():
                     converter = MarkdownConverter(base_url)
 
                     exported_files = []
+                    exported_filenames = set()
                     first_root_title = None
                     first_space_key = None
 
@@ -160,10 +161,10 @@ def main():
                         filename = f"【{display_space}】 {safe_title}.md"
 
                         # 同一名称の回避
-                        existing_names = [f[0] for f in exported_files]
-                        filename = get_unique_in_memory_filename(existing_names, filename, root_page_id)
+                        filename = get_unique_in_memory_filename(exported_filenames, filename, root_page_id)
 
                         exported_files.append((filename, full_md))
+                        exported_filenames.add(filename)
                         logger.info(f"Successfully processed {page_count} pages.")
 
                     if not exported_files:

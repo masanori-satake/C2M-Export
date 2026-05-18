@@ -89,6 +89,7 @@ def main():
     converter = MarkdownConverter(config.base_url)
 
     exported_files = []
+    exported_filenames = set()
     first_root_title = None
     first_space_key = None
 
@@ -119,9 +120,9 @@ def main():
 
         if config.zip_output:
             # ZIP出力時はメモリ内での名前重複も考慮
-            existing_names = [f[0] for f in exported_files]
-            final_filename = get_unique_in_memory_filename(existing_names, output_path.name, root_page_id)
+            final_filename = get_unique_in_memory_filename(exported_filenames, output_path.name, root_page_id)
             exported_files.append((final_filename, full_md))
+            exported_filenames.add(final_filename)
             logger.info(f"Successfully exported {page_count} pages (Queued for Zip)")
         else:
             try:

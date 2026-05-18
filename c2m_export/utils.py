@@ -2,7 +2,7 @@ import re
 import os
 import zipfile
 from pathlib import Path
-from typing import List, Tuple
+from typing import List, Tuple, Union
 
 def sanitize_filename(filename: str) -> str:
     """
@@ -57,7 +57,7 @@ def mb_to_bytes(mb: float) -> int:
 def bytes_to_mb(b: int) -> float:
     return b / (1024 * 1024)
 
-def get_unique_in_memory_filename(existing_names: List[str], filename: str, page_id: str) -> str:
+def get_unique_in_memory_filename(existing_names: Union[List[str], set], filename: str, page_id: str) -> str:
     """
     メモリ内のファイル名リストに対して重複を避け、重複がある場合は (page_id) を付与する。
     """
