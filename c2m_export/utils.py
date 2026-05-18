@@ -1,8 +1,9 @@
 import re
 import os
 import zipfile
+from datetime import datetime
 from pathlib import Path
-from typing import List, Tuple, Union
+from typing import List, Tuple, Union, Optional
 
 def sanitize_filename(filename: str) -> str:
     """
@@ -68,6 +69,15 @@ def get_unique_in_memory_filename(existing_names: Union[List[str], set], filenam
     base = path.stem
     ext = path.suffix
     return f"{base} ({page_id}){ext}"
+
+def generate_zip_filename(space_key: Optional[str], title: Optional[str]) -> str:
+    """
+    【spaceKey】 Title_YYMMDD_HHMM.zip 形式のファイル名を生成する。
+    """
+    timestamp = datetime.now().strftime("%y%m%d_%H%M")
+    display_space = space_key if space_key else "UNKNOWN"
+    safe_title = sanitize_filename(title or "untitled")
+    return f"【{display_space}】 {safe_title}_{timestamp}.zip"
 
 def create_zip_file(zip_path: Path, files: List[Tuple[str, str]]):
     """

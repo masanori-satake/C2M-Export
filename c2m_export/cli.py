@@ -6,7 +6,7 @@ from typing import List, Dict
 from .config import Config
 from .confluence import ConfluenceClient
 from .converter import MarkdownConverter
-from .utils import get_unique_filename, bytes_to_mb, is_within_size_limit, create_zip_file, get_unique_in_memory_filename
+from .utils import get_unique_filename, bytes_to_mb, is_within_size_limit, create_zip_file, get_unique_in_memory_filename, generate_zip_filename
 
 logger = logging.getLogger(__name__)
 
@@ -139,12 +139,7 @@ def main():
 
     # Zip圧縮が指定されている場合、全ファイルをまとめて出力
     if config.zip_output and exported_files:
-        from datetime import datetime
-        timestamp = datetime.now().strftime("%y%m%d_%H%M")
-        display_space_key = first_space_key if first_space_key else "UNKNOWN"
-        from .utils import sanitize_filename
-        safe_title = sanitize_filename(first_root_title or "untitled")
-        zip_filename = f"【{display_space_key}】 {safe_title}_{timestamp}.zip"
+        zip_filename = generate_zip_filename(first_space_key, first_root_title)
         zip_path = Path(config.output_dir) / zip_filename
 
         try:

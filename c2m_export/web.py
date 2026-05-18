@@ -11,7 +11,7 @@ from c2m_export.config import Config
 from c2m_export.confluence import ConfluenceClient
 from c2m_export.converter import MarkdownConverter
 from c2m_export.cli import export_tree
-from c2m_export.utils import create_zip_file, sanitize_filename, bytes_to_mb, get_unique_in_memory_filename
+from c2m_export.utils import create_zip_file, sanitize_filename, bytes_to_mb, get_unique_in_memory_filename, generate_zip_filename
 
 # グローバルロック
 export_lock = threading.Lock()
@@ -176,10 +176,7 @@ def main():
 
                     # ダウンロードファイルの作成
                     if zip_output:
-                        timestamp = datetime.now().strftime("%y%m%d_%H%M")
-                        display_space = first_space_key if first_space_key else "UNKNOWN"
-                        safe_title = sanitize_filename(first_root_title or "untitled")
-                        zip_filename = f"【{display_space}】 {safe_title}_{timestamp}.zip"
+                        zip_filename = generate_zip_filename(first_space_key, first_root_title)
                         zip_path = Path(tmp_dir) / zip_filename
                         create_zip_file(zip_path, exported_files)
 
