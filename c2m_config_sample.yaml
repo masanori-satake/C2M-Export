@@ -26,3 +26,6 @@ stop_threshold_mb: 95.0
 
 # HTTP/HTTPS プロキシURL
 # proxy: "http://proxy.example.com:8080"
+
+# エクスポート結果をZip圧縮する (既定: false)
+zip_output: false

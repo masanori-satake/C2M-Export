@@ -1,6 +1,8 @@
 import re
 import os
+import zipfile
 from pathlib import Path
+from typing import List, Tuple
 
 def sanitize_filename(filename: str) -> str:
     """
@@ -54,3 +56,12 @@ def mb_to_bytes(mb: float) -> int:
 
 def bytes_to_mb(b: int) -> float:
     return b / (1024 * 1024)
+
+def create_zip_file(zip_path: Path, files: List[Tuple[str, str]]):
+    """
+    指定されたファイル名と内容のリストからZipファイルを作成する。
+    files: [(filename, content), ...]
+    """
+    with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+        for filename, content in files:
+            zipf.writestr(filename, content)
