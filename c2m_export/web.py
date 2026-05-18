@@ -17,15 +17,18 @@ from c2m_export.utils import create_zip_file, sanitize_filename, bytes_to_mb, ge
 export_lock = threading.Lock()
 
 class StreamlitLogHandler(logging.Handler):
-    def __init__(self, placeholder):
+    def __init__(self, placeholder, max_lines=100):
         super().__init__()
         self.placeholder = placeholder
-        self.log_content = ""
+        self.log_lines = []
+        self.max_lines = max_lines
 
     def emit(self, record):
         msg = self.format(record)
-        self.log_content += msg + "\n"
-        self.placeholder.code(self.log_content)
+        self.log_lines.append(msg)
+        if len(self.log_lines) > self.max_lines:
+            self.log_lines.pop(0)
+        self.placeholder.code("\n".join(self.log_lines))
 
 def main():
     st.set_page_config(page_title="C2M-Export Web", layout="wide")
