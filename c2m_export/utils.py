@@ -26,22 +26,17 @@ def sanitize_filename(filename: str) -> str:
         s = s[:200]
     return s
 
-def get_unique_filename(directory: str, space_key: str, title: str, page_id: str) -> Path:
+def get_unique_filename(directory: str, space_key: str, title: str, suffix: str = "") -> Path:
     """
     【spaceKey】 Title.md 形式のファイル名を生成する。
-    既存ファイルがある場合は (pageId) を付与して衝突を回避する。
+    suffixが指定されている場合は、Titleの末尾に付与する。
     """
     # スペースキーが取得できない場合のフォールバック
     display_space_key = space_key if space_key else "UNKNOWN"
 
     safe_title = sanitize_filename(title or "untitled")
-    base_name = f"【{display_space_key}】 {safe_title}"
-    filename = f"{base_name}.md"
+    filename = f"【{display_space_key}】 {safe_title}{suffix}.md"
     filepath = Path(directory) / filename
-
-    if filepath.exists():
-        filename = f"{base_name} ({page_id}).md"
-        filepath = Path(directory) / filename
 
     return filepath
 
@@ -58,26 +53,20 @@ def mb_to_bytes(mb: float) -> int:
 def bytes_to_mb(b: int) -> float:
     return b / (1024 * 1024)
 
-def get_unique_in_memory_filename(existing_names: Union[List[str], set], filename: str, page_id: str) -> str:
+def get_unique_in_memory_filename(existing_names: Union[List[str], set], filename: str) -> str:
     """
-    メモリ内のファイル名リストに対して重複を避け、重複がある場合は (page_id) を付与する。
+    メモリ内のファイル名リストに対して重複がないか確認する。
     """
-    if filename not in existing_names:
-        return filename
+    return filename
 
-    path = Path(filename)
-    base = path.stem
-    ext = path.suffix
-    return f"{base} ({page_id}){ext}"
-
-def generate_zip_filename(space_key: Optional[str], title: Optional[str]) -> str:
+def generate_zip_filename(space_key: Optional[str], title: Optional[str], suffix: str = "") -> str:
     """
-    【spaceKey】 Title_YYMMDD_HHMM.zip 形式のファイル名を生成する。
+    【spaceKey】 Title.zip 形式のファイル名を生成する。
+    suffixが指定されている場合は、Titleの末尾に付与する。
     """
-    timestamp = datetime.now().strftime("%y%m%d_%H%M")
     display_space = space_key if space_key else "UNKNOWN"
     safe_title = sanitize_filename(title or "untitled")
-    return f"【{display_space}】 {safe_title}_{timestamp}.zip"
+    return f"【{display_space}】 {safe_title}{suffix}.zip"
 
 def create_zip_file(zip_path: Path, files: List[Tuple[str, str]]):
     """

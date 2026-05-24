@@ -66,6 +66,7 @@ def main():
     max_mb = st.sidebar.number_input("Max MB", value=config.max_mb, min_value=1.0)
     stop_threshold_mb = st.sidebar.number_input("Stop Threshold MB", value=config.stop_threshold_mb, min_value=1.0)
     zip_output = st.sidebar.checkbox("Zip圧縮してダウンロード", value=True)
+    add_suffix = st.sidebar.checkbox("作成時刻のSuffix有り", value=not config.overwrite)
 
     # メインエリア：Root Page IDs
     st.subheader("エクスポート対象のページID")
@@ -145,6 +146,11 @@ def main():
 
         try:
             with export_lock:
+                # ツール実行時点での共通サフィックスを生成
+                suffix = ""
+                if add_suffix:
+                    suffix = datetime.now().strftime("_%y%m%d_%H%M%S")
+
                 with tempfile.TemporaryDirectory() as tmp_dir:
                     client = ConfluenceClient(base_url, token, config.proxy)
                     converter = MarkdownConverter(base_url)
@@ -175,13 +181,17 @@ def main():
                             logger.error(f"ページ ID {root_page_id} のコンテンツがエクスポートされませんでした（現象）。詳細: 該当ページが空か、取得に失敗しました（原因）。ページIDと内容を確認してください（対処方法）")
                             continue
 
-                        # ファイル名生成（ここではtmp_dir内なので、重複はあまり気にしなくて良いが、一応一意にする）
-                        safe_title = sanitize_filename(root_title or "untitled")
+                        # 個別ファイルのパスを決定
                         display_space = space_key if space_key else "UNKNOWN"
-                        filename = f"【{display_space}】 {safe_title}.md"
+                        safe_title = sanitize_filename(root_title or "untitled")
+                        filename = f"【{display_space}】 {safe_title}{suffix}.md"
 
-                        # 同一名称の回避
-                        filename = get_unique_in_memory_filename(exported_filenames, filename, root_page_id)
+                        # メモリ内（Zip内）での名前重複を考慮
+                        filename = get_unique_in_memory_filename(exported_filenames, filename)
+                        if filename in exported_filenames:
+                             logger.error(f"ファイル名の競合が発生しました（現象）。詳細: '{filename}' が既に出力リストに存在します（原因）。ルートページ名が重複していないか確認してください（対処方法）")
+                             st.error(f"ファイル名の競合が発生しました: {filename}")
+                             return
 
                         exported_files.append((filename, full_md))
                         exported_filenames.add(filename)
@@ -193,7 +203,7 @@ def main():
 
                     # ダウンロード用データをセッション状態に保存
                     if zip_output:
-                        zip_filename = generate_zip_filename(first_space_key, first_root_title)
+                        zip_filename = generate_zip_filename(first_space_key, first_root_title, suffix)
                         zip_path = Path(tmp_dir) / zip_filename
                         create_zip_file(zip_path, exported_files)
 
