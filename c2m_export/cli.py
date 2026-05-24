@@ -27,7 +27,7 @@ def export_tree(client: ConfluenceClient, converter: MarkdownConverter, root_pag
             if pre_fetched_data:
                 page_data = pre_fetched_data
             else:
-                logger.info(f"Fetching page {page_id} (Level {level})...")
+                logger.info(f"ページ {page_id} を取得中 (レベル {level})...")
                 page_data = client.get_page(page_id)
 
             title = page_data.get('title')
@@ -47,7 +47,7 @@ def export_tree(client: ConfluenceClient, converter: MarkdownConverter, root_pag
 
             # サイズ制限のチェック。閾値を超えた場合は、中途半端な取得を避けるためその時点で停止。
             if not is_within_size_limit(total_bytes + md_bytes, stop_threshold_mb):
-                logger.warning(f"Stop threshold ({stop_threshold_mb}MB) reached. Stopping export.")
+                logger.warning(f"停止閾値 ({stop_threshold_mb}MB) に達しました（現象）。詳細: 取得予定のデータが制限を超えています（原因）。これ以上のエクスポートを停止します（対処方法）")
                 break
 
             processed_md.append(page_md)
@@ -59,11 +59,11 @@ def export_tree(client: ConfluenceClient, converter: MarkdownConverter, root_pag
             for child in reversed(children):
                 pages_to_process.append((child['id'], level + 1, None))
 
-            logger.info(f"Processed '{title}'. Current size: {bytes_to_mb(total_bytes):.2f}MB, Pages: {page_count}")
+            logger.info(f"'{title}' を処理しました。現在のサイズ: {bytes_to_mb(total_bytes):.2f}MB, ページ数: {page_count}")
 
         except Exception as e:
             # 個別ページの失敗はログに記録し、全体の処理は継続。
-            logger.error(f"Failed to process page {page_id}: {e}")
+            logger.error(f"ページ {page_id} の処理に失敗しました（現象）。詳細: {e}（原因）。このページをスキップして継続します（対処方法）")
             continue
 
     return "".join(processed_md), total_bytes, page_count
@@ -83,7 +83,7 @@ def main():
         config.load()
         config.validate()
     except Exception as e:
-        logger.error(f"Configuration error: {e}")
+        logger.error(f"設定エラーが発生しました（現象）。詳細: {e}（原因）。c2m_config.yaml の内容やコマンドライン引数を確認してください（対処方法）")
         sys.exit(1)
 
     client = ConfluenceClient(config.base_url, config.token, config.proxy)
@@ -96,7 +96,7 @@ def main():
 
     for root_page_id in config.root_page_ids:
         logger.info("-" * 50)
-        logger.info(f"Starting export from root page ID: {root_page_id}")
+        logger.info(f"ルートページID: {root_page_id} からのエクスポートを開始します")
 
         # 出力ファイル名に使用するためルートページの基本情報をまず取得
         try:
@@ -107,7 +107,7 @@ def main():
                 first_root_title = root_title
                 first_space_key = space_key
         except Exception as e:
-            logger.error(f"Failed to fetch root page {root_page_id}: {e}")
+            logger.error(f"ルートページ {root_page_id} の取得に失敗しました（現象）。詳細: {e}（原因）。ページIDが正しいか、権限があるかを確認してください（対処方法）")
             continue
 
         full_md, total_bytes, page_count = export_tree(client, converter, root_page_id, config.stop_threshold_mb, initial_page_data=root_page)
@@ -124,19 +124,19 @@ def main():
             final_filename = get_unique_in_memory_filename(exported_filenames, output_path.name, root_page_id)
             exported_files.append((final_filename, full_md))
             exported_filenames.add(final_filename)
-            logger.info(f"Successfully exported {page_count} pages (Queued for Zip)")
+            logger.info(f"{page_count} ページのエクスポートに成功しました (Zip待ち)")
         else:
             try:
                 output_path.parent.mkdir(parents=True, exist_ok=True)
                 with open(output_path, "w", encoding="utf-8") as f:
                     f.write(full_md)
-                logger.info(f"Successfully exported {page_count} pages to '{output_path}'")
-                logger.info(f"Final file size: {bytes_to_mb(total_bytes):.2f}MB")
+                logger.info(f"{page_count} ページを '{output_path}' にエクスポートしました")
+                logger.info(f"最終ファイルサイズ: {bytes_to_mb(total_bytes):.2f}MB")
 
                 if bytes_to_mb(total_bytes) > config.max_mb:
-                    logger.warning(f"Final file size ({bytes_to_mb(total_bytes):.2f}MB) exceeds max-mb ({config.max_mb}MB)")
+                    logger.warning(f"最終ファイルサイズ ({bytes_to_mb(total_bytes):.2f}MB) が最大許容サイズ ({config.max_mb}MB) を超えています（現象）。詳細: ページツリー全体の合計サイズが設定値を超過しました（原因）。--max-mb 設定の調整を検討してください（対処方法）")
             except Exception as e:
-                logger.error(f"Failed to write output file for page ID {root_page_id}: {e}")
+                logger.error(f"出力ファイルの書き込みに失敗しました（現象）。詳細: {e}（原因）。書き込み権限やディスク容量を確認してください（対処方法）")
 
     # Zip圧縮が指定されている場合、全ファイルをまとめて出力
     if config.zip_output and exported_files:
@@ -146,9 +146,9 @@ def main():
         try:
             zip_path.parent.mkdir(parents=True, exist_ok=True)
             create_zip_file(zip_path, exported_files)
-            logger.info(f"Successfully created zip file: '{zip_path}'")
+            logger.info(f"Zipファイルの作成に成功しました: '{zip_path}'")
         except Exception as e:
-            logger.error(f"Failed to create zip file: {e}")
+            logger.error(f"Zipファイルの作成に失敗しました（現象）。詳細: {e}（原因）。書き込み権限やディスク容量を確認してください（対処方法）")
 
 if __name__ == "__main__":
     main()

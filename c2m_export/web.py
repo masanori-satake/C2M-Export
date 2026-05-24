@@ -164,7 +164,7 @@ def main():
                                 first_root_title = root_title
                                 first_space_key = space_key
                         except Exception as e:
-                            logger.error(f"Failed to fetch root page {root_page_id}: {e}")
+                            logger.error(f"ルートページ {root_page_id} の取得に失敗しました（現象）。詳細: {e}（原因）。ページIDが正しいか確認してください（対処方法）")
                             continue
 
                         full_md, total_bytes, page_count = export_tree(
@@ -217,7 +217,7 @@ def main():
                     st.rerun()
 
         except Exception as e:
-            st.error(f"エラーが発生しました: {e}")
+            st.error(f"エラーが発生しました（現象）。詳細: {e}（原因）。ログを確認してください（対処方法）")
             logger.exception(e)
         finally:
             logger.removeHandler(handler)

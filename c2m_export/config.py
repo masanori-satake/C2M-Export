@@ -54,7 +54,7 @@ class Config:
                         self.token = file_config.get("token", self.token)
                         self.zip_output = file_config.get("zip_output", self.zip_output)
             except Exception as e:
-                print(f"Warning: Failed to load config file {config_path}: {e}")
+                print(f"警告: 設定ファイル {config_path} の読み込みに失敗しました（現象）。詳細: {e}（原因）。ファイル形式や権限を確認してください（対処方法）")
 
         # 2. 環境変数からの読み込み（Proxyなど環境依存性の高いもの）
         env_https_proxy = os.environ.get("HTTPS_PROXY")
