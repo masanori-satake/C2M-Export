@@ -41,12 +41,12 @@ class Config:
                     file_config = yaml.safe_load(f)
                     if file_config:
                         self.base_url = file_config.get("base_url", self.base_url)
-                        root_id = file_config.get("root_page_id")
-                        if root_id:
-                            if isinstance(root_id, list):
-                                self.root_page_ids = [str(i) for i in root_id]
+                        root_ids = file_config.get("root_page_ids")
+                        if root_ids:
+                            if isinstance(root_ids, list):
+                                self.root_page_ids = [str(i) for i in root_ids]
                             else:
-                                self.root_page_ids = [str(root_id)]
+                                self.root_page_ids = [str(root_ids)]
                         self.output_dir = file_config.get("output_dir", self.output_dir)
                         self.max_mb = float(file_config.get("max_mb", self.max_mb))
                         self.stop_threshold_mb = float(file_config.get("stop_threshold_mb", self.stop_threshold_mb))

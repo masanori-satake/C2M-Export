@@ -33,7 +33,9 @@ copy c2m_config_sample.yaml c2m_config.yaml
 ```yaml
 base_url: "https://your-confluence/wiki"
 token: "your_bearer_token_here"
-root_page_id: "12345678"
+root_page_ids:
+  - "12345678"
+  - "98765432"
 output_dir: "."
 max_mb: 100
 stop_threshold_mb: 95
@@ -48,7 +50,7 @@ stop_threshold_mb: 95
 python -m c2m_export.cli
 ```
 
-※設定ファイルで `root_page_id` が指定されていない場合や、別のページを書き出したい場合は、コマンドライン引数で指定します。
+※設定ファイルで `root_page_ids` が指定されていない場合や、別のページを書き出したい場合は、コマンドライン引数で指定します。
 
 ```cmd
 python -m c2m_export.cli --root-page-id 98765432
