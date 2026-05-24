@@ -22,6 +22,7 @@ class Config:
         self.proxy: Optional[str] = None
         self.token: Optional[str] = None
         self.zip_output: bool = False
+        self.overwrite: bool = False
 
     def load(self):
         """
@@ -53,6 +54,7 @@ class Config:
                         self.proxy = file_config.get("proxy", self.proxy)
                         self.token = file_config.get("token", self.token)
                         self.zip_output = file_config.get("zip_output", self.zip_output)
+                        self.overwrite = file_config.get("overwrite", self.overwrite)
             except Exception as e:
                 print(f"設定ファイル {config_path} の読み込みに失敗しました（現象）。詳細: {e}（原因）。ファイル形式や権限を確認してください（対処方法）")
 
@@ -75,6 +77,7 @@ class Config:
         parser.add_argument("--config", type=str, help=f"設定ファイルのパス (既定: c2m_config.yaml)")
         parser.add_argument("--token", type=str, help="ConfluenceのBearerトークン")
         parser.add_argument("--zip", action="store_true", help="エクスポート結果をZip圧縮する")
+        parser.add_argument("--overwrite", action="store_true", help="既存のファイルを上書きする")
 
         cli_args = parser.parse_args()
 
@@ -92,6 +95,7 @@ class Config:
         if cli_args.proxy: self.proxy = cli_args.proxy
         if cli_args.token: self.token = cli_args.token
         if cli_args.zip: self.zip_output = True
+        if cli_args.overwrite: self.overwrite = True
 
     def validate(self):
         """
