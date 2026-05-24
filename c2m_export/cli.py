@@ -113,7 +113,7 @@ def main():
         full_md, total_bytes, page_count = export_tree(client, converter, root_page_id, config.stop_threshold_mb, initial_page_data=root_page)
 
         if not full_md:
-            logger.error(f"No content exported for page ID {root_page_id}.")
+            logger.error(f"ページ ID {root_page_id} のコンテンツがエクスポートされませんでした（現象）。詳細: 該当ページが空か、取得に失敗しました（原因）。ページIDと内容を確認してください（対処方法）")
             continue
 
         # 個別ファイルのパスを決定（既存ファイルとの衝突回避も含む）

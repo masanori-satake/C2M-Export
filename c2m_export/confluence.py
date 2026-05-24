@@ -49,7 +49,7 @@ class ConfluenceClient:
                 logger.warning(f"リクエストが失敗しました: {e}。再試行中 ({i+1}/{retries})...")
                 time.sleep(backoff * (2 ** i))
 
-        raise Exception(f"{retries} 回の試行後も {url} の取得に失敗しました（現象）。詳細: タイムアウトまたはサーバーエラー（原因）。ネットワーク接続やAPIの状態を確認してください（対処方法）")
+        raise Exception(f"{retries} 回の試行後も {url} の取得に失敗しました")
 
     def get_page(self, page_id: str) -> Dict:
         """
