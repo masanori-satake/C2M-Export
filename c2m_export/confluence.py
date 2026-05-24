@@ -38,7 +38,7 @@ class ConfluenceClient:
                 if response.status_code == 200:
                     return response.json()
                 elif 500 <= response.status_code < 600:
-                    logger.warning(f"Server error {response.status_code} for {url}. Retrying ({i+1}/{retries})...")
+                    logger.warning(f"サーバーエラー {response.status_code} が発生しました ({url})。再試行中 ({i+1}/{retries})...")
                     time.sleep(backoff * (2 ** i))
                     continue
                 else:
@@ -46,10 +46,10 @@ class ConfluenceClient:
             except requests.exceptions.RequestException as e:
                 if i == retries - 1:
                     raise
-                logger.warning(f"Request failed: {e}. Retrying ({i+1}/{retries})...")
+                logger.warning(f"リクエストが失敗しました: {e}。再試行中 ({i+1}/{retries})...")
                 time.sleep(backoff * (2 ** i))
 
-        raise Exception(f"Failed to fetch {url} after {retries} retries")
+        raise Exception(f"{retries} 回の試行後も {url} の取得に失敗しました")
 
     def get_page(self, page_id: str) -> Dict:
         """

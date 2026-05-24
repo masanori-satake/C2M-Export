@@ -155,7 +155,7 @@ def main():
                     first_space_key = None
 
                     for root_page_id in active_ids:
-                        logger.info(f"Starting export from root page ID: {root_page_id}")
+                        logger.info(f"ルートページID {root_page_id} からのエクスポートを開始します")
                         try:
                             root_page = client.get_page(root_page_id)
                             root_title = root_page.get('title')
@@ -164,7 +164,7 @@ def main():
                                 first_root_title = root_title
                                 first_space_key = space_key
                         except Exception as e:
-                            logger.error(f"Failed to fetch root page {root_page_id}: {e}")
+                            logger.error(f"ルートページ {root_page_id} の取得に失敗しました（現象）。詳細: {e}（原因）。ページIDが正しいか確認してください（対処方法）")
                             continue
 
                         full_md, total_bytes, page_count = export_tree(
@@ -172,7 +172,7 @@ def main():
                         )
 
                         if not full_md:
-                            logger.error(f"No content exported for page ID {root_page_id}.")
+                            logger.error(f"ページ ID {root_page_id} のコンテンツがエクスポートされませんでした（現象）。詳細: 該当ページが空か、取得に失敗しました（原因）。ページIDと内容を確認してください（対処方法）")
                             continue
 
                         # ファイル名生成（ここではtmp_dir内なので、重複はあまり気にしなくて良いが、一応一意にする）
@@ -185,7 +185,7 @@ def main():
 
                         exported_files.append((filename, full_md))
                         exported_filenames.add(filename)
-                        logger.info(f"Successfully processed {page_count} pages.")
+                        logger.info(f"{page_count} ページの処理が正常に完了しました。")
 
                     if not exported_files:
                         st.error("エクスポートされたコンテンツがありません。")
@@ -217,7 +217,7 @@ def main():
                     st.rerun()
 
         except Exception as e:
-            st.error(f"エラーが発生しました: {e}")
+            st.error(f"エラーが発生しました（現象）。詳細: {e}（原因）。ログを確認してください（対処方法）")
             logger.exception(e)
         finally:
             logger.removeHandler(handler)

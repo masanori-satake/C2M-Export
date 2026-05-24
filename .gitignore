@@ -32,3 +32,4 @@ c2m_config.yaml
 *.md
 !README.md
 !README_DEV.md
+!AGENTS.md
