@@ -11,7 +11,7 @@ from c2m_export.config import Config
 from c2m_export.confluence import ConfluenceClient
 from c2m_export.converter import MarkdownConverter
 from c2m_export.cli import export_tree
-from c2m_export.utils import create_zip_file, sanitize_filename, bytes_to_mb, get_unique_in_memory_filename, generate_zip_filename
+from c2m_export.utils import create_zip_file, sanitize_filename, bytes_to_mb, generate_zip_filename
 
 # グローバルロック
 export_lock = threading.Lock()
@@ -155,13 +155,13 @@ def main():
                     client = ConfluenceClient(base_url, token, config.proxy)
                     converter = MarkdownConverter(base_url)
 
-                    exported_files = []
+                    # --- フェイルファスト・チェック (Fail-Fast) ---
+                    plan_list = []
                     exported_filenames = set()
                     first_root_title = None
                     first_space_key = None
 
                     for root_page_id in active_ids:
-                        logger.info(f"ルートページID {root_page_id} からのエクスポートを開始します")
                         try:
                             root_page = client.get_page(root_page_id)
                             root_title = root_page.get('title')
@@ -171,7 +171,27 @@ def main():
                                 first_space_key = space_key
                         except Exception as e:
                             logger.error(f"ルートページ {root_page_id} の取得に失敗しました（現象）。詳細: {e}（原因）。ページIDが正しいか確認してください（対処方法）")
-                            continue
+                            st.error(f"ルートページ {root_page_id} の取得に失敗しました。")
+                            return
+
+                        display_space = space_key if space_key else "UNKNOWN"
+                        safe_title = sanitize_filename(root_title or "untitled")
+                        filename = f"【{display_space}】 {safe_title}{suffix}.md"
+
+                        # 非上書き時の競合チェック（同一実行内での重複。Web UIではdisk存在チェックは行わない（一時ディレクトリのため））
+                        if not config.overwrite:
+                            if filename in exported_filenames:
+                                logger.error(f"ファイル名の競合が発生しました（現象）。詳細: 同一実行内で '{filename}' が重複しています（原因）。ルートページ名が重複していないか確認してください（対処方法）")
+                                st.error(f"ファイル名の競合が発生しました: {filename}")
+                                return
+
+                        exported_filenames.add(filename)
+                        plan_list.append((root_page_id, root_page, filename))
+
+                    # --- 情報収集と書き込み実行 ---
+                    exported_files = []
+                    for root_page_id, root_page, filename in plan_list:
+                        logger.info(f"ルートページID {root_page_id} からのエクスポートを開始します")
 
                         full_md, total_bytes, page_count = export_tree(
                             client, converter, root_page_id, stop_threshold_mb, initial_page_data=root_page
@@ -179,22 +199,10 @@ def main():
 
                         if not full_md:
                             logger.error(f"ページ ID {root_page_id} のコンテンツがエクスポートされませんでした（現象）。詳細: 該当ページが空か、取得に失敗しました（原因）。ページIDと内容を確認してください（対処方法）")
-                            continue
-
-                        # 個別ファイルのパスを決定
-                        display_space = space_key if space_key else "UNKNOWN"
-                        safe_title = sanitize_filename(root_title or "untitled")
-                        filename = f"【{display_space}】 {safe_title}{suffix}.md"
-
-                        # メモリ内（Zip内）での名前重複を考慮
-                        filename = get_unique_in_memory_filename(exported_filenames, filename)
-                        if filename in exported_filenames:
-                             logger.error(f"ファイル名の競合が発生しました（現象）。詳細: '{filename}' が既に出力リストに存在します（原因）。ルートページ名が重複していないか確認してください（対処方法）")
-                             st.error(f"ファイル名の競合が発生しました: {filename}")
-                             return
+                            st.error(f"ページ ID {root_page_id} のエクスポートに失敗しました。")
+                            return
 
                         exported_files.append((filename, full_md))
-                        exported_filenames.add(filename)
                         logger.info(f"{page_count} ページの処理が正常に完了しました。")
 
                     if not exported_files:

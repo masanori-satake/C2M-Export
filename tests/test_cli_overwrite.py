@@ -68,6 +68,38 @@ def test_cli_error_if_file_exists_and_no_overwrite(tmp_path, temp_config, mock_c
     with patch('sys.argv', ['c2m_export', '--config', str(temp_config)]):
         with patch('c2m_export.cli.datetime') as mock_date:
             mock_date.now.return_value.strftime.return_value = suffix
+            # Verify that export_tree is NOT called due to fail-fast
+            with patch('c2m_export.cli.export_tree') as mock_export:
+                with pytest.raises(SystemExit) as e:
+                    main()
+                assert e.value.code == 1
+                mock_export.assert_not_called()
+
+def test_cli_error_if_internal_collision_and_no_overwrite(tmp_path, temp_config, mock_confluence_client):
+    # Two root pages with same title
+    temp_config.write_text("""
+base_url: https://confluence.example.com
+root_page_ids:
+  - "123"
+  - "456"
+token: dummy-token
+output_dir: {dir}
+""".format(dir=str(tmp_path / "output")), encoding="utf-8")
+
+    with patch('sys.argv', ['c2m_export', '--config', str(temp_config)]):
+        with patch('c2m_export.cli.datetime') as mock_date:
+            mock_date.now.return_value.strftime.return_value = "_260503_160502"
+            with patch('c2m_export.cli.export_tree') as mock_export:
+                with pytest.raises(SystemExit) as e:
+                    main()
+                assert e.value.code == 1
+                mock_export.assert_not_called()
+
+def test_cli_error_if_empty_content(tmp_path, temp_config, mock_confluence_client):
+    # Mock empty content
+    with patch('c2m_export.cli.export_tree') as mock_export:
+        mock_export.return_value = ("", 0, 0)
+        with patch('sys.argv', ['c2m_export', '--config', str(temp_config)]):
             with pytest.raises(SystemExit) as e:
                 main()
             assert e.value.code == 1

@@ -53,11 +53,6 @@ def mb_to_bytes(mb: float) -> int:
 def bytes_to_mb(b: int) -> float:
     return b / (1024 * 1024)
 
-def get_unique_in_memory_filename(existing_names: Union[List[str], set], filename: str) -> str:
-    """
-    メモリ内のファイル名リストに対して重複がないか確認する。
-    """
-    return filename
 
 def generate_zip_filename(space_key: Optional[str], title: Optional[str], suffix: str = "") -> str:
     """
