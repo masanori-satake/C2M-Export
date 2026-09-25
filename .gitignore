@@ -5,6 +5,8 @@ __pycache__/
 *.so
 .Python
 env/
+venv/
+.venv/
 build/
 develop-eggs/
 dist/
@@ -24,6 +26,21 @@ wheels/
 # Pytest
 .pytest_cache/
 
+# Mypy
+.mypy_cache/
+
+# Ruff
+.ruff_cache/
+
+# Coverage
+.coverage
+.coverage.*
+htmlcov/
+
+# Editor / IDE
+.vscode/
+.idea/
+
 # Local configuration
 c2m_config.yaml
 .env
@@ -33,3 +50,4 @@ c2m_config.yaml
 !README.md
 !README_DEV.md
 !AGENTS.md
+*.zip
