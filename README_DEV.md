@@ -213,6 +213,23 @@ Web 側も4つの戻り値を受け取ります。
 ### API呼び出しの追加
 `c2m_export/confluence.py` の `ConfluenceClient` にメソッドを追加します。共通の `_request` メソッドを使用することで、リトライロジックやProxy設定が自動的に適用されます。
 
+## 開発環境のセットアップ
+
+ランタイム依存と開発依存（pytest / ruff / mypy など）をまとめてインストールします。
+
+```bash
+pip install -r requirements.txt -r requirements-dev.txt
+```
+
+- ランタイム依存: `requirements.txt`
+- 開発・テスト依存: `requirements-dev.txt`
+
+コード品質チェックは pre-commit で自動化されています（`.pre-commit-config.yaml`）。
+
+```bash
+pre-commit run --all-files
+```
+
 ## テスト方法
 
 `pytest` を使用してテストを実行します。
@@ -220,6 +237,12 @@ Web 側も4つの戻り値を受け取ります。
 ```bash
 # プロジェクトルートで実行
 PYTHONPATH=. pytest
+```
+
+静的型検査は mypy で行います。
+
+```bash
+mypy c2m_export
 ```
 
 ### 主要なテストファイル
