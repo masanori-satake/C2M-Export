@@ -1,8 +1,9 @@
-from bs4 import BeautifulSoup, Tag
 import html
-import re
 import logging
+import re
 from urllib.parse import quote
+
+from bs4 import BeautifulSoup, Tag
 
 logger = logging.getLogger(__name__)
 

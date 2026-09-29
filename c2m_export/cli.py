@@ -1,5 +1,5 @@
-import sys
 import logging
+import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Dict
@@ -7,7 +7,7 @@ from typing import Dict
 from .config import Config
 from .confluence import ConfluenceClient
 from .converter import MarkdownConverter
-from .utils import get_unique_filename, bytes_to_mb, is_within_size_limit, create_zip_file, generate_zip_filename
+from .utils import bytes_to_mb, create_zip_file, generate_zip_filename, get_unique_filename, is_within_size_limit
 
 logger = logging.getLogger(__name__)
 

@@ -1,8 +1,9 @@
-import os
-import yaml
 import argparse
+import os
 from pathlib import Path
-from typing import Optional, List
+from typing import List, Optional
+
+import yaml
 
 # デフォルト設定ファイルの保存場所 (ツールと同じディレクトリ)
 DEFAULT_CONFIG_PATH = Path(__file__).resolve().parent.parent / "c2m_config.yaml"
@@ -40,7 +41,7 @@ class Config:
         # 1. 設定ファイルからの読み込み（優先度：低）
         if config_path.exists():
             try:
-                with open(config_path, "r", encoding="utf-8") as f:
+                with open(config_path, encoding="utf-8") as f:
                     file_config = yaml.safe_load(f)
                     if file_config:
                         self.base_url = file_config.get("base_url", self.base_url)

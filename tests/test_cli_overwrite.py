@@ -1,8 +1,10 @@
-import pytest
 import os
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
+
+import pytest
+
 from c2m_export.cli import main
 from c2m_export.config import Config
 

@@ -1,7 +1,7 @@
 import re
 import zipfile
 from pathlib import Path
-from typing import List, Tuple, Optional
+from typing import List, Optional, Tuple
 
 
 def sanitize_filename(filename: str) -> str:

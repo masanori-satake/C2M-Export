@@ -6,12 +6,12 @@
 - ページ連結でのコードフェンス波及防止（要件15.3）
 """
 
-import re
 import logging
+import re
+
 import pytest
 
 from c2m_export.converter import MarkdownConverter
-
 
 # ---------------------------------------------------------------------------
 # タスク2: コードフェンスの動的伸長（対策1の単体検証 / 要件15.1, 15.2）

@@ -1,6 +1,8 @@
-import pytest
 from pathlib import Path
-from c2m_export.utils import sanitize_filename, get_unique_filename, is_within_size_limit
+
+import pytest
+
+from c2m_export.utils import get_unique_filename, is_within_size_limit, sanitize_filename
 
 
 def test_sanitize_filename():
