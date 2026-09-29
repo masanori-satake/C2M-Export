@@ -239,10 +239,10 @@ pre-commit run --all-files
 PYTHONPATH=. pytest
 ```
 
-静的型検査は mypy で行います。
+静的型検査は mypy で行います（対象や設定は `pyproject.toml` の `[tool.mypy]` を参照）。
 
 ```bash
-mypy c2m_export
+mypy
 ```
 
 ### 主要なテストファイル

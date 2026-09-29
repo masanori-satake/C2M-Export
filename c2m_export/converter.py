@@ -18,6 +18,22 @@ class MarkdownConverter:
         self.base_url = base_url
         self.macro_handlers = {"conf-macro": self._handle_macro, "ac:structured-macro": self._handle_structured_macro}
 
+    @staticmethod
+    def _attr(tag: Tag, name: str, default: str = "") -> str:
+        """
+        タグ属性を必ず str として取得する。
+
+        bs4 の Tag.get は str / AttributeValueList / None を返しうるため、
+        後続の文字列操作で型が揺れないよう単一の文字列に正規化する。
+        リスト（複数値属性）の場合は空白区切りで結合する。
+        """
+        value = tag.get(name, default)
+        if value is None:
+            return default
+        if isinstance(value, list):
+            return " ".join(value)
+        return value
+
     def convert(self, html_content: str, level: int = 1) -> str:
         """
         HTML文字列をMarkdownに変換するエントリーポイント。
@@ -110,7 +126,7 @@ class MarkdownConverter:
             return self._safe(self._handle_img, tag, level)
 
         if name == "a":
-            href = tag.get("href", "")
+            href = self._attr(tag, "href")
             # コンテキストパスを含む絶対URLに変換
             if href.startswith("/"):
                 href = self.base_url + href
@@ -134,7 +150,8 @@ class MarkdownConverter:
             return self._walk(tag, level, list_depth)
 
         # クラス名によるマクロ判定
-        if tag.get("class") and "conf-macro" in tag.get("class"):
+        class_attr = tag.get("class") or ""
+        if "conf-macro" in class_attr:
             return self._safe(self._handle_macro, tag, level)
 
         # 名前空間付きマクロタグの処理
@@ -213,7 +230,7 @@ class MarkdownConverter:
             cell_text = cell_text.replace("|", "\\|").replace("\n", "<br>")
             # colspan があれば、その列数ぶんセルを複製せず空セルで補完し列整合を保つ
             try:
-                span = int(cell.get("colspan", 1))
+                span = int(self._attr(cell, "colspan", "1"))
             except (TypeError, ValueError):
                 span = 1
             cols.append(cell_text)
@@ -320,10 +337,10 @@ class MarkdownConverter:
 
     def _handle_img(self, tag: Tag, level: int) -> str:
         """<img> を Markdown 画像記法に変換する。相対 src は絶対 URL 化。"""
-        src = tag.get("src", "")
+        src = self._attr(tag, "src")
         if src.startswith("/"):
             src = self.base_url + src
-        alt = tag.get("alt", "").strip()
+        alt = self._attr(tag, "alt").strip()
         if not src:
             # src が無ければ alt テキストのみ残す（情報非欠損）
             return alt
@@ -334,17 +351,17 @@ class MarkdownConverter:
         Confluence の <ac:image> を変換する。
         ri:attachment（添付ファイル名）または ri:url（外部URL）を参照として残す。
         """
-        alt = tag.get("ac:alt", "").strip()
+        alt = self._attr(tag, "ac:alt").strip()
 
         attachment = tag.find("ri:attachment")
-        if attachment and attachment.get("ri:filename"):
-            filename = attachment.get("ri:filename")
+        if isinstance(attachment, Tag) and attachment.get("ri:filename"):
+            filename = self._attr(attachment, "ri:filename")
             alt_text = alt or filename
             return f"![{alt_text}]({self._format_destination(filename)})"
 
         ri_url = tag.find("ri:url")
-        if ri_url and ri_url.get("ri:value"):
-            url = ri_url.get("ri:value")
+        if isinstance(ri_url, Tag) and ri_url.get("ri:value"):
+            url = self._attr(ri_url, "ri:value")
             return f"![{alt}]({self._format_destination(url)})"
 
         # 参照が取れない場合でも alt があれば残す
@@ -365,13 +382,13 @@ class MarkdownConverter:
         # 表示テキスト（link-body / plain-text-link-body）
         display = ""
         body = tag.find(["ac:link-body", "ac:plain-text-link-body"])
-        if body:
+        if isinstance(body, Tag):
             display = self._walk(body, level).strip() if body.name == "ac:link-body" else body.get_text().strip()
 
         ri_page = tag.find("ri:page")
-        if ri_page:
-            title = ri_page.get("ri:content-title", "").strip()
-            space_key = ri_page.get("ri:space-key", "").strip()
+        if isinstance(ri_page, Tag):
+            title = self._attr(ri_page, "ri:content-title").strip()
+            space_key = self._attr(ri_page, "ri:space-key").strip()
             text = display or title
             if not text:
                 return ""
@@ -381,14 +398,14 @@ class MarkdownConverter:
             return text
 
         ri_user = tag.find("ri:user")
-        if ri_user:
-            name = display or ri_user.get("ri:username", "") or ri_user.get("ri:userkey", "")
+        if isinstance(ri_user, Tag):
+            name = display or self._attr(ri_user, "ri:username") or self._attr(ri_user, "ri:userkey")
             name = name.strip()
             return f"@{name}" if name else ""
 
         ri_attachment = tag.find("ri:attachment")
-        if ri_attachment and ri_attachment.get("ri:filename"):
-            filename = ri_attachment.get("ri:filename")
+        if isinstance(ri_attachment, Tag) and ri_attachment.get("ri:filename"):
+            filename = self._attr(ri_attachment, "ri:filename")
             text = display or filename
             return f"[{text}]({self._format_destination(filename)})"
 
@@ -397,10 +414,10 @@ class MarkdownConverter:
 
     def _handle_emoticon(self, tag: Tag) -> str:
         """絵文字（ac:emoticon）を Unicode またはショートコードで残す。"""
-        fallback = tag.get("ac:emoji-fallback")
+        fallback = self._attr(tag, "ac:emoji-fallback")
         if fallback:
             return fallback
-        name = tag.get("ac:name")
+        name = self._attr(tag, "ac:name")
         if name:
             return f":{name}:"
         return ""

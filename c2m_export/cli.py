@@ -2,7 +2,7 @@ import logging
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Dict
+from typing import Dict, List, Optional, Tuple
 
 from .config import Config
 from .confluence import ConfluenceClient
@@ -17,16 +17,17 @@ def export_tree(
     converter: MarkdownConverter,
     root_page_id: str,
     stop_threshold_mb: float,
-    initial_page_data: Dict = None,
-):
+    initial_page_data: Optional[Dict] = None,
+) -> Tuple[str, int, int, List[str]]:
     """
     指定されたルートページから子孫をDFS(深さ優先探索)で巡回し、Markdownに統合する。
     """
-    pages_to_process = [(root_page_id, 1, initial_page_data)]  # (page_id, level, pre_fetched_data) のスタック
-    processed_md = []
+    # (page_id, level, pre_fetched_data) のスタック
+    pages_to_process: List[Tuple[str, int, Optional[Dict]]] = [(root_page_id, 1, initial_page_data)]
+    processed_md: List[str] = []
     total_bytes = 0
     page_count = 0
-    skipped_page_ids = []  # 取得・変換に失敗しスキップしたページIDを集計
+    skipped_page_ids: List[str] = []  # 取得・変換に失敗しスキップしたページIDを集計
 
     while pages_to_process:
         page_id, level, pre_fetched_data = pages_to_process.pop()

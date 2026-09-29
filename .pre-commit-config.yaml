@@ -22,3 +22,13 @@ repos:
         args: [--fix]
     # ruff-format: 一貫したコードフォーマットを自動適用（可読性・メンテナンス性向上）
     -   id: ruff-format
+
+# mypy: 静的型検査。設定は mypy.ini を参照（段階導入のため緩めから開始）。
+-   repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.18.2
+    hooks:
+    -   id: mypy
+        # 型スタブを追加依存として渡す（pre-commit の隔離環境で必要）
+        additional_dependencies: [types-requests, types-PyYAML]
+        # 設定ファイルで対象（files=c2m_export）を制御するため、引数は付けない
+        pass_filenames: false
