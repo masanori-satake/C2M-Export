@@ -227,3 +227,35 @@ def test_page_concatenation_code_fence_does_not_leak():
     assert len(outer) % 2 == 0
     # 後続ページの本文が確実に出力されている（コードに飲まれていない）
     assert "normal following text" in md
+
+
+@pytest.mark.parametrize('failed_id', ['root', 'c1'])
+def test_child_listing_failure_does_not_count_skipped_page(monkeypatch, caplog, failed_id):
+    """子ページ取得失敗時も本文・バイト数・成功数・スキップ一覧が整合する。"""
+    pages = {
+        'root': {'title': 'Root', 'body': '<p>root body</p>', 'children': ['c1', 'c2']},
+        'c1': {'title': 'Child1', 'body': '<p>child1 body</p>'},
+        'c2': {'title': 'Child2', 'body': '<p>child2 body</p>'},
+    }
+    client = _StubClient(pages)
+    get_children = client.get_child_pages
+
+    def failing_children(page_id):
+        if page_id == failed_id:
+            raise RuntimeError('子ページ一覧の取得失敗')
+        return get_children(page_id)
+
+    monkeypatch.setattr(client, 'get_child_pages', failing_children)
+    with caplog.at_level(logging.WARNING):
+        md, total_bytes, count, skipped = export_tree(
+            client, MarkdownConverter(client.base_url), 'root', 100.0
+        )
+
+    assert skipped == [failed_id]
+    assert f'**Page ID**: {failed_id}\n' not in md
+    assert total_bytes == len(md.encode('utf-8'))
+    assert count == (0 if failed_id == 'root' else 2)
+    if failed_id == 'c1':
+        assert 'root body' in md
+        assert 'child2 body' in md
+    assert any(f'成功 {count} ページ / スキップ 1 ページ' in r.message for r in caplog.records)

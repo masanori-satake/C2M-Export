@@ -143,9 +143,9 @@ flowchart TD
     CheckSize -- Yes --> Warning[/警告ログを出力/]
     Warning --> Combine[それまでの内容を統合]
 
-    CheckSize -- No --> AddMD[リストに追加 & サイズ更新]
-    AddMD --> GetChildren[子ページ一覧を取得]
-    GetChildren --> Push[逆順にスタックへ追加]
+    CheckSize -- No --> GetChildren[子ページ一覧を取得]
+    GetChildren --> AddMD[リストに追加 & サイズ更新]
+    AddMD --> Push[逆順にスタックへ追加]
     Push --> Pop
 
     Pop -- Yes --> Combine
@@ -164,13 +164,15 @@ AI ナレッジ利用を最優先し、**情報を欠損させない**ことを�
 
 - インライン/ブロック: `blockquote`（`>`）、`hr`（`---`）、`del/s/strike`（`~~`）、
   `u/sup/sub`（テキストのみ）、`pre`（コードブロック）、`dl/dt/dd`（定義リスト）。
-- リスト: `ul/ol/li`。`_walk` / `_process_tag` に引き回す `list_depth`（ネスト深さ）で
-  インデントを制御します。`_handle_list_item` が項目本文と子リストを分離して出力します。
+- リスト: `ul/ol/li`。祖先リストのマーカー幅（`ol` は3列、`ul` は2列）を加算し、
+  子項目のインデントを親項目の本文開始位置に揃えます。`_handle_list_item` が項目本文と子リストを分離して出力します。
 - 表: `_handle_table` と補助の `_collect_table_rows` / `_table_row_cells`。
   `thead/tbody/tfoot` を考慮して行を収集し（`recursive=False` でネスト表の tr を親に取り込まない）、
   ヘッダー不明時は空ヘッダー行で区切り線を成立させます。セル内の `|` はエスケープ、改行は `<br>`。
 - Confluence 固有: `ac:image`、`ac:link`（ページ/ユーザー/添付）、`ac:emoticon`、
   `ac:task-list`、`ac:layout*`。
+
+画像と添付リンクの参照先は `_format_destination` で整形し、空白や丸括弧を含む場合のみ山括弧で囲みます。
 
 ### コードフェンスの動的伸長（`_wrap_code_block`）
 
@@ -195,6 +197,8 @@ plantuml、`pre` 単体）はすべて `_wrap_code_block(content, lang)` を経�
 
 `export_tree` は個別ページの失敗を `try/except ... continue` で捕捉し、スキップした page_id を
 `skipped_page_ids` に集計します。戻り値は `(md, total_bytes, page_count, skipped_page_ids)` です。
+子ページ一覧を取得してから本文・バイト数・成功数を確定し、取得失敗したページを二重集計しません。
+Web 側も4つの戻り値を受け取ります。
 処理完了時に成功数・スキップ数・スキップ page_id をサマリログとして出力します。
 
 ## 拡張ポイント

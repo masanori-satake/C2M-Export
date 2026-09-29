@@ -51,12 +51,14 @@ def export_tree(client: ConfluenceClient, converter: MarkdownConverter, root_pag
                 logger.warning(f"停止閾値 ({stop_threshold_mb}MB) に達しました（現象）。詳細: 取得予定のデータが制限を超えています（原因）。これ以上のエクスポートを停止します（対処方法）")
                 break
 
+            # 子ページ一覧の取得に成功してから本文と成功数を確定する。
+            children = client.get_child_pages(page_id)
+
             processed_md.append(page_md)
             total_bytes += md_bytes
             page_count += 1
 
-            # 子ページの取得とスタックへの追加。DFSを実現するために reversed で追加。
-            children = client.get_child_pages(page_id)
+            # DFSを実現するために子ページを reversed でスタックへ追加。
             for child in reversed(children):
                 pages_to_process.append((child['id'], level + 1, None))
 

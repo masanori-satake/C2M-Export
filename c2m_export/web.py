@@ -192,7 +192,7 @@ def main():
                     for root_page_id, root_page, filename in plan_list:
                         logger.info(f"ルートページID {root_page_id} からのエクスポートを開始します")
 
-                        full_md, total_bytes, page_count = export_tree(
+                        full_md, total_bytes, page_count, skipped_page_ids = export_tree(
                             client, converter, root_page_id, stop_threshold_mb, initial_page_data=root_page
                         )
 

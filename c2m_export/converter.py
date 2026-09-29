@@ -271,8 +271,9 @@ class MarkdownConverter:
         項目直下のインライン内容と子リスト（ul/ol）を分離し、
         子リストは本文の下に、さらに深いインデントで出力する。
         """
-        depth = max(1, list_depth)
-        indent = "  " * (depth - 1)
+        # 親項目の本文開始位置に揃える（番号リストは3列、箇条書きは2列）。
+        parent_lists = tag.find_parents(['ul', 'ol'])
+        indent = " " * sum(3 if parent.name == 'ol' else 2 for parent in parent_lists[1:])
         marker = "1. " if (tag.parent and tag.parent.name == 'ol') else "- "
 
         # 子リストとそれ以外を分離
@@ -312,6 +313,12 @@ class MarkdownConverter:
             return ""
         return "\n" + "\n".join(parts) + "\n"
 
+    def _format_destination(self, destination: str) -> str:
+        """空白や丸括弧を含む参照先を山括弧で囲み、Markdown 構文を保つ。"""
+        if any(char in destination for char in ' ()'):
+            return f"<{destination}>"
+        return destination
+
     def _handle_img(self, tag: Tag, level: int) -> str:
         """<img> を Markdown 画像記法に変換する。相対 src は絶対 URL 化。"""
         src = tag.get('src', '')
@@ -321,7 +328,7 @@ class MarkdownConverter:
         if not src:
             # src が無ければ alt テキストのみ残す（情報非欠損）
             return alt
-        return f"![{alt}]({src})"
+        return f"![{alt}]({self._format_destination(src)})"
 
     def _handle_ac_image(self, tag: Tag, level: int) -> str:
         """
@@ -334,12 +341,12 @@ class MarkdownConverter:
         if attachment and attachment.get('ri:filename'):
             filename = attachment.get('ri:filename')
             alt_text = alt or filename
-            return f"![{alt_text}]({filename})"
+            return f"![{alt_text}]({self._format_destination(filename)})"
 
         ri_url = tag.find('ri:url')
         if ri_url and ri_url.get('ri:value'):
             url = ri_url.get('ri:value')
-            return f"![{alt}]({url})"
+            return f"![{alt}]({self._format_destination(url)})"
 
         # 参照が取れない場合でも alt があれば残す
         return alt
@@ -384,7 +391,7 @@ class MarkdownConverter:
         if ri_attachment and ri_attachment.get('ri:filename'):
             filename = ri_attachment.get('ri:filename')
             text = display or filename
-            return f"[{text}]({filename})"
+            return f"[{text}]({self._format_destination(filename)})"
 
         # 上記いずれでもない場合、表示テキストがあれば残す
         return display

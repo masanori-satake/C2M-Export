@@ -142,7 +142,7 @@ def test_nested_ordered_list(converter):
     html = "<ol><li>first<ol><li>sub</li></ol></li></ol>"
     md = converter.convert(html)
     assert "1. first" in md
-    assert "  1. sub" in md
+    assert "   1. sub" in md.splitlines()
 
 
 # ---------------------------------------------------------------------------
@@ -220,3 +220,44 @@ def test_ac_layout_keeps_content(converter):
     )
     md = converter.convert(html)
     assert "cell content" in md
+
+
+@pytest.mark.parametrize(
+    ('html', 'expected'),
+    [
+        ('<ol><li>parent<ol><li>child<ol><li>leaf</li></ol></li></ol></li><li>next</li></ol>',
+         ['1. parent', '   1. child', '      1. leaf', '1. next']),
+        ('<ol><li>parent<ul><li>child<ol><li>leaf</li></ol></li></ul></li></ol>',
+         ['1. parent', '   - child', '     1. leaf']),
+        ('<ul><li>parent<ol><li>child<ul><li>leaf</li></ul></li></ol></li></ul>',
+         ['- parent', '  1. child', '     - leaf']),
+        ('<ul><li>parent<ul><li>child<ul><li>leaf</li></ul></li></ul></li></ul>',
+         ['- parent', '  - child', '    - leaf']),
+    ],
+)
+def test_nested_list_content_columns(converter, html, expected):
+    """混在した多段リストでも子項目は親の本文開始位置に揃う。"""
+    assert [line for line in converter.convert(html).splitlines() if line.strip()] == expected
+
+
+@pytest.mark.parametrize('filename', ['figure.png', 'my figure.png', 'figure(1).png', 'figure).png', 'figure(.png'])
+@pytest.mark.parametrize(
+    ('template', 'prefix', 'label', 'marker'),
+    [
+        ('<img src="/download/{filename}" alt="figure" />', 'https://example.com/wiki/download/', 'figure', '!'),
+        ('<ac:image><ri:attachment ri:filename="{filename}" /></ac:image>', '', None, '!'),
+        ('<ac:image ac:alt="figure"><ri:url ri:value="https://cdn.example.com/{filename}" /></ac:image>',
+         'https://cdn.example.com/', 'figure', '!'),
+        ('<ac:link><ri:attachment ri:filename="{filename}" /></ac:link>', '', None, ''),
+        ('<ac:link><ri:attachment ri:filename="{filename}" />'
+         '<ac:plain-text-link-body>figure</ac:plain-text-link-body></ac:link>', '', 'figure', ''),
+    ],
+)
+def test_image_and_attachment_destinations(converter, filename, template, prefix, label, marker):
+    """参照先の空白・丸括弧を保護し、通常の参照先と表示名は維持する。"""
+    destination = prefix + filename
+    if filename != 'figure.png':
+        destination = f'<{destination}>'
+    assert converter.convert(template.format(filename=filename)).strip() == (
+        f'{marker}[{label or filename}]({destination})'
+    )
