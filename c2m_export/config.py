@@ -2,7 +2,7 @@ import os
 import yaml
 import argparse
 from pathlib import Path
-from typing import Optional, List, Union
+from typing import Optional, List
 
 # デフォルト設定ファイルの保存場所 (ツールと同じディレクトリ)
 DEFAULT_CONFIG_PATH = Path(__file__).resolve().parent.parent / "c2m_config.yaml"
@@ -74,7 +74,7 @@ class Config:
         parser.add_argument("--max-mb", type=float, help="出力ファイルの最大許容サイズ (MB) (既定: 100)")
         parser.add_argument("--stop-threshold-mb", type=float, help="サイズがこの閾値 (MB) を超えた場合に処理を停止する (既定: 95)")
         parser.add_argument("--proxy", type=str, help="HTTP/HTTPS プロキシURL")
-        parser.add_argument("--config", type=str, help=f"設定ファイルのパス (既定: c2m_config.yaml)")
+        parser.add_argument("--config", type=str, help="設定ファイルのパス (既定: c2m_config.yaml)")
         parser.add_argument("--token", type=str, help="ConfluenceのBearerトークン")
         parser.add_argument("--zip", action="store_true", help="エクスポート結果をZip圧縮する")
         parser.add_argument("--overwrite", action="store_true", help="既存のファイルを上書きする")

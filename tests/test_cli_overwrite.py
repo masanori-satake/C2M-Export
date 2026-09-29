@@ -98,7 +98,7 @@ output_dir: {dir}
 def test_cli_error_if_empty_content(tmp_path, temp_config, mock_confluence_client):
     # Mock empty content
     with patch('c2m_export.cli.export_tree') as mock_export:
-        mock_export.return_value = ("", 0, 0)
+        mock_export.return_value = ("", 0, 0, [])
         with patch('sys.argv', ['c2m_export', '--config', str(temp_config)]):
             with pytest.raises(SystemExit) as e:
                 main()

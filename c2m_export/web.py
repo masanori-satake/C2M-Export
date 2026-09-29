@@ -2,16 +2,14 @@ import streamlit as st
 import logging
 import threading
 import tempfile
-import os
 from pathlib import Path
 from datetime import datetime
-from typing import List, Tuple
 
 from c2m_export.config import Config
 from c2m_export.confluence import ConfluenceClient
 from c2m_export.converter import MarkdownConverter
 from c2m_export.cli import export_tree
-from c2m_export.utils import create_zip_file, sanitize_filename, bytes_to_mb, generate_zip_filename
+from c2m_export.utils import create_zip_file, sanitize_filename, generate_zip_filename
 
 # グローバルロック
 export_lock = threading.Lock()
@@ -63,7 +61,8 @@ def main():
     token = st.sidebar.text_input("Token", value=config.token if config.token else "", type="password")
 
     st.sidebar.header("エクスポート設定")
-    max_mb = st.sidebar.number_input("Max MB", value=config.max_mb, min_value=1.0)
+    # Max MB は UI 表示用のウィジェット。値は後続処理で参照しないため代入しない。
+    st.sidebar.number_input("Max MB", value=config.max_mb, min_value=1.0)
     stop_threshold_mb = st.sidebar.number_input("Stop Threshold MB", value=config.stop_threshold_mb, min_value=1.0)
     zip_output = st.sidebar.checkbox("Zip圧縮してダウンロード", value=True)
     add_suffix = st.sidebar.checkbox("作成時刻のSuffix有り", value=not config.overwrite)
@@ -193,7 +192,7 @@ def main():
                     for root_page_id, root_page, filename in plan_list:
                         logger.info(f"ルートページID {root_page_id} からのエクスポートを開始します")
 
-                        full_md, total_bytes, page_count = export_tree(
+                        full_md, total_bytes, page_count, skipped_page_ids = export_tree(
                             client, converter, root_page_id, stop_threshold_mb, initial_page_data=root_page
                         )
 
