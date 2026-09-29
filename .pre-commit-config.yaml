@@ -20,3 +20,5 @@ repos:
     hooks:
     -   id: ruff
         args: [--fix]
+    # ruff-format: 一貫したコードフォーマットを自動適用（可読性・メンテナンス性向上）
+    -   id: ruff-format

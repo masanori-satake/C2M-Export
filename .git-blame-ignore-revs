@@ -1,0 +1,7 @@
+# このファイルは git blame から除外したいコミット（主に大規模フォーマット適用）を列挙します。
+# 利用するには次を一度実行してください:
+#   git config blame.ignoreRevsFile .git-blame-ignore-revs
+# GitHub は自動でこのファイルを認識し、blame 表示から該当コミットを除外します。
+
+# style: ruff format をコードベース全体に適用
+b6df9911b776f659be2b36c2919d491efd950c6a
