@@ -1,18 +1,20 @@
-import streamlit as st
 import logging
-import threading
 import tempfile
-from pathlib import Path
+import threading
 from datetime import datetime
+from pathlib import Path
 
+import streamlit as st
+
+from c2m_export.cli import export_tree
 from c2m_export.config import Config
 from c2m_export.confluence import ConfluenceClient
 from c2m_export.converter import MarkdownConverter
-from c2m_export.cli import export_tree
-from c2m_export.utils import create_zip_file, sanitize_filename, generate_zip_filename
+from c2m_export.utils import create_zip_file, generate_zip_filename, sanitize_filename
 
 # グローバルロック
 export_lock = threading.Lock()
+
 
 class StreamlitLogHandler(logging.Handler):
     def __init__(self, placeholder, max_lines=100):
@@ -28,17 +30,21 @@ class StreamlitLogHandler(logging.Handler):
             self.log_lines.pop(0)
         self.placeholder.code("\n".join(self.log_lines))
 
+
 def main():
     st.set_page_config(page_title="C2M-Export Web", layout="wide")
 
     # パスワードの伏字表示から「目」のアイコン（表示切替）を隠すためのCSS
-    st.markdown("""
+    st.markdown(
+        """
         <style>
         div[data-testid="stTextInput"] button {
             display: none;
         }
         </style>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 
     st.title("Confluence to Markdown Exporter")
 
@@ -75,7 +81,7 @@ def main():
 
     for i, pid in enumerate(st.session_state.root_page_ids):
         cols = st.columns([0.8, 0.2])
-        val = cols[0].text_input(f"Root Page ID #{i+1}", value=pid, key=f"pid_{i}")
+        val = cols[0].text_input(f"Root Page ID #{i + 1}", value=pid, key=f"pid_{i}")
         new_ids.append(val)
         if cols[1].button("削除", key=f"del_{i}"):
             ids_to_remove.append(i)
@@ -105,11 +111,7 @@ def main():
     if st.session_state.export_result:
         res = st.session_state.export_result
         st.download_button(
-            label=res["label"],
-            data=res["data"],
-            file_name=res["file_name"],
-            mime=res["mime"],
-            key="download_result"
+            label=res["label"], data=res["data"], file_name=res["file_name"], mime=res["mime"], key="download_result"
         )
         if st.button("結果をクリア"):
             st.session_state.export_result = None
@@ -138,7 +140,7 @@ def main():
 
         # ロギング設定
         handler = StreamlitLogHandler(log_placeholder)
-        handler.setFormatter(logging.Formatter('%(asctime)s [%(levelname)s] %(message)s', '%H:%M:%S'))
+        handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s", "%H:%M:%S"))
         logger = logging.getLogger("c2m_export")
         logger.setLevel(logging.INFO)
         logger.addHandler(handler)
@@ -163,13 +165,15 @@ def main():
                     for root_page_id in active_ids:
                         try:
                             root_page = client.get_page(root_page_id)
-                            root_title = root_page.get('title')
-                            space_key = root_page.get('space', {}).get('key')
+                            root_title = root_page.get("title")
+                            space_key = root_page.get("space", {}).get("key")
                             if first_root_title is None:
                                 first_root_title = root_title
                                 first_space_key = space_key
                         except Exception as e:
-                            logger.error(f"ルートページ {root_page_id} の取得に失敗しました（現象）。詳細: {e}（原因）。ページIDが正しいか確認してください（対処方法）")
+                            logger.error(
+                                f"ルートページ {root_page_id} の取得に失敗しました（現象）。詳細: {e}（原因）。ページIDが正しいか確認してください（対処方法）"
+                            )
                             st.error(f"ルートページ {root_page_id} の取得に失敗しました。")
                             return
 
@@ -180,7 +184,9 @@ def main():
                         # 非上書き時の競合チェック（同一実行内での重複。Web UIではdisk存在チェックは行わない（一時ディレクトリのため））
                         if not config.overwrite:
                             if filename in exported_filenames:
-                                logger.error(f"ファイル名の競合が発生しました（現象）。詳細: 同一実行内で '{filename}' が重複しています（原因）。ルートページ名が重複していないか確認してください（対処方法）")
+                                logger.error(
+                                    f"ファイル名の競合が発生しました（現象）。詳細: 同一実行内で '{filename}' が重複しています（原因）。ルートページ名が重複していないか確認してください（対処方法）"
+                                )
                                 st.error(f"ファイル名の競合が発生しました: {filename}")
                                 return
 
@@ -197,7 +203,9 @@ def main():
                         )
 
                         if not full_md:
-                            logger.error(f"ページ ID {root_page_id} のコンテンツがエクスポートされませんでした（現象）。詳細: 該当ページが空か、取得に失敗しました（原因）。ページIDと内容を確認してください（対処方法）")
+                            logger.error(
+                                f"ページ ID {root_page_id} のコンテンツがエクスポートされませんでした（現象）。詳細: 該当ページが空か、取得に失敗しました（原因）。ページIDと内容を確認してください（対処方法）"
+                            )
                             st.error(f"ページ ID {root_page_id} のエクスポートに失敗しました。")
                             return
 
@@ -219,7 +227,7 @@ def main():
                                 "label": "Zipファイルをダウンロード",
                                 "data": f.read(),
                                 "file_name": zip_filename,
-                                "mime": "application/zip"
+                                "mime": "application/zip",
                             }
                     else:
                         # 単一ファイルの場合
@@ -228,7 +236,7 @@ def main():
                             "label": "Markdownファイルをダウンロード",
                             "data": content,
                             "file_name": filename,
-                            "mime": "text/markdown"
+                            "mime": "text/markdown",
                         }
                     st.success("エクスポートが完了しました。ダウンロードボタンが表示されました。")
                     st.rerun()
@@ -239,8 +247,10 @@ def main():
         finally:
             logger.removeHandler(handler)
 
+
 if __name__ == "__main__":
     import sys
+
     from streamlit.web import cli as stcli
 
     if "--run-internal" in sys.argv:

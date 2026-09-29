@@ -1,33 +1,32 @@
-import requests
-import time
 import logging
+import time
 from typing import Dict, List, Optional
 
+import requests
+
 logger = logging.getLogger(__name__)
+
 
 class ConfluenceClient:
     """
     Confluence Data Center REST APIとの通信を担当するクライアントクラス。
     Bearer認証、Proxy経由の接続、および一時的なエラーに対するリトライロジックを実装。
     """
+
     def __init__(self, base_url: str, token: str, proxy: Optional[str] = None):
         self.base_url = base_url
-        self.headers = {
-            "Authorization": f"Bearer {token}",
-            "Accept": "application/json"
-        }
+        self.headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
         self.proxies = None
         if proxy:
-            self.proxies = {
-                "http": proxy,
-                "https": proxy
-            }
+            self.proxies = {"http": proxy, "https": proxy}
         self.session = requests.Session()
         self.session.headers.update(self.headers)
         if self.proxies:
             self.session.proxies.update(self.proxies)
 
-    def _request(self, method: str, path: str, params: Optional[Dict] = None, retries: int = 3, backoff: float = 2.0) -> Dict:
+    def _request(
+        self, method: str, path: str, params: Optional[Dict] = None, retries: int = 3, backoff: float = 2.0
+    ) -> Dict:
         """
         共通のリクエスト処理。5xxエラーやネットワークエラーに対して指数バックオフを伴うリトライを行う。
         """
@@ -38,16 +37,18 @@ class ConfluenceClient:
                 if response.status_code == 200:
                     return response.json()
                 elif 500 <= response.status_code < 600:
-                    logger.warning(f"サーバーエラー {response.status_code} が発生しました ({url})。再試行中 ({i+1}/{retries})...")
-                    time.sleep(backoff * (2 ** i))
+                    logger.warning(
+                        f"サーバーエラー {response.status_code} が発生しました ({url})。再試行中 ({i + 1}/{retries})..."
+                    )
+                    time.sleep(backoff * (2**i))
                     continue
                 else:
                     response.raise_for_status()
             except requests.exceptions.RequestException as e:
                 if i == retries - 1:
                     raise
-                logger.warning(f"リクエストが失敗しました: {e}。再試行中 ({i+1}/{retries})...")
-                time.sleep(backoff * (2 ** i))
+                logger.warning(f"リクエストが失敗しました: {e}。再試行中 ({i + 1}/{retries})...")
+                time.sleep(backoff * (2**i))
 
         raise Exception(f"{retries} 回の試行後も {url} の取得に失敗しました")
 

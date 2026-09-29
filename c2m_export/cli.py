@@ -1,25 +1,33 @@
-import sys
 import logging
+import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Dict
+from typing import Dict, List, Optional, Tuple
 
 from .config import Config
 from .confluence import ConfluenceClient
 from .converter import MarkdownConverter
-from .utils import get_unique_filename, bytes_to_mb, is_within_size_limit, create_zip_file, generate_zip_filename
+from .utils import bytes_to_mb, create_zip_file, generate_zip_filename, get_unique_filename, is_within_size_limit
 
 logger = logging.getLogger(__name__)
 
-def export_tree(client: ConfluenceClient, converter: MarkdownConverter, root_page_id: str, stop_threshold_mb: float, initial_page_data: Dict = None):
+
+def export_tree(
+    client: ConfluenceClient,
+    converter: MarkdownConverter,
+    root_page_id: str,
+    stop_threshold_mb: float,
+    initial_page_data: Optional[Dict] = None,
+) -> Tuple[str, int, int, List[str]]:
     """
     指定されたルートページから子孫をDFS(深さ優先探索)で巡回し、Markdownに統合する。
     """
-    pages_to_process = [(root_page_id, 1, initial_page_data)] # (page_id, level, pre_fetched_data) のスタック
-    processed_md = []
+    # (page_id, level, pre_fetched_data) のスタック
+    pages_to_process: List[Tuple[str, int, Optional[Dict]]] = [(root_page_id, 1, initial_page_data)]
+    processed_md: List[str] = []
     total_bytes = 0
     page_count = 0
-    skipped_page_ids = []  # 取得・変換に失敗しスキップしたページIDを集計
+    skipped_page_ids: List[str] = []  # 取得・変換に失敗しスキップしたページIDを集計
 
     while pages_to_process:
         page_id, level, pre_fetched_data = pages_to_process.pop()
@@ -31,10 +39,10 @@ def export_tree(client: ConfluenceClient, converter: MarkdownConverter, root_pag
                 logger.info(f"ページ {page_id} を取得中 (レベル {level})...")
                 page_data = client.get_page(page_id)
 
-            title = page_data.get('title')
-            space_key = page_data.get('space', {}).get('key')
-            body = page_data.get('body', {}).get('storage', {}).get('value', '')
-            webui = page_data.get('_links', {}).get('webui', '')
+            title = page_data.get("title")
+            space_key = page_data.get("space", {}).get("key")
+            body = page_data.get("body", {}).get("storage", {}).get("value", "")
+            webui = page_data.get("_links", {}).get("webui", "")
             full_url = f"{client.base_url}{webui}"
 
             # 統合ファイル内での各ページのヘッダーセクション。メタ情報をAIが参照できるように付与。
@@ -44,11 +52,13 @@ def export_tree(client: ConfluenceClient, converter: MarkdownConverter, root_pag
             page_md += f"- **URL**: {full_url}\n\n"
             page_md += converter.convert(body, level=level)
 
-            md_bytes = len(page_md.encode('utf-8'))
+            md_bytes = len(page_md.encode("utf-8"))
 
             # サイズ制限のチェック。閾値を超えた場合は、中途半端な取得を避けるためその時点で停止。
             if not is_within_size_limit(total_bytes + md_bytes, stop_threshold_mb):
-                logger.warning(f"停止閾値 ({stop_threshold_mb}MB) に達しました（現象）。詳細: 取得予定のデータが制限を超えています（原因）。これ以上のエクスポートを停止します（対処方法）")
+                logger.warning(
+                    f"停止閾値 ({stop_threshold_mb}MB) に達しました（現象）。詳細: 取得予定のデータが制限を超えています（原因）。これ以上のエクスポートを停止します（対処方法）"
+                )
                 break
 
             # 子ページ一覧の取得に成功してから本文と成功数を確定する。
@@ -60,13 +70,17 @@ def export_tree(client: ConfluenceClient, converter: MarkdownConverter, root_pag
 
             # DFSを実現するために子ページを reversed でスタックへ追加。
             for child in reversed(children):
-                pages_to_process.append((child['id'], level + 1, None))
+                pages_to_process.append((child["id"], level + 1, None))
 
-            logger.info(f"'{title}' を処理しました。現在のサイズ: {bytes_to_mb(total_bytes):.2f}MB, ページ数: {page_count}")
+            logger.info(
+                f"'{title}' を処理しました。現在のサイズ: {bytes_to_mb(total_bytes):.2f}MB, ページ数: {page_count}"
+            )
 
         except Exception as e:
             # 個別ページの失敗はログに記録し、全体の処理は継続。
-            logger.error(f"ページ {page_id} の処理に失敗しました（現象）。詳細: {e}（原因）。このページをスキップして継続します（対処方法）")
+            logger.error(
+                f"ページ {page_id} の処理に失敗しました（現象）。詳細: {e}（原因）。このページをスキップして継続します（対処方法）"
+            )
             skipped_page_ids.append(page_id)
             continue
 
@@ -83,22 +97,23 @@ def export_tree(client: ConfluenceClient, converter: MarkdownConverter, root_pag
 
     return "".join(processed_md), total_bytes, page_count, skipped_page_ids
 
+
 def main():
     """
     CLIのエントリーポイント。設定の読み込み、クライアントの初期化、エクスポートの実行を行う。
     """
     # 外部からインポートされた際の副作用を防ぐため、実行時にのみログ設定を行う
     logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s [%(levelname)s] %(message)s',
-        datefmt='%Y-%m-%d %H:%M:%S'
+        level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
     )
     config = Config()
     try:
         config.load()
         config.validate()
     except Exception as e:
-        logger.error(f"設定エラーが発生しました（現象）。詳細: {e}（原因）。c2m_config.yaml の内容やコマンドライン引数を確認してください（対処方法）")
+        logger.error(
+            f"設定エラーが発生しました（現象）。詳細: {e}（原因）。c2m_config.yaml の内容やコマンドライン引数を確認してください（対処方法）"
+        )
         sys.exit(1)
 
     client = ConfluenceClient(config.base_url, config.token, config.proxy)
@@ -119,13 +134,15 @@ def main():
     for root_page_id in config.root_page_ids:
         try:
             root_page = client.get_page(root_page_id)
-            root_title = root_page.get('title')
-            space_key = root_page.get('space', {}).get('key')
+            root_title = root_page.get("title")
+            space_key = root_page.get("space", {}).get("key")
             if first_root_title is None:
                 first_root_title = root_title
                 first_space_key = space_key
         except Exception as e:
-            logger.error(f"ルートページ {root_page_id} の取得に失敗しました（現象）。詳細: {e}（原因）。ページIDが正しいか、権限があるかを確認してください（対処方法）")
+            logger.error(
+                f"ルートページ {root_page_id} の取得に失敗しました（現象）。詳細: {e}（原因）。ページIDが正しいか、権限があるかを確認してください（対処方法）"
+            )
             sys.exit(1)
 
         output_path = get_unique_filename(config.output_dir, space_key, root_title, suffix)
@@ -134,10 +151,14 @@ def main():
         # 非上書き時の競合チェック（既存ファイルおよび同一実行内での重複）
         if not config.overwrite:
             if filename in exported_filenames:
-                logger.error(f"ファイル名の競合が発生しました（現象）。詳細: 同一実行内で '{filename}' が重複しています（原因）。ルートページ名が重複していないか確認してください（対処方法）")
+                logger.error(
+                    f"ファイル名の競合が発生しました（現象）。詳細: 同一実行内で '{filename}' が重複しています（原因）。ルートページ名が重複していないか確認してください（対処方法）"
+                )
                 sys.exit(1)
             if not config.zip_output and output_path.exists():
-                logger.error(f"出力ファイルが既に存在します（現象）。詳細: '{output_path}' は既に存在します（原因）。上書きを指定するか、既存ファイルを移動してください（対処方法）")
+                logger.error(
+                    f"出力ファイルが既に存在します（現象）。詳細: '{output_path}' は既に存在します（原因）。上書きを指定するか、既存ファイルを移動してください（対処方法）"
+                )
                 sys.exit(1)
 
         exported_filenames.add(filename)
@@ -147,7 +168,9 @@ def main():
             try:
                 output_path.parent.mkdir(parents=True, exist_ok=True)
             except Exception as e:
-                logger.error(f"出力ディレクトリの作成に失敗しました（現象）。詳細: {e}（原因）。書き込み権限を確認してください（対処方法）")
+                logger.error(
+                    f"出力ディレクトリの作成に失敗しました（現象）。詳細: {e}（原因）。書き込み権限を確認してください（対処方法）"
+                )
                 sys.exit(1)
 
         plan_list.append((root_page_id, root_page, output_path))
@@ -156,12 +179,16 @@ def main():
         zip_filename = generate_zip_filename(first_space_key, first_root_title, suffix)
         zip_path = Path(config.output_dir) / zip_filename
         if not config.overwrite and zip_path.exists():
-            logger.error(f"Zipファイルが既に存在します（現象）。詳細: '{zip_path}' は既に存在します（原因）。上書きを指定するか、既存ファイルを移動してください（対処方法）")
+            logger.error(
+                f"Zipファイルが既に存在します（現象）。詳細: '{zip_path}' は既に存在します（原因）。上書きを指定するか、既存ファイルを移動してください（対処方法）"
+            )
             sys.exit(1)
         try:
             zip_path.parent.mkdir(parents=True, exist_ok=True)
         except Exception as e:
-            logger.error(f"出力ディレクトリの作成に失敗しました（現象）。詳細: {e}（原因）。書き込み権限を確認してください（対処方法）")
+            logger.error(
+                f"出力ディレクトリの作成に失敗しました（現象）。詳細: {e}（原因）。書き込み権限を確認してください（対処方法）"
+            )
             sys.exit(1)
 
     # --- 情報収集と書き込み実行 ---
@@ -170,10 +197,14 @@ def main():
         logger.info("-" * 50)
         logger.info(f"ルートページID: {root_page_id} からのエクスポートを開始します")
 
-        full_md, total_bytes, page_count, skipped_page_ids = export_tree(client, converter, root_page_id, config.stop_threshold_mb, initial_page_data=root_page)
+        full_md, total_bytes, page_count, skipped_page_ids = export_tree(
+            client, converter, root_page_id, config.stop_threshold_mb, initial_page_data=root_page
+        )
 
         if not full_md:
-            logger.error(f"ページ ID {root_page_id} のコンテンツがエクスポートされませんでした（現象）。詳細: 該当ページが空か、取得に失敗しました（原因）。ページIDと内容を確認してください（対処方法）")
+            logger.error(
+                f"ページ ID {root_page_id} のコンテンツがエクスポートされませんでした（現象）。詳細: 該当ページが空か、取得に失敗しました（原因）。ページIDと内容を確認してください（対処方法）"
+            )
             sys.exit(1)
 
         if config.zip_output:
@@ -187,9 +218,13 @@ def main():
                 logger.info(f"最終ファイルサイズ: {bytes_to_mb(total_bytes):.2f}MB")
 
                 if bytes_to_mb(total_bytes) > config.max_mb:
-                    logger.warning(f"最終ファイルサイズ ({bytes_to_mb(total_bytes):.2f}MB) が最大許容サイズ ({config.max_mb}MB) を超えています（現象）。詳細: ページツリー全体の合計サイズが設定値を超過しました（原因）。--max-mb 設定の調整を検討してください（対処方法）")
+                    logger.warning(
+                        f"最終ファイルサイズ ({bytes_to_mb(total_bytes):.2f}MB) が最大許容サイズ ({config.max_mb}MB) を超えています（現象）。詳細: ページツリー全体の合計サイズが設定値を超過しました（原因）。--max-mb 設定の調整を検討してください（対処方法）"
+                    )
             except Exception as e:
-                logger.error(f"出力ファイルの書き込みに失敗しました（現象）。詳細: {e}（原因）。書き込み権限、ディスク容量、またはファイルロックを確認してください（対処方法）")
+                logger.error(
+                    f"出力ファイルの書き込みに失敗しました（現象）。詳細: {e}（原因）。書き込み権限、ディスク容量、またはファイルロックを確認してください（対処方法）"
+                )
                 sys.exit(1)
 
     # Zip圧縮が指定されている場合、全ファイルをまとめて出力
@@ -200,8 +235,11 @@ def main():
             create_zip_file(zip_path, exported_files)
             logger.info(f"Zipファイルの作成に成功しました: '{zip_path}'")
         except Exception as e:
-            logger.error(f"Zipファイルの作成に失敗しました（現象）。詳細: {e}（原因）。書き込み権限、ディスク容量、またはファイルロックを確認してください（対処方法）")
+            logger.error(
+                f"Zipファイルの作成に失敗しました（現象）。詳細: {e}（原因）。書き込み権限、ディスク容量、またはファイルロックを確認してください（対処方法）"
+            )
             sys.exit(1)
+
 
 if __name__ == "__main__":
     main()

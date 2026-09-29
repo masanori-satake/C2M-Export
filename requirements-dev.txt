@@ -1,0 +1,17 @@
+# 開発・テスト用の依存関係
+# ランタイム依存は requirements.txt を参照してください。
+#
+# インストール:
+#   pip install -r requirements.txt -r requirements-dev.txt
+
+# テストフレームワーク
+pytest>=8.0
+
+# リンター / フォーマッター
+ruff>=0.13.0
+
+# 静的型検査
+mypy>=1.10
+# サードパーティライブラリの型スタブ
+types-requests
+types-PyYAML

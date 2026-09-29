@@ -1,5 +1,7 @@
 import pytest
+
 from c2m_export.converter import MarkdownConverter
+
 
 def test_convert_basic():
     converter = MarkdownConverter("https://example.com/wiki")
@@ -8,6 +10,7 @@ def test_convert_basic():
     assert "# Title" in md
     assert "Hello **World**" in md
 
+
 def test_convert_table():
     converter = MarkdownConverter("https://example.com/wiki")
     html = "<table><tr><th>H1</th><th>H2</th></tr><tr><td>D1</td><td>D2</td></tr></table>"
@@ -15,6 +18,7 @@ def test_convert_table():
     assert "| H1 | H2 |" in md
     assert "| --- | --- |" in md
     assert "| D1 | D2 |" in md
+
 
 def test_convert_macros():
     converter = MarkdownConverter("https://example.com/wiki")
@@ -30,6 +34,7 @@ def test_convert_macros():
     assert "```plantuml" in md_puml
     assert "alice -> bob" in md_puml
 
+
 def test_heading_limit():
     converter = MarkdownConverter("https://example.com/wiki")
     # level 2 means h1 becomes ##, h6 becomes ######## (which should be limited to ######)
@@ -38,14 +43,15 @@ def test_heading_limit():
     assert "###### Deep Header" in md
     assert "########" not in md
 
+
 def test_code_macro_language():
     converter = MarkdownConverter("https://example.com/wiki")
-    html = '''
+    html = """
     <ac:structured-macro ac:name="code">
         <ac:parameter ac:name="language">python</ac:parameter>
         <ac:plain-text-body><![CDATA[print("hi")]]></ac:plain-text-body>
     </ac:structured-macro>
-    '''
+    """
     md = converter.convert(html)
     assert "```python" in md
     assert 'print("hi")' in md
