@@ -2,12 +2,12 @@ import sys
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import List, Dict
+from typing import Dict
 
 from .config import Config
 from .confluence import ConfluenceClient
 from .converter import MarkdownConverter
-from .utils import get_unique_filename, bytes_to_mb, is_within_size_limit, create_zip_file, generate_zip_filename, sanitize_filename
+from .utils import get_unique_filename, bytes_to_mb, is_within_size_limit, create_zip_file, generate_zip_filename
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +19,7 @@ def export_tree(client: ConfluenceClient, converter: MarkdownConverter, root_pag
     processed_md = []
     total_bytes = 0
     page_count = 0
+    skipped_page_ids = []  # 取得・変換に失敗しスキップしたページIDを集計
 
     while pages_to_process:
         page_id, level, pre_fetched_data = pages_to_process.pop()
@@ -64,9 +65,21 @@ def export_tree(client: ConfluenceClient, converter: MarkdownConverter, root_pag
         except Exception as e:
             # 個別ページの失敗はログに記録し、全体の処理は継続。
             logger.error(f"ページ {page_id} の処理に失敗しました（現象）。詳細: {e}（原因）。このページをスキップして継続します（対処方法）")
+            skipped_page_ids.append(page_id)
             continue
 
-    return "".join(processed_md), total_bytes, page_count
+    # 処理完了サマリ。欠損の有無を利用者が把握できるよう、成功数・スキップ数・IDを明示する。
+    if skipped_page_ids:
+        logger.warning(
+            f"エクスポートが一部のページをスキップして完了しました（現象）。"
+            f"成功 {page_count} ページ / スキップ {len(skipped_page_ids)} ページ"
+            f"（page_id={', '.join(skipped_page_ids)}）（原因: 上記の個別エラーログを参照）。"
+            f"スキップされたページは元の Confluence で内容と権限を確認してください（対処方法）"
+        )
+    else:
+        logger.info(f"エクスポートが完了しました。成功 {page_count} ページ（スキップなし）")
+
+    return "".join(processed_md), total_bytes, page_count, skipped_page_ids
 
 def main():
     """
@@ -155,7 +168,7 @@ def main():
         logger.info("-" * 50)
         logger.info(f"ルートページID: {root_page_id} からのエクスポートを開始します")
 
-        full_md, total_bytes, page_count = export_tree(client, converter, root_page_id, config.stop_threshold_mb, initial_page_data=root_page)
+        full_md, total_bytes, page_count, skipped_page_ids = export_tree(client, converter, root_page_id, config.stop_threshold_mb, initial_page_data=root_page)
 
         if not full_md:
             logger.error(f"ページ ID {root_page_id} のコンテンツがエクスポートされませんでした（現象）。詳細: 該当ページが空か、取得に失敗しました（原因）。ページIDと内容を確認してください（対処方法）")

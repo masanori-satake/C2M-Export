@@ -2,16 +2,14 @@ import streamlit as st
 import logging
 import threading
 import tempfile
-import os
 from pathlib import Path
 from datetime import datetime
-from typing import List, Tuple
 
 from c2m_export.config import Config
 from c2m_export.confluence import ConfluenceClient
 from c2m_export.converter import MarkdownConverter
 from c2m_export.cli import export_tree
-from c2m_export.utils import create_zip_file, sanitize_filename, bytes_to_mb, generate_zip_filename
+from c2m_export.utils import create_zip_file, sanitize_filename, generate_zip_filename
 
 # グローバルロック
 export_lock = threading.Lock()
@@ -63,7 +61,8 @@ def main():
     token = st.sidebar.text_input("Token", value=config.token if config.token else "", type="password")
 
     st.sidebar.header("エクスポート設定")
-    max_mb = st.sidebar.number_input("Max MB", value=config.max_mb, min_value=1.0)
+    # Max MB は UI 表示用のウィジェット。値は後続処理で参照しないため代入しない。
+    st.sidebar.number_input("Max MB", value=config.max_mb, min_value=1.0)
     stop_threshold_mb = st.sidebar.number_input("Stop Threshold MB", value=config.stop_threshold_mb, min_value=1.0)
     zip_output = st.sidebar.checkbox("Zip圧縮してダウンロード", value=True)
     add_suffix = st.sidebar.checkbox("作成時刻のSuffix有り", value=not config.overwrite)

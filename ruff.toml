@@ -1,0 +1,19 @@
+# Ruff 設定
+# Python スクリプトの健全性チェックに用いる。
+# 既存コードのスタイル（if cond: return 等の一行形式）を尊重し、
+# バグに直結しやすいエラー系ルールに絞って有効化する。
+
+target-version = "py38"
+line-length = 120
+
+[lint]
+# E9  : 構文エラー等（実行を妨げる致命的な問題）
+# F   : pyflakes（未使用 import/変数、未定義名など、バグに直結しやすい問題）
+select = ["E9", "F"]
+
+# E701（複数文の一行記述）などのスタイル系は既存コードと衝突するため有効化しない。
+
+[lint.per-file-ignores]
+# テストでは pytest の import が fixture 提供のために必要なケースがあるため、
+# 未使用 import の指摘を緩和する。
+"tests/*" = ["F401"]
