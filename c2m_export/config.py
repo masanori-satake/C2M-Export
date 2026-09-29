@@ -7,12 +7,14 @@ from typing import Optional, List
 # デフォルト設定ファイルの保存場所 (ツールと同じディレクトリ)
 DEFAULT_CONFIG_PATH = Path(__file__).resolve().parent.parent / "c2m_config.yaml"
 
+
 class Config:
     """
     ツールの設定を管理するクラス。
     CLI引数、環境変数、設定ファイルの順で優先順位を制御し、
     企業環境（Proxy等）での実行に必要な設定を保持する。
     """
+
     def __init__(self):
         self.base_url: Optional[str] = None
         self.root_page_ids: List[str] = []
@@ -56,7 +58,9 @@ class Config:
                         self.zip_output = file_config.get("zip_output", self.zip_output)
                         self.overwrite = file_config.get("overwrite", self.overwrite)
             except Exception as e:
-                print(f"設定ファイル {config_path} の読み込みに失敗しました（現象）。詳細: {e}（原因）。ファイル形式や権限を確認してください（対処方法）")
+                print(
+                    f"設定ファイル {config_path} の読み込みに失敗しました（現象）。詳細: {e}（原因）。ファイル形式や権限を確認してください（対処方法）"
+                )
 
         # 2. 環境変数からの読み込み（Proxyなど環境依存性の高いもの）
         env_https_proxy = os.environ.get("HTTPS_PROXY")
@@ -69,10 +73,14 @@ class Config:
         # 3. CLI引数からの読み込み（優先度：最高）
         parser = argparse.ArgumentParser(description="ConfluenceのページツリーをMarkdownとしてエクスポートするツール")
         parser.add_argument("--base-url", type=str, help="ConfluenceのベースURL (例: https://host/wiki)")
-        parser.add_argument("--root-page-id", type=str, nargs="+", help="エクスポートを開始するルートページのID（複数指定可能）")
+        parser.add_argument(
+            "--root-page-id", type=str, nargs="+", help="エクスポートを開始するルートページのID（複数指定可能）"
+        )
         parser.add_argument("--output-dir", type=str, help="エクスポートされたMarkdownファイルを保存するディレクトリ")
         parser.add_argument("--max-mb", type=float, help="出力ファイルの最大許容サイズ (MB) (既定: 100)")
-        parser.add_argument("--stop-threshold-mb", type=float, help="サイズがこの閾値 (MB) を超えた場合に処理を停止する (既定: 95)")
+        parser.add_argument(
+            "--stop-threshold-mb", type=float, help="サイズがこの閾値 (MB) を超えた場合に処理を停止する (既定: 95)"
+        )
         parser.add_argument("--proxy", type=str, help="HTTP/HTTPS プロキシURL")
         parser.add_argument("--config", type=str, help="設定ファイルのパス (既定: c2m_config.yaml)")
         parser.add_argument("--token", type=str, help="ConfluenceのBearerトークン")
@@ -81,21 +89,30 @@ class Config:
 
         cli_args = parser.parse_args()
 
-        if cli_args.base_url: self.base_url = cli_args.base_url
-        if cli_args.root_page_id: self.root_page_ids = cli_args.root_page_id
+        if cli_args.base_url:
+            self.base_url = cli_args.base_url
+        if cli_args.root_page_id:
+            self.root_page_ids = cli_args.root_page_id
 
         # 重複を除去
         if self.root_page_ids:
             seen = set()
             self.root_page_ids = [x for x in self.root_page_ids if not (x in seen or seen.add(x))]
 
-        if cli_args.output_dir: self.output_dir = cli_args.output_dir
-        if cli_args.max_mb is not None: self.max_mb = cli_args.max_mb
-        if cli_args.stop_threshold_mb is not None: self.stop_threshold_mb = cli_args.stop_threshold_mb
-        if cli_args.proxy: self.proxy = cli_args.proxy
-        if cli_args.token: self.token = cli_args.token
-        if cli_args.zip: self.zip_output = True
-        if cli_args.overwrite: self.overwrite = True
+        if cli_args.output_dir:
+            self.output_dir = cli_args.output_dir
+        if cli_args.max_mb is not None:
+            self.max_mb = cli_args.max_mb
+        if cli_args.stop_threshold_mb is not None:
+            self.stop_threshold_mb = cli_args.stop_threshold_mb
+        if cli_args.proxy:
+            self.proxy = cli_args.proxy
+        if cli_args.token:
+            self.token = cli_args.token
+        if cli_args.zip:
+            self.zip_output = True
+        if cli_args.overwrite:
+            self.overwrite = True
 
     def validate(self):
         """
@@ -109,4 +126,4 @@ class Config:
             raise ValueError("token is required (use --token or config file)")
 
         # 後続のパス結合時に重複を防ぐための正規化
-        self.base_url = self.base_url.rstrip('/')
+        self.base_url = self.base_url.rstrip("/")

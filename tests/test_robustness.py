@@ -5,6 +5,7 @@
 - CLI レベルの波及防止・部分成功・ログ（要件14）
 - ページ連結でのコードフェンス波及防止（要件15.3）
 """
+
 import re
 import logging
 import pytest
@@ -15,6 +16,7 @@ from c2m_export.converter import MarkdownConverter
 # ---------------------------------------------------------------------------
 # タスク2: コードフェンスの動的伸長（対策1の単体検証 / 要件15.1, 15.2）
 # ---------------------------------------------------------------------------
+
 
 def test_wrap_code_block_normal_uses_three_backticks():
     """通常のコード（バッククォートを含まない）は 3 連フェンスのまま（退行防止）。"""
@@ -59,7 +61,7 @@ def test_code_macro_with_inner_fence_does_not_leak():
     html = (
         '<ac:structured-macro ac:name="code">'
         '<ac:plain-text-body><![CDATA[echo "```"]]></ac:plain-text-body>'
-        '</ac:structured-macro>'
+        "</ac:structured-macro>"
     )
     md = converter.convert(html)
     # 中身の ``` (3連) を包む外側フェンスは 4 連以上になる。
@@ -74,6 +76,7 @@ def test_code_macro_with_inner_fence_does_not_leak():
 # ---------------------------------------------------------------------------
 # タスク14: 変換器レベルの堅牢性（例外を投げず情報を残す / 要件14.1, 14.2, 14.7）
 # ---------------------------------------------------------------------------
+
 
 def test_incomplete_xhtml_does_not_raise():
     """閉じタグ欠落・途中で切れた XHTML でも例外を投げず部分テキストを返す。"""
@@ -110,10 +113,7 @@ def test_ac_link_without_target_does_not_raise():
 
 def test_uneven_columns_table_does_not_raise():
     converter = MarkdownConverter("https://example.com/wiki")
-    html = (
-        "<table><thead><tr><th>A</th><th>B</th></tr></thead>"
-        "<tbody><tr><td>x</td></tr></tbody></table>"
-    )
+    html = "<table><thead><tr><th>A</th><th>B</th></tr></thead><tbody><tr><td>x</td></tr></tbody></table>"
     md = converter.convert(html)  # 列数不揃いでも例外を投げない
     assert "| A | B |" in md
     assert "| x |" in md
@@ -171,9 +171,7 @@ def test_export_tree_skips_failing_page_and_continues(caplog):
     converter = MarkdownConverter(client.base_url)
 
     with caplog.at_level(logging.WARNING):
-        md, total_bytes, page_count, skipped = export_tree(
-            client, converter, "root", stop_threshold_mb=100.0
-        )
+        md, total_bytes, page_count, skipped = export_tree(client, converter, "root", stop_threshold_mb=100.0)
 
     # 例外は外に漏れず、成功ページの内容が含まれる（部分成功）
     assert "root body" in md
@@ -193,9 +191,7 @@ def test_export_tree_no_skip_logs_success(caplog):
     converter = MarkdownConverter(client.base_url)
 
     with caplog.at_level(logging.INFO):
-        md, total_bytes, page_count, skipped = export_tree(
-            client, converter, "root", stop_threshold_mb=100.0
-        )
+        md, total_bytes, page_count, skipped = export_tree(client, converter, "root", stop_threshold_mb=100.0)
 
     assert skipped == []
     assert page_count == 1
@@ -207,7 +203,7 @@ def test_page_concatenation_code_fence_does_not_leak():
     code_page_body = (
         '<ac:structured-macro ac:name="code">'
         '<ac:plain-text-body><![CDATA[echo "```"]]></ac:plain-text-body>'
-        '</ac:structured-macro>'
+        "</ac:structured-macro>"
     )
     pages = {
         "root": {"title": "CodePage", "body": code_page_body, "children": ["c1"]},
@@ -216,9 +212,7 @@ def test_page_concatenation_code_fence_does_not_leak():
     client = _StubClient(pages)
     converter = MarkdownConverter(client.base_url)
 
-    md, _, page_count, skipped = export_tree(
-        client, converter, "root", stop_threshold_mb=100.0
-    )
+    md, _, page_count, skipped = export_tree(client, converter, "root", stop_threshold_mb=100.0)
 
     assert page_count == 2
     assert skipped == []
@@ -229,33 +223,31 @@ def test_page_concatenation_code_fence_does_not_leak():
     assert "normal following text" in md
 
 
-@pytest.mark.parametrize('failed_id', ['root', 'c1'])
+@pytest.mark.parametrize("failed_id", ["root", "c1"])
 def test_child_listing_failure_does_not_count_skipped_page(monkeypatch, caplog, failed_id):
     """子ページ取得失敗時も本文・バイト数・成功数・スキップ一覧が整合する。"""
     pages = {
-        'root': {'title': 'Root', 'body': '<p>root body</p>', 'children': ['c1', 'c2']},
-        'c1': {'title': 'Child1', 'body': '<p>child1 body</p>'},
-        'c2': {'title': 'Child2', 'body': '<p>child2 body</p>'},
+        "root": {"title": "Root", "body": "<p>root body</p>", "children": ["c1", "c2"]},
+        "c1": {"title": "Child1", "body": "<p>child1 body</p>"},
+        "c2": {"title": "Child2", "body": "<p>child2 body</p>"},
     }
     client = _StubClient(pages)
     get_children = client.get_child_pages
 
     def failing_children(page_id):
         if page_id == failed_id:
-            raise RuntimeError('子ページ一覧の取得失敗')
+            raise RuntimeError("子ページ一覧の取得失敗")
         return get_children(page_id)
 
-    monkeypatch.setattr(client, 'get_child_pages', failing_children)
+    monkeypatch.setattr(client, "get_child_pages", failing_children)
     with caplog.at_level(logging.WARNING):
-        md, total_bytes, count, skipped = export_tree(
-            client, MarkdownConverter(client.base_url), 'root', 100.0
-        )
+        md, total_bytes, count, skipped = export_tree(client, MarkdownConverter(client.base_url), "root", 100.0)
 
     assert skipped == [failed_id]
-    assert f'**Page ID**: {failed_id}\n' not in md
-    assert total_bytes == len(md.encode('utf-8'))
-    assert count == (0 if failed_id == 'root' else 2)
-    if failed_id == 'c1':
-        assert 'root body' in md
-        assert 'child2 body' in md
-    assert any(f'成功 {count} ページ / スキップ 1 ページ' in r.message for r in caplog.records)
+    assert f"**Page ID**: {failed_id}\n" not in md
+    assert total_bytes == len(md.encode("utf-8"))
+    assert count == (0 if failed_id == "root" else 2)
+    if failed_id == "c1":
+        assert "root body" in md
+        assert "child2 body" in md
+    assert any(f"成功 {count} ページ / スキップ 1 ページ" in r.message for r in caplog.records)

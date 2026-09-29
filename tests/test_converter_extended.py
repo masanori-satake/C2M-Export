@@ -3,6 +3,7 @@
 表の再設計、インライン/ブロック要素、ネストリスト、タスクリスト、画像、
 ページリンク・メンション・絵文字・レイアウトなどを検証する。
 """
+
 import pytest
 
 from c2m_export.converter import MarkdownConverter
@@ -16,6 +17,7 @@ def converter():
 # ---------------------------------------------------------------------------
 # タスク4: 表変換（要件1, 12）
 # ---------------------------------------------------------------------------
+
 
 def test_table_with_thead_tbody(converter):
     """thead/tbody で囲まれた表が消えず、ヘッダー・ボディともに出力される。"""
@@ -86,6 +88,7 @@ def test_table_cell_pipe_escaped(converter):
 # タスク6: インライン/ブロック要素（要件2,3,4,9,10,11）
 # ---------------------------------------------------------------------------
 
+
 def test_blockquote(converter):
     html = "<blockquote><p>quoted text</p></blockquote>"
     md = converter.convert(html)
@@ -130,6 +133,7 @@ def test_definition_list(converter):
 # タスク8: ネストリスト（要件5）
 # ---------------------------------------------------------------------------
 
+
 def test_nested_unordered_list_indent(converter):
     html = "<ul><li>parent<ul><li>child</li></ul></li></ul>"
     md = converter.convert(html)
@@ -148,6 +152,7 @@ def test_nested_ordered_list(converter):
 # ---------------------------------------------------------------------------
 # タスク12: タスクリスト・画像・リンク・固有要素（要件6,7,8,11）
 # ---------------------------------------------------------------------------
+
 
 def test_task_list(converter):
     html = (
@@ -195,7 +200,7 @@ def test_ac_link_page_without_space_key_keeps_title(converter):
 def test_ac_link_page_display_text_priority(converter):
     html = (
         '<ac:link><ri:page ri:content-title="Real Title" ri:space-key="DEV" />'
-        '<ac:plain-text-link-body>Display Text</ac:plain-text-link-body></ac:link>'
+        "<ac:plain-text-link-body>Display Text</ac:plain-text-link-body></ac:link>"
     )
     md = converter.convert(html)
     assert "[Display Text](https://example.com/wiki/display/DEV/Real%20Title)" in md
@@ -208,9 +213,9 @@ def test_ac_link_user_mention(converter):
 
 
 def test_ac_emoticon(converter):
-    html = '<p><ac:emoticon ac:name="smile" ac:emoji-fallback="\U0001F642" /></p>'
+    html = '<p><ac:emoticon ac:name="smile" ac:emoji-fallback="\U0001f642" /></p>'
     md = converter.convert(html)
-    assert "\U0001F642" in md
+    assert "\U0001f642" in md
 
 
 def test_ac_layout_keeps_content(converter):
@@ -223,16 +228,24 @@ def test_ac_layout_keeps_content(converter):
 
 
 @pytest.mark.parametrize(
-    ('html', 'expected'),
+    ("html", "expected"),
     [
-        ('<ol><li>parent<ol><li>child<ol><li>leaf</li></ol></li></ol></li><li>next</li></ol>',
-         ['1. parent', '   1. child', '      1. leaf', '1. next']),
-        ('<ol><li>parent<ul><li>child<ol><li>leaf</li></ol></li></ul></li></ol>',
-         ['1. parent', '   - child', '     1. leaf']),
-        ('<ul><li>parent<ol><li>child<ul><li>leaf</li></ul></li></ol></li></ul>',
-         ['- parent', '  1. child', '     - leaf']),
-        ('<ul><li>parent<ul><li>child<ul><li>leaf</li></ul></li></ul></li></ul>',
-         ['- parent', '  - child', '    - leaf']),
+        (
+            "<ol><li>parent<ol><li>child<ol><li>leaf</li></ol></li></ol></li><li>next</li></ol>",
+            ["1. parent", "   1. child", "      1. leaf", "1. next"],
+        ),
+        (
+            "<ol><li>parent<ul><li>child<ol><li>leaf</li></ol></li></ul></li></ol>",
+            ["1. parent", "   - child", "     1. leaf"],
+        ),
+        (
+            "<ul><li>parent<ol><li>child<ul><li>leaf</li></ul></li></ol></li></ul>",
+            ["- parent", "  1. child", "     - leaf"],
+        ),
+        (
+            "<ul><li>parent<ul><li>child<ul><li>leaf</li></ul></li></ul></li></ul>",
+            ["- parent", "  - child", "    - leaf"],
+        ),
     ],
 )
 def test_nested_list_content_columns(converter, html, expected):
@@ -240,24 +253,33 @@ def test_nested_list_content_columns(converter, html, expected):
     assert [line for line in converter.convert(html).splitlines() if line.strip()] == expected
 
 
-@pytest.mark.parametrize('filename', ['figure.png', 'my figure.png', 'figure(1).png', 'figure).png', 'figure(.png'])
+@pytest.mark.parametrize("filename", ["figure.png", "my figure.png", "figure(1).png", "figure).png", "figure(.png"])
 @pytest.mark.parametrize(
-    ('template', 'prefix', 'label', 'marker'),
+    ("template", "prefix", "label", "marker"),
     [
-        ('<img src="/download/{filename}" alt="figure" />', 'https://example.com/wiki/download/', 'figure', '!'),
-        ('<ac:image><ri:attachment ri:filename="{filename}" /></ac:image>', '', None, '!'),
-        ('<ac:image ac:alt="figure"><ri:url ri:value="https://cdn.example.com/{filename}" /></ac:image>',
-         'https://cdn.example.com/', 'figure', '!'),
-        ('<ac:link><ri:attachment ri:filename="{filename}" /></ac:link>', '', None, ''),
-        ('<ac:link><ri:attachment ri:filename="{filename}" />'
-         '<ac:plain-text-link-body>figure</ac:plain-text-link-body></ac:link>', '', 'figure', ''),
+        ('<img src="/download/{filename}" alt="figure" />', "https://example.com/wiki/download/", "figure", "!"),
+        ('<ac:image><ri:attachment ri:filename="{filename}" /></ac:image>', "", None, "!"),
+        (
+            '<ac:image ac:alt="figure"><ri:url ri:value="https://cdn.example.com/{filename}" /></ac:image>',
+            "https://cdn.example.com/",
+            "figure",
+            "!",
+        ),
+        ('<ac:link><ri:attachment ri:filename="{filename}" /></ac:link>', "", None, ""),
+        (
+            '<ac:link><ri:attachment ri:filename="{filename}" />'
+            "<ac:plain-text-link-body>figure</ac:plain-text-link-body></ac:link>",
+            "",
+            "figure",
+            "",
+        ),
     ],
 )
 def test_image_and_attachment_destinations(converter, filename, template, prefix, label, marker):
     """参照先の空白・丸括弧を保護し、通常の参照先と表示名は維持する。"""
     destination = prefix + filename
-    if filename != 'figure.png':
-        destination = f'<{destination}>'
+    if filename != "figure.png":
+        destination = f"<{destination}>"
     assert converter.convert(template.format(filename=filename)).strip() == (
-        f'{marker}[{label or filename}]({destination})'
+        f"{marker}[{label or filename}]({destination})"
     )

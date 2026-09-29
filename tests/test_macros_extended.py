@@ -1,19 +1,21 @@
 import pytest
 from c2m_export.converter import MarkdownConverter
 
+
 def test_convert_expand_macro():
     converter = MarkdownConverter("https://example.com/wiki")
-    html = '''
+    html = """
     <ac:structured-macro ac:name="expand">
         <ac:parameter ac:name="title">Click to see more</ac:parameter>
         <ac:rich-text-body>
             <p>Hidden content here</p>
         </ac:rich-text-body>
     </ac:structured-macro>
-    '''
+    """
     md = converter.convert(html)
     assert "Click to see more" in md
     assert "Hidden content here" in md
+
 
 def test_convert_admonition_macros():
     converter = MarkdownConverter("https://example.com/wiki")
@@ -28,23 +30,25 @@ def test_convert_admonition_macros():
         md = converter.convert(html)
         assert f"This is a {name} message" in md
 
+
 def test_convert_panel_macro():
     converter = MarkdownConverter("https://example.com/wiki")
-    html = '''
+    html = """
     <ac:structured-macro ac:name="panel">
         <ac:parameter ac:name="title">Panel Title</ac:parameter>
         <ac:rich-text-body>
             <p>Panel content</p>
         </ac:rich-text-body>
     </ac:structured-macro>
-    '''
+    """
     md = converter.convert(html)
     assert "Panel Title" in md
     assert "Panel content" in md
 
+
 def test_convert_details_macro():
     converter = MarkdownConverter("https://example.com/wiki")
-    html = '''
+    html = """
     <ac:structured-macro ac:name="details">
         <ac:rich-text-body>
             <table>
@@ -52,66 +56,71 @@ def test_convert_details_macro():
             </table>
         </ac:rich-text-body>
     </ac:structured-macro>
-    '''
+    """
     md = converter.convert(html)
     assert "| Key | Value |" in md
 
+
 def test_convert_status_macro():
     converter = MarkdownConverter("https://example.com/wiki")
-    html = '''
+    html = """
     <ac:structured-macro ac:name="status">
         <ac:parameter ac:name="title">IN PROGRESS</ac:parameter>
         <ac:parameter ac:name="colour">Yellow</ac:parameter>
     </ac:structured-macro>
-    '''
+    """
     md = converter.convert(html)
     assert "【ステータス: IN PROGRESS】" in md
+
 
 def test_convert_jira_macro():
     converter = MarkdownConverter("https://example.com/wiki")
     # Single issue
-    html_single = '''
+    html_single = """
     <ac:structured-macro ac:name="jira">
         <ac:parameter ac:name="key">PROJ-123</ac:parameter>
     </ac:structured-macro>
-    '''
+    """
     md_single = converter.convert(html_single)
     assert "【JIRA課題: PROJ-123】" in md_single
 
     # JQL Query
-    html_jql = '''
+    html_jql = """
     <ac:structured-macro ac:name="jira">
         <ac:parameter ac:name="jqlQuery">project = PROJ</ac:parameter>
     </ac:structured-macro>
-    '''
+    """
     md_jql = converter.convert(html_jql)
     assert "【JIRAクエリ: project = PROJ】" in md_jql
 
+
 def test_convert_plantumlrender_macro():
     converter = MarkdownConverter("https://example.com/wiki")
-    html = '''
+    html = """
     <ac:structured-macro ac:name="plantumlrender">
         <ac:plain-text-body><![CDATA[alice -> bob]]></ac:plain-text-body>
     </ac:structured-macro>
-    '''
+    """
     md = converter.convert(html)
     assert "```plantuml" in md
     assert "alice -> bob" in md
 
+
 def test_convert_noformat_macro():
     converter = MarkdownConverter("https://example.com/wiki")
-    html = '''
+    html = """
     <ac:structured-macro ac:name="noformat">
         <ac:plain-text-body><![CDATA[plain text here]]></ac:plain-text-body>
     </ac:structured-macro>
-    '''
+    """
     md = converter.convert(html)
     assert "```" in md
     assert "plain text here" in md
 
+
 def test_convert_include_macro():
     converter = MarkdownConverter("https://example.com/wiki")
-    html = '''
+    html = """
     <ac:structured-macro ac:name="include">
         <ac:parameter ac:name="">
             <ac:link>
@@ -119,9 +128,10 @@ def test_convert_include_macro():
             </ac:link>
         </ac:parameter>
     </ac:structured-macro>
-    '''
+    """
     md = converter.convert(html)
     assert "他ページからの埋め込み内容: Included Page Name" in md
+
 
 def test_convert_irrelevant_macros():
     converter = MarkdownConverter("https://example.com/wiki")
@@ -130,6 +140,7 @@ def test_convert_irrelevant_macros():
         html = f'<ac:structured-macro ac:name="{name}"></ac:structured-macro>'
         md = converter.convert(html)
         assert md.strip() == ""
+
 
 def test_convert_empty_macros():
     converter = MarkdownConverter("https://example.com/wiki")
@@ -154,27 +165,28 @@ def test_convert_empty_macros():
     html_legacy = '<div class="conf-macro" data-macro-name="code"></div>'
     assert converter.convert(html_legacy).strip() == ""
 
+
 def test_convert_unknown_macros_generalized():
     converter = MarkdownConverter("https://example.com/wiki")
 
     # Unknown macro with rich-text-body
-    html_rich = '''
+    html_rich = """
     <ac:structured-macro ac:name="unknown-rich">
         <ac:parameter ac:name="title">Some Title</ac:parameter>
         <ac:rich-text-body><p>Content from unknown macro</p></ac:rich-text-body>
     </ac:structured-macro>
-    '''
+    """
     md_rich = converter.convert(html_rich)
     assert "**Some Title**" in md_rich
     assert "Content from unknown macro" in md_rich
 
     # Unknown macro with plain-text-body
-    html_plain = '''
+    html_plain = """
     <ac:structured-macro ac:name="unknown-plain">
         <ac:parameter ac:name="language">sql</ac:parameter>
         <ac:plain-text-body><![CDATA[SELECT * FROM table;]]></ac:plain-text-body>
     </ac:structured-macro>
-    '''
+    """
     md_plain = converter.convert(html_plain)
     assert "```sql" in md_plain
     assert "SELECT * FROM table;" in md_plain
@@ -183,15 +195,16 @@ def test_convert_unknown_macros_generalized():
     html_none = '<ac:structured-macro ac:name="unknown-none"></ac:structured-macro>'
     assert converter.convert(html_none).strip() == ""
 
+
 def test_header_level_shift_inside_macro():
     converter = MarkdownConverter("https://example.com/wiki")
     # level=2 means h1 should become ##
-    html = '''
+    html = """
     <ac:structured-macro ac:name="expand">
         <ac:rich-text-body>
             <h1>Heading in Macro</h1>
         </ac:rich-text-body>
     </ac:structured-macro>
-    '''
+    """
     md = converter.convert(html, level=2)
     assert "## Heading in Macro" in md

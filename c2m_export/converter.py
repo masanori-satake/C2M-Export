@@ -6,17 +6,16 @@ from urllib.parse import quote
 
 logger = logging.getLogger(__name__)
 
+
 class MarkdownConverter:
     """
     ConfluenceのStorage Format (XHTML) を Markdownに変換するクラス。
     再帰的なタグ探索と、特定のマクロ（Code, PlantUML）に対するカスタムハンドラを実装。
     """
+
     def __init__(self, base_url: str):
         self.base_url = base_url
-        self.macro_handlers = {
-            "conf-macro": self._handle_macro,
-            "ac:structured-macro": self._handle_structured_macro
-        }
+        self.macro_handlers = {"conf-macro": self._handle_macro, "ac:structured-macro": self._handle_structured_macro}
 
     def convert(self, html_content: str, level: int = 1) -> str:
         """
@@ -51,96 +50,94 @@ class MarkdownConverter:
         name = tag.name
 
         # 見出し: ページ階層に応じて#の数を増やす。ただしMarkdownの仕様上、最大6まで。
-        if re.match(r'h[1-6]', name):
+        if re.match(r"h[1-6]", name):
             h_level = min(6, int(name[1]) + level - 1)
             return f"\n{'#' * h_level} {self._walk(tag, level, list_depth)}\n"
 
-        if name == 'p':
+        if name == "p":
             return f"\n{self._walk(tag, level, list_depth)}\n"
 
-        if name == 'br':
+        if name == "br":
             return "\n"
 
-        if name in ['strong', 'b']:
+        if name in ["strong", "b"]:
             return f"**{self._walk(tag, level, list_depth)}**"
 
-        if name in ['em', 'i']:
+        if name in ["em", "i"]:
             return f"*{self._walk(tag, level, list_depth)}*"
 
         # 打ち消し線（GFM）
-        if name in ['del', 's', 'strike']:
+        if name in ["del", "s", "strike"]:
             return f"~~{self._walk(tag, level, list_depth)}~~"
 
         # 下線・上付き・下付きは Markdown に専用構文がないためテキストのみ残す（情報非欠損）
-        if name in ['u', 'sup', 'sub', 'ins']:
+        if name in ["u", "sup", "sub", "ins"]:
             return self._walk(tag, level, list_depth)
 
-        if name == 'code':
+        if name == "code":
             return f"`{self._walk(tag, level, list_depth)}`"
 
         # 水平線
-        if name == 'hr':
+        if name == "hr":
             return "\n---\n"
 
         # 引用: 内部を変換し、各非空行の先頭に "> " を付与
-        if name == 'blockquote':
+        if name == "blockquote":
             inner = self._walk(tag, level, list_depth).strip()
-            quoted = "\n".join(
-                f"> {line}" if line.strip() else ">" for line in inner.split("\n")
-            )
+            quoted = "\n".join(f"> {line}" if line.strip() else ">" for line in inner.split("\n"))
             return f"\n{quoted}\n"
 
         # マクロ外の pre 単体はコードブロック化（フェンスは動的伸長）
-        if name == 'pre':
+        if name == "pre":
             return self._wrap_code_block(tag.get_text())
 
         # 定義リスト: dt を用語、dd を説明として出力
-        if name == 'dl':
+        if name == "dl":
             return self._handle_definition_list(tag, level)
 
-        if name in ['ul', 'ol']:
+        if name in ["ul", "ol"]:
             # リストコンテナはネスト深さを 1 段深くして子を処理
             return f"\n{self._walk(tag, level, list_depth + 1)}\n"
 
-        if name == 'li':
+        if name == "li":
             return self._handle_list_item(tag, level, list_depth)
 
-        if name == 'table':
+        if name == "table":
             return self._safe(self._handle_table, tag, level)
 
-        if name == 'img':
+        if name == "img":
             return self._safe(self._handle_img, tag, level)
 
-        if name == 'a':
-            href = tag.get('href', '')
+        if name == "a":
+            href = tag.get("href", "")
             # コンテキストパスを含む絶対URLに変換
-            if href.startswith('/'):
+            if href.startswith("/"):
                 href = self.base_url + href
             return f"[{self._walk(tag, level, list_depth)}]({href})"
 
         # Confluence 固有要素
-        if name == 'ac:image':
+        if name == "ac:image":
             return self._safe(self._handle_ac_image, tag, level)
 
-        if name == 'ac:link':
+        if name == "ac:link":
             return self._safe(self._handle_ac_link, tag, level)
 
-        if name == 'ac:emoticon':
+        if name == "ac:emoticon":
             return self._handle_emoticon(tag)
 
-        if name == 'ac:task-list':
+        if name == "ac:task-list":
             return self._safe(self._handle_task_list, tag, level)
 
         # レイアウトは段組みの見た目を捨て、中身を縦積みでテキストとして残す
-        if name in ['ac:layout', 'ac:layout-section', 'ac:layout-cell']:
+        if name in ["ac:layout", "ac:layout-section", "ac:layout-cell"]:
             return self._walk(tag, level, list_depth)
 
         # クラス名によるマクロ判定
-        if tag.get('class') and 'conf-macro' in tag.get('class'):
+        if tag.get("class") and "conf-macro" in tag.get("class"):
             return self._safe(self._handle_macro, tag, level)
 
         # 名前空間付きマクロタグの処理
-        if name == 'ac:structured-macro':
+        if name == "ac:structured-macro":
             return self._safe(self._handle_structured_macro, tag, level)
 
         # 未定義のタグは中身を再帰的に処理
@@ -173,18 +170,19 @@ class MarkdownConverter:
 
         戻り値: (header_rows, body_rows)
         """
+
         def direct_trs(container):
-            return container.find_all('tr', recursive=False)
+            return container.find_all("tr", recursive=False)
 
         header_trs = []
         body_trs = []
 
-        thead = table.find('thead', recursive=False)
+        thead = table.find("thead", recursive=False)
         if thead:
             header_trs = direct_trs(thead)
 
-        tbodies = table.find_all('tbody', recursive=False)
-        tfoots = table.find_all('tfoot', recursive=False)
+        tbodies = table.find_all("tbody", recursive=False)
+        tfoots = table.find_all("tfoot", recursive=False)
 
         for tbody in tbodies:
             body_trs.extend(direct_trs(tbody))
@@ -199,7 +197,7 @@ class MarkdownConverter:
         # thead が無い場合、先頭行が th を含むならヘッダーとして扱う
         if not header_trs and body_trs:
             first = body_trs[0]
-            if first.find('th', recursive=False):
+            if first.find("th", recursive=False):
                 header_trs = [first]
                 body_trs = body_trs[1:]
 
@@ -208,13 +206,13 @@ class MarkdownConverter:
     def _table_row_cells(self, tr: Tag, level: int):
         """tr から各セルのテキストを取り出す。セル内の | と改行を安全化する。"""
         cols = []
-        for cell in tr.find_all(['th', 'td'], recursive=False):
+        for cell in tr.find_all(["th", "td"], recursive=False):
             cell_text = self._walk(cell, level).strip()
             # 表構造を壊さないよう、| をエスケープし、改行を <br> に置換
-            cell_text = cell_text.replace('|', '\\|').replace('\n', '<br>')
+            cell_text = cell_text.replace("|", "\\|").replace("\n", "<br>")
             # colspan があれば、その列数ぶんセルを複製せず空セルで補完し列整合を保つ
             try:
-                span = int(cell.get('colspan', 1))
+                span = int(cell.get("colspan", 1))
             except (TypeError, ValueError):
                 span = 1
             cols.append(cell_text)
@@ -272,15 +270,15 @@ class MarkdownConverter:
         子リストは本文の下に、さらに深いインデントで出力する。
         """
         # 親項目の本文開始位置に揃える（番号リストは3列、箇条書きは2列）。
-        parent_lists = tag.find_parents(['ul', 'ol'])
-        indent = " " * sum(3 if parent.name == 'ol' else 2 for parent in parent_lists[1:])
-        marker = "1. " if (tag.parent and tag.parent.name == 'ol') else "- "
+        parent_lists = tag.find_parents(["ul", "ol"])
+        indent = " " * sum(3 if parent.name == "ol" else 2 for parent in parent_lists[1:])
+        marker = "1. " if (tag.parent and tag.parent.name == "ol") else "- "
 
         # 子リストとそれ以外を分離
         child_lists = []
         inline_parts = ""
         for child in tag.children:
-            if isinstance(child, Tag) and child.name in ('ul', 'ol'):
+            if isinstance(child, Tag) and child.name in ("ul", "ol"):
                 # 子リストは現在の深さのまま処理（ul/ol 側で +1 される）
                 child_lists.append(self._process_tag(child, level, list_depth))
             elif isinstance(child, Tag):
@@ -288,11 +286,11 @@ class MarkdownConverter:
             else:
                 inline_parts += html.unescape(str(child))
 
-        body = inline_parts.strip().replace('\n', ' ')
+        body = inline_parts.strip().replace("\n", " ")
         result = f"{indent}{marker}{body}\n"
         for cl in child_lists:
             # 子リストの各行はそのままのインデントで続ける（ul/ol 側でインデント済み）
-            result += cl.strip('\n') + "\n"
+            result += cl.strip("\n") + "\n"
         return result
 
     def _handle_definition_list(self, tag: Tag, level: int) -> str:
@@ -301,11 +299,11 @@ class MarkdownConverter:
         Markdown に専用構文がないため、用語を太字、説明を続く行として表現する。
         """
         parts = []
-        for child in tag.find_all(['dt', 'dd'], recursive=False):
+        for child in tag.find_all(["dt", "dd"], recursive=False):
             text = self._walk(child, level).strip()
             if not text:
                 continue
-            if child.name == 'dt':
+            if child.name == "dt":
                 parts.append(f"**{text}**")
             else:
                 parts.append(text)
@@ -315,16 +313,16 @@ class MarkdownConverter:
 
     def _format_destination(self, destination: str) -> str:
         """空白や丸括弧を含む参照先を山括弧で囲み、Markdown 構文を保つ。"""
-        if any(char in destination for char in ' ()'):
+        if any(char in destination for char in " ()"):
             return f"<{destination}>"
         return destination
 
     def _handle_img(self, tag: Tag, level: int) -> str:
         """<img> を Markdown 画像記法に変換する。相対 src は絶対 URL 化。"""
-        src = tag.get('src', '')
-        if src.startswith('/'):
+        src = tag.get("src", "")
+        if src.startswith("/"):
             src = self.base_url + src
-        alt = tag.get('alt', '').strip()
+        alt = tag.get("alt", "").strip()
         if not src:
             # src が無ければ alt テキストのみ残す（情報非欠損）
             return alt
@@ -335,17 +333,17 @@ class MarkdownConverter:
         Confluence の <ac:image> を変換する。
         ri:attachment（添付ファイル名）または ri:url（外部URL）を参照として残す。
         """
-        alt = tag.get('ac:alt', '').strip()
+        alt = tag.get("ac:alt", "").strip()
 
-        attachment = tag.find('ri:attachment')
-        if attachment and attachment.get('ri:filename'):
-            filename = attachment.get('ri:filename')
+        attachment = tag.find("ri:attachment")
+        if attachment and attachment.get("ri:filename"):
+            filename = attachment.get("ri:filename")
             alt_text = alt or filename
             return f"![{alt_text}]({self._format_destination(filename)})"
 
-        ri_url = tag.find('ri:url')
-        if ri_url and ri_url.get('ri:value'):
-            url = ri_url.get('ri:value')
+        ri_url = tag.find("ri:url")
+        if ri_url and ri_url.get("ri:value"):
+            url = ri_url.get("ri:value")
             return f"![{alt}]({self._format_destination(url)})"
 
         # 参照が取れない場合でも alt があれば残す
@@ -365,14 +363,14 @@ class MarkdownConverter:
         """
         # 表示テキスト（link-body / plain-text-link-body）
         display = ""
-        body = tag.find(['ac:link-body', 'ac:plain-text-link-body'])
+        body = tag.find(["ac:link-body", "ac:plain-text-link-body"])
         if body:
-            display = self._walk(body, level).strip() if body.name == 'ac:link-body' else body.get_text().strip()
+            display = self._walk(body, level).strip() if body.name == "ac:link-body" else body.get_text().strip()
 
-        ri_page = tag.find('ri:page')
+        ri_page = tag.find("ri:page")
         if ri_page:
-            title = ri_page.get('ri:content-title', '').strip()
-            space_key = ri_page.get('ri:space-key', '').strip()
+            title = ri_page.get("ri:content-title", "").strip()
+            space_key = ri_page.get("ri:space-key", "").strip()
             text = display or title
             if not text:
                 return ""
@@ -381,15 +379,15 @@ class MarkdownConverter:
             # space-key 不明時はタイトル（テキスト）のみ残す（A案・情報非欠損）
             return text
 
-        ri_user = tag.find('ri:user')
+        ri_user = tag.find("ri:user")
         if ri_user:
-            name = display or ri_user.get('ri:username', '') or ri_user.get('ri:userkey', '')
+            name = display or ri_user.get("ri:username", "") or ri_user.get("ri:userkey", "")
             name = name.strip()
             return f"@{name}" if name else ""
 
-        ri_attachment = tag.find('ri:attachment')
-        if ri_attachment and ri_attachment.get('ri:filename'):
-            filename = ri_attachment.get('ri:filename')
+        ri_attachment = tag.find("ri:attachment")
+        if ri_attachment and ri_attachment.get("ri:filename"):
+            filename = ri_attachment.get("ri:filename")
             text = display or filename
             return f"[{text}]({self._format_destination(filename)})"
 
@@ -398,10 +396,10 @@ class MarkdownConverter:
 
     def _handle_emoticon(self, tag: Tag) -> str:
         """絵文字（ac:emoticon）を Unicode またはショートコードで残す。"""
-        fallback = tag.get('ac:emoji-fallback')
+        fallback = tag.get("ac:emoji-fallback")
         if fallback:
             return fallback
-        name = tag.get('ac:name')
+        name = tag.get("ac:name")
         if name:
             return f":{name}:"
         return ""
@@ -412,11 +410,11 @@ class MarkdownConverter:
         ac:task-status が complete なら [x]、それ以外は [ ]。
         """
         lines = []
-        for task in tag.find_all('ac:task', recursive=False):
-            status = task.find('ac:task-status')
-            checked = status and status.get_text().strip().lower() == 'complete'
-            body = task.find('ac:task-body')
-            body_md = self._walk(body, level).strip().replace('\n', ' ') if body else ""
+        for task in tag.find_all("ac:task", recursive=False):
+            status = task.find("ac:task-status")
+            checked = status and status.get_text().strip().lower() == "complete"
+            body = task.find("ac:task-body")
+            body_md = self._walk(body, level).strip().replace("\n", " ") if body else ""
             box = "[x]" if checked else "[ ]"
             lines.append(f"- {box} {body_md}")
         if not lines:
@@ -445,9 +443,9 @@ class MarkdownConverter:
         """
         旧来の形式のマクロ（conf-macro）を処理。
         """
-        macro_name = tag.get('data-macro-name')
-        if macro_name in ['code', 'noformat']:
-            content = tag.find('pre')
+        macro_name = tag.get("data-macro-name")
+        if macro_name in ["code", "noformat"]:
+            content = tag.find("pre")
             if content:
                 return self._wrap_code_block(content.get_text())
 
@@ -459,44 +457,44 @@ class MarkdownConverter:
         名前空間付きの構造化マクロを処理。
         AIナレッジ向けに有用な情報を抽出し、Markdownに変換。
         """
-        macro_name = tag.get('ac:name')
+        macro_name = tag.get("ac:name")
 
         # 1. 特殊な情報抽出が必要なマクロ
-        if macro_name == 'status':
-            title_param = tag.find('ac:parameter', attrs={'ac:name': 'title'})
+        if macro_name == "status":
+            title_param = tag.find("ac:parameter", attrs={"ac:name": "title"})
             if title_param:
                 return f" 【ステータス: {title_param.get_text().strip()}】 "
             return ""
 
-        if macro_name == 'jira':
-            key_param = tag.find('ac:parameter', attrs={'ac:name': 'key'})
+        if macro_name == "jira":
+            key_param = tag.find("ac:parameter", attrs={"ac:name": "key"})
             if key_param:
                 return f" 【JIRA課題: {key_param.get_text().strip()}】 "
-            jql_param = tag.find('ac:parameter', attrs={'ac:name': 'jqlQuery'})
+            jql_param = tag.find("ac:parameter", attrs={"ac:name": "jqlQuery"})
             if jql_param:
                 return f" 【JIRAクエリ: {jql_param.get_text().strip()}】 "
             return ""
 
-        if macro_name == 'include':
-            ri_page = tag.find('ri:page')
-            if ri_page and ri_page.get('ri:content-title'):
+        if macro_name == "include":
+            ri_page = tag.find("ri:page")
+            if ri_page and ri_page.get("ri:content-title"):
                 return f"\n(他ページからの埋め込み内容: {ri_page.get('ri:content-title')})\n"
             return ""
 
         # 2. AIインプットとして不要なナビゲーション・動的マクロ
-        if macro_name in ['toc', 'anchor', 'pagetree', 'children', 'contentbylabel']:
+        if macro_name in ["toc", "anchor", "pagetree", "children", "contentbylabel"]:
             return ""
 
         # 3. 汎用的なボディ処理 (名前を問わず構造に基づいて変換)
 
         # プレーンテキストボディ (Code, PlantUML等)
-        plain_text_body = tag.find('ac:plain-text-body')
+        plain_text_body = tag.find("ac:plain-text-body")
         if plain_text_body:
             lang = ""
-            if macro_name in ['plantuml', 'plantumlrender']:
+            if macro_name in ["plantuml", "plantumlrender"]:
                 lang = "plantuml"
             else:
-                lang_param = tag.find('ac:parameter', attrs={'ac:name': 'language'})
+                lang_param = tag.find("ac:parameter", attrs={"ac:name": "language"})
                 if lang_param:
                     lang = lang_param.get_text().strip()
 
@@ -504,10 +502,10 @@ class MarkdownConverter:
             return self._wrap_code_block(content, lang)
 
         # リッチテキストボディ (expand, note, info, panel, details等)
-        rich_text_body = tag.find('ac:rich-text-body')
+        rich_text_body = tag.find("ac:rich-text-body")
         if rich_text_body:
             title = ""
-            title_param = tag.find('ac:parameter', attrs={'ac:name': 'title'})
+            title_param = tag.find("ac:parameter", attrs={"ac:name": "title"})
             if title_param:
                 title = title_param.get_text().strip()
 
