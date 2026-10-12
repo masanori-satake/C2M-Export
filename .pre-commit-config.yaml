@@ -16,7 +16,7 @@ repos:
 # 既存コードのスタイルを尊重し、バグに直結しやすいエラー系ルール（E9, F）に絞って有効化。
 # 詳細な設定は ruff.toml を参照。
 -   repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.13.3
+    rev: v0.17.0
     hooks:
     -   id: ruff
         args: [--fix]
@@ -25,7 +25,7 @@ repos:
 
 # mypy: 静的型検査。設定は mypy.ini を参照（段階導入のため緩めから開始）。
 -   repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.18.2
+    rev: v2.4.0
     hooks:
     -   id: mypy
         # 型スタブを追加依存として渡す（pre-commit の隔離環境で必要）
