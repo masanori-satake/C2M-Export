@@ -8,8 +8,8 @@ logger = logging.getLogger(__name__)
 
 
 class ConfluenceClient:
-    """
-    Confluence Data Center REST APIとの通信を担当するクライアントクラス。
+    """Confluence Data Center REST APIとの通信を担当するクライアントクラス.
+
     Bearer認証、Proxy経由の接続、および一時的なエラーに対するリトライロジックを実装。
     """
 
@@ -27,8 +27,9 @@ class ConfluenceClient:
     def _request(
         self, method: str, path: str, params: Optional[Dict] = None, retries: int = 3, backoff: float = 2.0
     ) -> Dict:
-        """
-        共通のリクエスト処理。5xxエラーやネットワークエラーに対して指数バックオフを伴うリトライを行う。
+        """共通のリクエスト処理.
+
+        5xxエラーやネットワークエラーに対して指数バックオフを伴うリトライを行う。
         """
         url = f"{self.base_url}{path}"
         for i in range(retries):
@@ -52,18 +53,18 @@ class ConfluenceClient:
 
         raise Exception(f"{retries} 回の試行後も {url} の取得に失敗しました")
 
-    def get_page(self, page_id: str) -> Dict:
-        """
-        指定されたページIDの情報を取得する。
-        storage形式の本文とスペース情報を取得するために expand パラメータを使用。
+    def get_page(self, page_id: str, expand: str = "body.storage,space") -> Dict:
+        """指定されたページIDの情報を取得する.
+
+        既定値 expand="body.storage,space" により既存呼び出しの後方互換性を保持する。
         """
         path = f"/rest/api/content/{page_id}"
-        params = {"expand": "body.storage,space"}
+        params = {"expand": expand}
         return self._request("GET", path, params=params)
 
     def get_child_pages(self, page_id: str, limit: int = 25) -> List[Dict]:
-        """
-        指定されたページの子ページ一覧を取得する。
+        """指定されたページの子ページ一覧を取得する.
+
         大規模なツリーに対応するため、内部でページング処理を完結させて全件を返す。
         """
         path = f"/rest/api/content/{page_id}/child/page"
@@ -81,3 +82,48 @@ class ConfluenceClient:
             start += len(results)
 
         return children
+
+    def get_attachments(self, page_id: str, limit: int = 50) -> List[Dict]:
+        """指定されたページの添付ファイル一覧を取得する.
+
+        `expand=extensions,version` を付与し、内部でページング処理を行って全件取得する。
+        """
+        path = f"/rest/api/content/{page_id}/child/attachment"
+        attachments = []
+        start = 0
+        while True:
+            params = {"limit": limit, "start": start, "expand": "extensions,version"}
+            data = self._request("GET", path, params=params)
+            results = data.get("results", [])
+            attachments.extend(results)
+
+            if len(results) < limit:
+                break
+            start += len(results)
+
+        return attachments
+
+    def get_restrictions(self, page_id: str) -> Dict:
+        """指定されたページのコンテンツ制限（byOperation）情報を取得する."""
+        path = f"/rest/api/content/{page_id}/restriction/byOperation"
+        return self._request("GET", path)
+
+    def get_space_root_pages(self, space_key: str, limit: int = 25) -> List[Dict]:
+        """指定されたSpaceのトップレベル（ルート）ページ一覧を取得する.
+
+        `/rest/api/space/{space_key}/content/page?depth=root` をページングで全件取得する。
+        """
+        path = f"/rest/api/space/{space_key}/content/page"
+        root_pages = []
+        start = 0
+        while True:
+            params = {"depth": "root", "limit": limit, "start": start}
+            data = self._request("GET", path, params=params)
+            results = data.get("results", [])
+            root_pages.extend(results)
+
+            if len(results) < limit:
+                break
+            start += len(results)
+
+        return root_pages

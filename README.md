@@ -2,9 +2,12 @@
 
 Confluence Data Center 9.2 のページツリーを REST API で取得し、AIナレッジ向けに Markdown へ統合エクスポートするローカルCLIツールです。
 
+また、実エクスポート前に Confluence ワークスペース全体の規模・構造・移設リスク（SharePoint/OneDrive 向け制約など）を把握するための**アセスメント（分析）機能**も提供しています。
+
 ## 特徴
 - Confluence Data Center 9.2 対応 (REST API)
-- ページツリーを再帰的に取得し、1つの Markdown ファイルに統合
+- **コンテンツ分析（アセスメントモード）**: 添付バイナリをダウンロードせずに高速にメタデータを収集し、規模・構造・移設リスク・権限・鮮度のレポート（Markdown & JSON）を出力
+- **統合エクスポート（結合モード）**: ページツリーを再帰的に取得し、1つの Markdown ファイルに統合
 - HTTP/HTTPS Proxy (CONNECTトンネル) 対応
 - Windows ファイル名制約に基づいたサニタイズ
 - 出力ファイルサイズ制限機能 (既定100MB)
@@ -42,7 +45,34 @@ max_mb: 100
 stop_threshold_mb: 95
 ```
 
-### 2. 実行
+---
+
+### 2. 分析（アセスメント）モードの実行
+
+Confluence の規模・構造・移設リスク（SharePoint/OneDrive 向けのパス長・禁止文字・ブロック拡張子・巨大添付・同名衝突など）を事前に分析したい場合は、以下のコマンドを実行します。
+
+```cmd
+python -m c2m_export.assess
+```
+
+Space キーを直接指定して分析を行うことも可能です：
+```cmd
+python -m c2m_export.assess --space-key SPACE_A SPACE_B
+```
+
+主要なオプション：
+- `--space-key`: 分析を開始する Space キー（複数指定可能）
+- `--root-page-id`: 分析を開始するルートページ ID
+- `--restrictions` / `--no-restrictions`: 個別権限（コンテンツ制限）の分析の有効/無効化
+- `--single-file-max-mb`: 巨大添付判定の閾値 MB (既定: 250)
+- `--path-length-limit`: 移設先パス長上限文字数 (既定: 400)
+- `--report-format`: 出力形式 (`md`, `json`, `both` / 既定: `both`)
+
+アセスメント完了後、`confluence_assessment_<YYYYMMDD_HHMMSS>.md` および `.json` が `output_dir` 配下に出力されます。
+
+---
+
+### 3. エクスポート（結合モード）の実行
 
 #### 最も簡単な実行方法
 設定ファイル（`c2m_config.yaml`）が準備されている場合、引数なしで実行可能です。
@@ -80,7 +110,7 @@ python -m c2m_export.web
 起動後、ブラウザで表示されるURL（既定では `http://localhost:8501`）にアクセスしてください。
 Web UIでは、複数のRoot Page IDの動的な追加、進捗のリアルタイム表示、およびエクスポート結果のZipダウンロードが可能です。
 
-### パラメータ
+### CLI パラメータ（共通）
 - `--base-url`: ConfluenceのベースURL (例: `https://host/wiki`)
 - `--root-page-id`: 起点となるページのID（複数指定可能）
 - `--output-dir`: 出力先ディレクトリ (既定: カレントディレクトリ)
@@ -90,17 +120,11 @@ Web UIでは、複数のRoot Page IDの動的な追加、進捗のリアルタ�
 - `--config`: 設定ファイルパス (既定: `c2m_config.yaml`)
 - `--token`: Bearerトークン
 - `--zip`: エクスポート結果をZip圧縮する
+- `--overwrite`: 既存ファイルを上書きする
 
 ## ファイル名規則
 出力ファイル名は以下の形式になります：
 `【<spaceKey>】 <トップページタイトル>.md`
-
-ファイルが既に存在する場合、衝突を避けるために `(<pageId>)` が付与されます。
-例: `【SPACE】 Title (12345).md`
-
-## サイズ制限の挙動
-- 出力ファイルの合計サイズが `--stop-threshold-mb` (既定95MB) を超える見込みになった時点で、新しいページの取得を停止し、それまで取得した内容をファイルに書き出します。
-- 最終的なファイルサイズが `--max-mb` (既定100MB) を超えた場合は警告ログが出力されます。
 
 ## 変換方針（AI ナレッジ利用を最優先）
 

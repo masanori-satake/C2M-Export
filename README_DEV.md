@@ -4,7 +4,7 @@
 
 ## システム概要
 
-C2M-Export は、Confluence Data Center のページツリーを再帰的に取得し、1つの Markdown ファイルに統合する Python ベースの CLI ツールです。特に AI（LLM）のナレッジベース作成に最適化されており、メタデータの付与や階層構造に応じた見出しの調整を行います。
+C2M-Export は、Confluence Data Center のページツリーを再帰的に取得し、1つの Markdown ファイルに統合する Python ベースの CLI ツールです。また、実エクスポート前に Confluence ワークスペース全体の規模・構造・移設リスク（SharePoint/OneDrive 向け制約など）を把握するための**アセスメント（分析）機能**も提供しています。
 
 ## システム構成図
 
@@ -13,12 +13,16 @@ C2M-Export は、Confluence Data Center のページツリーを再帰的に取�
 ```mermaid
 graph TD
     subgraph "Local Environment"
-        CLI[cli.py: Main Logic]
-        Config[config.py: Config Management]
+        CLI[cli.py: Main Export Logic]
+        Assess[assess.py: Main Assessment Logic]
+        Config[config.py: Config / AssessConfig]
         Client[confluence.py: API Client]
         Converter[converter.py: Markdown Converter]
+        Collector[assessment/collector.py: Collector]
+        Analyzers[assessment/analyzers.py: Analyzers & Rules]
+        Report[assessment/report.py: Report Generator]
         Utils[utils.py: Utilities]
-        Output[.md File]
+        Output[.md / .json Reports]
     end
 
     subgraph "External"
@@ -30,10 +34,46 @@ graph TD
     CLI --> Client
     CLI --> Converter
     CLI --> Utils
+
+    Assess --> Config
+    Assess --> Client
+    Assess --> Collector
+    Collector --> Client
+    Assess --> Analyzers
+    Assess --> Report
+
     Client --> Proxy
     Proxy --> Confluence
     CLI --> Output
+    Report --> Output
 ```
+
+## アセスメント機能のモジュール構造とアーキテクチャ設計
+
+アセスメント機能（`c2m_export/assessment/`）は、I/O 層（Collector）と純粋集計・分析ロジック層（Analyzers & Rules）を完全に分離するアーキテクチャを採用しています。
+
+```
+c2m_export/
+├── confluence.py      # [拡張] get_attachments, get_restrictions, get_space_root_pages 等を追加
+├── config.py          # [拡張] AssessConfig を追加
+├── assess.py          # [新規] 分析モードのエントリーポイント（python -m c2m_export.assess）
+└── assessment/        # [新規] 分析ロジック一式
+    ├── __init__.py
+    ├── models.py      # PageMeta / AttachmentMeta / RestrictionMeta / RawInventory / AssessmentResult 等
+    ├── collector.py   # DFS巡回でページ/添付/権限/更新情報のメタデータを収集する I/O 層
+    ├── rules.py       # SharePoint/OneDrive 判定ルール（パス長、禁止文字、予約語、ブロック拡張子等）
+    ├── analyzers.py   # RawInventory を入力とする純粋関数群（API非依存＝テスト容易）
+    └── report.py      # AssessmentResult から Markdown / JSON を生成
+```
+
+### 本文サイズ概算の偏りについての設計背景
+
+アセスメント機能では、大量ページの巡回および API 負荷の抑制・処理時間短縮を目的として、**添付バイナリのダウンロードや Markdown 変換処理を行いません**。
+
+- **添付ファイルサイズ**: Confluence API メタデータ (`extensions.fileSize`) をそのまま合算するため、実測値とほぼ一致します。
+- **ページ本文サイズ**: Storage Format (XHTML) の UTF-8 バイト長を素に概算します。Markdown 変換後は一般に HTML/XHTML タグの削除によってサイズが減少するため、本文の推定総サイズは**やや過大（安全側）に試算**されます。
+
+> 偏りの結論: 本文はやや過大、添付はほぼ正確となり、総容量は「上振れ方向に安全側」の見積もりとなります。この前提は生成される Markdown レポートの注記およびドキュメントに明記されます。
 
 ## クラス図
 
@@ -43,43 +83,39 @@ graph TD
 classDiagram
     class Config {
         +base_url: str
-        +root_page_id: str
+        +root_page_ids: list
         +output_dir: str
-        +max_mb: float
-        +stop_threshold_mb: float
-        +proxy: str
-        +token: str
+        +load()
+        +validate()
+    }
+
+    class AssessConfig {
+        +base_url: str
+        +root_page_ids: list
+        +space_keys: list
+        +analyze_restrictions: bool
+        +single_file_max_mb: int
+        +path_length_limit: int
         +load()
         +validate()
     }
 
     class ConfluenceClient {
-        +base_url: str
-        +headers: dict
-        +proxies: dict
-        +session: requests.Session
-        +get_page(page_id: str)
+        +get_page(page_id: str, expand: str)
         +get_child_pages(page_id: str, limit: int)
-        -_request(method, path, params, retries, backoff)
+        +get_attachments(page_id: str, limit: int)
+        +get_restrictions(page_id: str)
+        +get_space_root_pages(space_key: str, limit: int)
+    }
+
+    class Collector {
+        +client: ConfluenceClient
+        +analyze_restrictions: bool
+        +collect(root_ids: list) RawInventory
     }
 
     class MarkdownConverter {
-        +base_url: str
-        +macro_handlers: dict
         +convert(html_content: str, level: int)
-        -_walk(node, level, list_depth)
-        -_process_tag(tag, level, list_depth)
-        -_safe(handler, tag, level)
-        -_wrap_code_block(content, lang)
-        -_handle_table(table, level)
-        -_handle_list_item(tag, level, list_depth)
-        -_handle_definition_list(tag, level)
-        -_handle_img(tag, level)
-        -_handle_ac_image(tag, level)
-        -_handle_ac_link(tag, level)
-        -_handle_task_list(tag, level)
-        -_handle_macro(tag)
-        -_handle_structured_macro(tag)
     }
 
     class CLI {
@@ -87,45 +123,56 @@ classDiagram
         +main()
     }
 
+    class Assess {
+        +main()
+    }
+
     CLI ..> Config : uses
     CLI ..> ConfluenceClient : uses
     CLI ..> MarkdownConverter : uses
+
+    Assess ..> AssessConfig : uses
+    Assess ..> ConfluenceClient : uses
+    Assess ..> Collector : uses
 ```
 
 ## 処理シーケンス
 
-全体の実行フローは以下の通りです。
+アセスメントモードの実行フローは以下の通りです。
 
 ```mermaid
 sequenceDiagram
     participant User
-    participant CLI
-    participant Config
+    participant Assess
+    participant AssessConfig
     participant Client as ConfluenceClient
-    participant Conv as MarkdownConverter
+    participant Collector
+    participant Analyzers
+    participant Report
 
-    User->>CLI: python -m c2m_export.cli
-    CLI->>Config: load() & validate()
-    Config-->>CLI: Config Data
-    CLI->>Client: Initialize(base_url, token, proxy)
-    CLI->>Conv: Initialize(base_url)
+    User->>Assess: python -m c2m_export.assess
+    Assess->>AssessConfig: load() & validate()
+    AssessConfig-->>Assess: Config Data
+    Assess->>Client: Initialize(base_url, token, proxy)
 
-    CLI->>Client: get_page(root_page_id)
-    Client-->>CLI: Root Page Info (Title, Space)
+    Note over Assess, Client: 起点解決 (root_page_ids / space_keys)
+    Assess->>Collector: collect(root_ids)
 
-    Note over CLI, Client: export_tree (DFS Traversal)
-    loop pages in stack
-        CLI->>Client: get_page(page_id)
-        Client-->>CLI: Page Data (Storage Format)
-        CLI->>Conv: convert(body, level)
-        Conv-->>CLI: Markdown String
-        CLI->>Client: get_child_pages(page_id)
-        Client-->>CLI: Child List
-        Note right of CLI: Check Size Limit
+    loop DFS DFS Traversal
+        Collector->>Client: get_page(page_id, expand)
+        Collector->>Client: get_attachments(page_id)
+        alt analyze_restrictions is True
+            Collector->>Client: get_restrictions(page_id)
+        end
+        Collector->>Client: get_child_pages(page_id)
     end
+    Collector-->>Assess: RawInventory
 
-    CLI->>CLI: Write combined MD to file
-    CLI-->>User: Done (File Path)
+    Assess->>Analyzers: analyze_inventory(RawInventory, rules)
+    Analyzers-->>Assess: AssessmentResult
+
+    Assess->>Report: write_reports(AssessmentResult)
+    Report-->>User: Output confluence_assessment_<timestamp>.md / .json
 ```
 
 ## 探索アルゴリズムのフローチャート
@@ -254,3 +301,10 @@ mypy
   CLI の波及防止・部分成功・ログ、ページ連結でのフェンス波及防止を検証。
 - `tests/test_cli_overwrite.py`: CLI の上書き挙動・フェイルファストを検証。
 - `tests/test_utils.py`: ファイル名サニタイズやサイズ計算のロジックを検証。
+- `tests/test_confluence_assess_client.py`: アセスメント用 Confluence API 拡張のテスト。
+- `tests/test_assessment_rules.py`: 移設リスク判定ルール単体テスト。
+- `tests/test_assessment_analyzers.py`: 規模・構造・権限・鮮度の分析純粋ロジック単体テスト。
+- `tests/test_assessment_collector.py`: DFS メタデータ収集およびスキップ継続のテスト。
+- `tests/test_assessment_report.py`: Markdown / JSON レポート生成および上書き挙動のテスト。
+- `tests/test_assess_config.py`: AssessConfig の設定読み込み・優先順位のテスト。
+- `tests/test_assess_main.py`: assess.py メイン処理およびルート解決のテスト。
