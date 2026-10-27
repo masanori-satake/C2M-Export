@@ -21,9 +21,7 @@ def test_download_attachment_success(tmp_path):
         bytes_written = client.download_attachment("/download/test.txt", str(dest_file))
         assert bytes_written == 12
         assert dest_file.read_bytes() == b"chunk1chunk2"
-        mock_get.assert_called_once_with(
-            "https://confluence.example.com/download/test.txt", stream=True, timeout=60
-        )
+        mock_get.assert_called_once_with("https://confluence.example.com/download/test.txt", stream=True, timeout=60)
 
 
 def test_download_attachment_exceeds_max_bytes(tmp_path):

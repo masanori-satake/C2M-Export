@@ -182,17 +182,20 @@ page_id 集合の比較で分類する。
 
 ```python
 def main():
-    config = FsExportConfig(); config.load(); config.validate()
-    client = ConfluenceClient(...); converter = MarkdownConverter(...)
+    config = FsExportConfig()
+    config.load()
+    config.validate()
+    client = ConfluenceClient(...)
+    converter = MarkdownConverter(...)
     if config.full or not (config.sync or config.resume):
-        run_full_export(...)          # 0004 の経路（マニフェストは最後に新規保存）
+        run_full_export(...)  # 0004 の経路（マニフェストは最後に新規保存）
     else:
-        manifest = load_manifest(config)         # 破損/欠落→通知しフォールバック案内
-        verify_scope(manifest, config)           # base_url/roots 不一致→破壊的操作せず安全停止
+        manifest = load_manifest(config)  # 破損/欠落→通知しフォールバック案内
+        verify_scope(manifest, config)  # base_url/roots 不一致→破壊的操作せず安全停止
         inv = collect_inventory(client, config)  # 軽量メタのみ
-        plan = diff(manifest, inv, skipped)      # DiffPlan（純粋）
+        plan = diff(manifest, inv, skipped)  # DiffPlan（純粋）
         run_sync(client, converter, config, plan, manifest)  # 実出力 + 原子的更新
-    write_summary(...)                # 0004 と整合（ログ + 日時サフィックスファイル）
+    write_summary(...)  # 0004 と整合（ログ + 日時サフィックスファイル）
 ```
 
 - フル出力経路でも**完了時にマニフェストを新規保存**しておくことで、次回から sync/resume が使える（0004 単独実行後でも 0005 が機能する基盤を作る）。
