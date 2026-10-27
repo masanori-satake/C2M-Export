@@ -1,11 +1,45 @@
 import html
 import logging
 import re
+from typing import Iterable, Optional, Union
 from urllib.parse import quote
 
 from bs4 import BeautifulSoup, Tag
 
 logger = logging.getLogger(__name__)
+
+# ホットパスでの正規表現評価オーバーヘッドを回避するための見出しタグ一覧（Set検索はO(1)）
+_HEADINGS = {"h1", "h2", "h3", "h4", "h5", "h6"}
+
+
+def _find_direct_child(tag: Tag, name_or_names: Union[str, Iterable[str]]) -> Optional[Tag]:
+    """
+    指定されたタグの直下（1段階目の子）から該当する要素を探索する。
+    bs4 の find() はツリー全体の再帰検索および Filter オブジェクトの生成に伴う
+    パフォーマンスオーバーヘッドが大きいため、直下の子要素ループで高速化する。
+    """
+    if isinstance(name_or_names, str):
+        for child in tag.children:
+            if isinstance(child, Tag) and child.name == name_or_names:
+                return child
+    else:
+        names = set(name_or_names) if not isinstance(name_or_names, set) else name_or_names
+        for child in tag.children:
+            if isinstance(child, Tag) and child.name in names:
+                return child
+    return None
+
+
+def _get_macro_parameter(tag: Tag, param_name: str) -> Optional[Tag]:
+    """
+    ac:structured-macro 直下の ac:parameter 要素から指定された ac:name を探す。
+    tag.find("ac:parameter", attrs={"ac:name": ...}) は属性検索用 Filter を動的生成し
+    非常に低速なため、直下要素のループで効率的に検索する。
+    """
+    for child in tag.children:
+        if isinstance(child, Tag) and child.name == "ac:parameter" and child.get("ac:name") == param_name:
+            return child
+    return None
 
 
 class MarkdownConverter:
@@ -67,7 +101,8 @@ class MarkdownConverter:
         name = tag.name
 
         # 見出し: ページ階層に応じて#の数を増やす。ただしMarkdownの仕様上、最大6まで。
-        if re.match(r"h[1-6]", name):
+        # Set 検索により全タグ処理時の判定オーバーヘッドを低減
+        if name in _HEADINGS:
             h_level = min(6, int(name[1]) + level - 1)
             return f"\n{'#' * h_level} {self._walk(tag, level, list_depth)}\n"
 
@@ -184,23 +219,23 @@ class MarkdownConverter:
         Confluence の Storage Format は tr を tbody 等でラップすることが多く、
         table 直下だけを見ると tr が 0 件になり表が消失する。これを防ぐため、
         各セクションコンテナの「直下」の tr のみを対象に収集する。
-        ネストした表の tr を親テーブルに取り込まないよう recursive=False を用いる。
+        ネストした表の tr を親テーブルに取り込まないよう直下子要素ループを用いる。
 
         戻り値: (header_rows, body_rows)
         """
 
         def direct_trs(container):
-            return container.find_all("tr", recursive=False)
+            return [c for c in container.children if isinstance(c, Tag) and c.name == "tr"]
 
         header_trs = []
         body_trs = []
 
-        thead = table.find("thead", recursive=False)
+        thead = _find_direct_child(table, "thead")
         if thead:
             header_trs = direct_trs(thead)
 
-        tbodies = table.find_all("tbody", recursive=False)
-        tfoots = table.find_all("tfoot", recursive=False)
+        tbodies = [c for c in table.children if isinstance(c, Tag) and c.name == "tbody"]
+        tfoots = [c for c in table.children if isinstance(c, Tag) and c.name == "tfoot"]
 
         for tbody in tbodies:
             body_trs.extend(direct_trs(tbody))
@@ -215,7 +250,7 @@ class MarkdownConverter:
         # thead が無い場合、先頭行が th を含むならヘッダーとして扱う
         if not header_trs and body_trs:
             first = body_trs[0]
-            if first.find("th", recursive=False):
+            if _find_direct_child(first, "th"):
                 header_trs = [first]
                 body_trs = body_trs[1:]
 
@@ -224,18 +259,19 @@ class MarkdownConverter:
     def _table_row_cells(self, tr: Tag, level: int):
         """tr から各セルのテキストを取り出す。セル内の | と改行を安全化する。"""
         cols = []
-        for cell in tr.find_all(["th", "td"], recursive=False):
-            cell_text = self._walk(cell, level).strip()
-            # 表構造を壊さないよう、| をエスケープし、改行を <br> に置換
-            cell_text = cell_text.replace("|", "\\|").replace("\n", "<br>")
-            # colspan があれば、その列数ぶんセルを複製せず空セルで補完し列整合を保つ
-            try:
-                span = int(self._attr(cell, "colspan", "1"))
-            except (TypeError, ValueError):
-                span = 1
-            cols.append(cell_text)
-            for _ in range(max(0, span - 1)):
-                cols.append("")
+        for cell in tr.children:
+            if isinstance(cell, Tag) and cell.name in ("th", "td"):
+                cell_text = self._walk(cell, level).strip()
+                # 表構造を壊さないよう、| をエスケープし、改行を <br> に置換
+                cell_text = cell_text.replace("|", "\\|").replace("\n", "<br>")
+                # colspan があれば、その列数ぶんセルを複製せず空セルで補完し列整合を保つ
+                try:
+                    span = int(self._attr(cell, "colspan", "1"))
+                except (TypeError, ValueError):
+                    span = 1
+                cols.append(cell_text)
+                for _ in range(max(0, span - 1)):
+                    cols.append("")
         return cols
 
     def _handle_table(self, table: Tag, level: int) -> str:
@@ -288,7 +324,13 @@ class MarkdownConverter:
         子リストは本文の下に、さらに深いインデントで出力する。
         """
         # 親項目の本文開始位置に揃える（番号リストは3列、箇条書きは2列）。
-        parent_lists = tag.find_parents(["ul", "ol"])
+        parent_lists = []
+        p = tag.parent
+        while p:
+            if isinstance(p, Tag) and p.name in ("ul", "ol"):
+                parent_lists.append(p)
+            p = p.parent
+
         indent = " " * sum(3 if parent.name == "ol" else 2 for parent in parent_lists[1:])
         marker = "1. " if (tag.parent and tag.parent.name == "ol") else "- "
 
@@ -317,14 +359,15 @@ class MarkdownConverter:
         Markdown に専用構文がないため、用語を太字、説明を続く行として表現する。
         """
         parts = []
-        for child in tag.find_all(["dt", "dd"], recursive=False):
-            text = self._walk(child, level).strip()
-            if not text:
-                continue
-            if child.name == "dt":
-                parts.append(f"**{text}**")
-            else:
-                parts.append(text)
+        for child in tag.children:
+            if isinstance(child, Tag) and child.name in ("dt", "dd"):
+                text = self._walk(child, level).strip()
+                if not text:
+                    continue
+                if child.name == "dt":
+                    parts.append(f"**{text}**")
+                else:
+                    parts.append(text)
         if not parts:
             return ""
         return "\n" + "\n".join(parts) + "\n"
@@ -353,13 +396,13 @@ class MarkdownConverter:
         """
         alt = self._attr(tag, "ac:alt").strip()
 
-        attachment = tag.find("ri:attachment")
+        attachment = _find_direct_child(tag, "ri:attachment")
         if isinstance(attachment, Tag) and attachment.get("ri:filename"):
             filename = self._attr(attachment, "ri:filename")
             alt_text = alt or filename
             return f"![{alt_text}]({self._format_destination(filename)})"
 
-        ri_url = tag.find("ri:url")
+        ri_url = _find_direct_child(tag, "ri:url")
         if isinstance(ri_url, Tag) and ri_url.get("ri:value"):
             url = self._attr(ri_url, "ri:value")
             return f"![{alt}]({self._format_destination(url)})"
@@ -381,11 +424,11 @@ class MarkdownConverter:
         """
         # 表示テキスト（link-body / plain-text-link-body）
         display = ""
-        body = tag.find(["ac:link-body", "ac:plain-text-link-body"])
+        body = _find_direct_child(tag, ("ac:link-body", "ac:plain-text-link-body"))
         if isinstance(body, Tag):
             display = self._walk(body, level).strip() if body.name == "ac:link-body" else body.get_text().strip()
 
-        ri_page = tag.find("ri:page")
+        ri_page = _find_direct_child(tag, "ri:page")
         if isinstance(ri_page, Tag):
             title = self._attr(ri_page, "ri:content-title").strip()
             space_key = self._attr(ri_page, "ri:space-key").strip()
@@ -397,13 +440,13 @@ class MarkdownConverter:
             # space-key 不明時はタイトル（テキスト）のみ残す（A案・情報非欠損）
             return text
 
-        ri_user = tag.find("ri:user")
+        ri_user = _find_direct_child(tag, "ri:user")
         if isinstance(ri_user, Tag):
             name = display or self._attr(ri_user, "ri:username") or self._attr(ri_user, "ri:userkey")
             name = name.strip()
             return f"@{name}" if name else ""
 
-        ri_attachment = tag.find("ri:attachment")
+        ri_attachment = _find_direct_child(tag, "ri:attachment")
         if isinstance(ri_attachment, Tag) and ri_attachment.get("ri:filename"):
             filename = self._attr(ri_attachment, "ri:filename")
             text = display or filename
@@ -428,13 +471,14 @@ class MarkdownConverter:
         ac:task-status が complete なら [x]、それ以外は [ ]。
         """
         lines = []
-        for task in tag.find_all("ac:task", recursive=False):
-            status = task.find("ac:task-status")
-            checked = status and status.get_text().strip().lower() == "complete"
-            body = task.find("ac:task-body")
-            body_md = self._walk(body, level).strip().replace("\n", " ") if body else ""
-            box = "[x]" if checked else "[ ]"
-            lines.append(f"- {box} {body_md}")
+        for task in tag.children:
+            if isinstance(task, Tag) and task.name == "ac:task":
+                status = _find_direct_child(task, "ac:task-status")
+                checked = status and status.get_text().strip().lower() == "complete"
+                body = _find_direct_child(task, "ac:task-body")
+                body_md = self._walk(body, level).strip().replace("\n", " ") if body else ""
+                box = "[x]" if checked else "[ ]"
+                lines.append(f"- {box} {body_md}")
         if not lines:
             return ""
         return "\n" + "\n".join(lines) + "\n"
@@ -463,7 +507,7 @@ class MarkdownConverter:
         """
         macro_name = tag.get("data-macro-name")
         if macro_name in ["code", "noformat"]:
-            content = tag.find("pre")
+            content = _find_direct_child(tag, "pre") or tag.find("pre")
             if content:
                 return self._wrap_code_block(content.get_text())
 
@@ -479,16 +523,16 @@ class MarkdownConverter:
 
         # 1. 特殊な情報抽出が必要なマクロ
         if macro_name == "status":
-            title_param = tag.find("ac:parameter", attrs={"ac:name": "title"})
+            title_param = _get_macro_parameter(tag, "title")
             if title_param:
                 return f" 【ステータス: {title_param.get_text().strip()}】 "
             return ""
 
         if macro_name == "jira":
-            key_param = tag.find("ac:parameter", attrs={"ac:name": "key"})
+            key_param = _get_macro_parameter(tag, "key")
             if key_param:
                 return f" 【JIRA課題: {key_param.get_text().strip()}】 "
-            jql_param = tag.find("ac:parameter", attrs={"ac:name": "jqlQuery"})
+            jql_param = _get_macro_parameter(tag, "jqlQuery")
             if jql_param:
                 return f" 【JIRAクエリ: {jql_param.get_text().strip()}】 "
             return ""
@@ -506,13 +550,13 @@ class MarkdownConverter:
         # 3. 汎用的なボディ処理 (名前を問わず構造に基づいて変換)
 
         # プレーンテキストボディ (Code, PlantUML等)
-        plain_text_body = tag.find("ac:plain-text-body")
+        plain_text_body = _find_direct_child(tag, "ac:plain-text-body")
         if plain_text_body:
             lang = ""
             if macro_name in ["plantuml", "plantumlrender"]:
                 lang = "plantuml"
             else:
-                lang_param = tag.find("ac:parameter", attrs={"ac:name": "language"})
+                lang_param = _get_macro_parameter(tag, "language")
                 if lang_param:
                     lang = lang_param.get_text().strip()
 
@@ -520,10 +564,10 @@ class MarkdownConverter:
             return self._wrap_code_block(content, lang)
 
         # リッチテキストボディ (expand, note, info, panel, details等)
-        rich_text_body = tag.find("ac:rich-text-body")
+        rich_text_body = _find_direct_child(tag, "ac:rich-text-body")
         if rich_text_body:
             title = ""
-            title_param = tag.find("ac:parameter", attrs={"ac:name": "title"})
+            title_param = _get_macro_parameter(tag, "title")
             if title_param:
                 title = title_param.get_text().strip()
 
