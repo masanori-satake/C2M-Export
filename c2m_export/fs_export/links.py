@@ -52,13 +52,16 @@ def rewrite_attachment_links(
         if clean_target.startswith("<") and clean_target.endswith(">"):
             clean_target = clean_target[1:-1]
 
-        # 外部 URL またはアンカー等はスキップ
-        if clean_target.startswith("http://") or clean_target.startswith("https://") or clean_target.startswith("#"):
+        # 外部 URL はスキップ
+        if clean_target.startswith("http://") or clean_target.startswith("https://"):
             return match.group(0)
 
         # att_map にマッチするか
         att = att_map.get(clean_target)
         if not att:
+            # 添付に一致しない場合のみアンカーとして保持する
+            if clean_target.startswith("#"):
+                return match.group(0)
             # 該当する添付情報が見つからない場合
             if link_mode == "relative":
                 unresolved_count += 1

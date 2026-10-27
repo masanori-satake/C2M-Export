@@ -70,7 +70,7 @@ def test_external_angle_destination_is_preserved(target, link_mode):
     assert unresolved == 0
 
 
-@pytest.mark.parametrize("filename", ["image space.png", "image(1).png", "image (1).png"])
+@pytest.mark.parametrize("filename", ["image space.png", "image(1).png", "image (1).png", "#image (1).png"])
 @pytest.mark.parametrize("tag", ["image", "link"])
 @pytest.mark.parametrize("link_mode", ["relative", "original"])
 def test_rewrite_converted_attachment_with_special_destination(filename, tag, link_mode):
@@ -119,3 +119,31 @@ def test_unresolved_angle_destination_is_preserved():
 
     assert new_content == content
     assert unresolved == 2
+
+
+@pytest.mark.parametrize("target", ["#doc.pdf", "<#doc.pdf>"])
+@pytest.mark.parametrize("link_mode", ["relative", "original"])
+@pytest.mark.parametrize("saved", [False, True])
+def test_hash_attachment_is_distinguished_from_anchor(target, link_mode, saved):
+    content = f"[文書]({target}) [節](#section) [節](<#section>)"
+    attachments = [
+        AttachmentRef(
+            original_filename="#doc.pdf",
+            saved_filename="doc (2).pdf",
+            saved=saved,
+            download_path="/download/attachments/123/%23doc.pdf",
+        )
+    ]
+
+    new_content, unresolved = rewrite_attachment_links(
+        content, attachments, link_mode=link_mode, base_url="https://confluence.example.com/"
+    )
+
+    if link_mode == "original":
+        destination = "https://confluence.example.com/download/attachments/123/%23doc.pdf"
+    elif saved:
+        destination = "<_attachments/doc (2).pdf>"
+    else:
+        destination = target
+    assert new_content == f"[文書]({destination}) [節](#section) [節](<#section>)"
+    assert unresolved == (1 if link_mode == "relative" and not saved else 0)
