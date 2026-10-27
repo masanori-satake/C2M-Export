@@ -55,9 +55,16 @@ graph TD
 ```
 c2m_export/
 ├── confluence.py      # [拡張] get_attachments, download_attachment, get_restrictions, get_space_root_pages 等を追加
-├── config.py          # [拡張] AssessConfig, FsExportConfig (sync/resume/full/deletion_policy 等) を追加
+├── config.py          # [拡張] AssessConfig, FsExportConfig, PermissionExportConfig を追加
 ├── assess.py          # 分析モードのエントリーポイント（python -m c2m_export.assess）
 ├── fsexport.py        # ファイルシステムモードのエントリーポイント（python -m c2m_export.fsexport / sync・resume分岐）
+├── permexport.py      # [新規 0006] 権限エクスポートのエントリーポイント（python -m c2m_export.permexport）
+├── permission/        # [新規 0006] 権限エクスポートロジック一式
+│   ├── __init__.py
+│   ├── models.py      # PagePermission / PermissionReport / PermissionResult
+│   ├── collector.py   # DFS 巡回で各ページの制限情報を収集 (I/O)・部分成功処理
+│   ├── report.py      # Markdown (集約/分散) / JSON レポート生成純粋ロジック
+│   └── summary.py     # 実行サマリ生成（ログ + 日時サフィックス付きファイル出力）
 ├── fs_export/         # ファイルシステム出力ロジック一式
 │   ├── __init__.py
 │   ├── manifest.py    # [新規 0005] マニフェストモデル・原子的保存/読み込み・破損検出・スコープ検証
@@ -347,3 +354,8 @@ mypy
 - `tests/test_sync_apply.py`: DiffPlan 適用、移動・改名追従、レジューム再帰のテスト。
 - `tests/test_fsexport_sync_config.py`: FsExportConfig の sync 関連キー解決・バリデーションのテスト。
 - `tests/test_fsexport_sync_main.py`: fsexport main 処理での sync 経路分岐のテスト。
+- `tests/test_permexport_config.py`: PermissionExportConfig の設定解決・バリデーションのテスト。
+- `tests/test_perm_collector.py`: DFS 巡回でのコンテンツ制限収集・二重防止・部分成功のテスト。
+- `tests/test_perm_report.py`: 集約・分散 Markdown および JSON レポート生成のテスト。
+- `tests/test_perm_summary.py`: 権限エクスポートサマリ集計とファイル出力のテスト。
+- `tests/test_permexport_main.py`: permexport エントリーポイントのテスト。
