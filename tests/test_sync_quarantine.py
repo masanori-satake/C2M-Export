@@ -59,3 +59,18 @@ def test_quarantine_path_report_mode(tmp_path):
     )
 
     assert os.path.exists(target_file)
+
+
+def test_quarantine_path_traversal_prevention(tmp_path):
+    """パストラバーサルを伴う相対パスが渡された場合に ValueError が発生することを検証する."""
+    import pytest
+
+    out_dir = str(tmp_path / "output")
+    os.makedirs(out_dir, exist_ok=True)
+
+    with pytest.raises(ValueError, match="ディレクトリトラバーサルの検知"):
+        quarantine_path(
+            rel_path="../secret.txt",
+            output_dir=out_dir,
+            deletion_policy="quarantine",
+        )

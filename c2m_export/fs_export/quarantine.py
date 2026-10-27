@@ -27,7 +27,15 @@ def quarantine_path(
         quarantine_dir_name: 退避ルートディレクトリ名 (既定: "_c2m_quarantine")
         timestamp: 退避サブディレクトリ用のタイムスタンプ (未指定時は現在時刻 YYYYMMDD_HHMMSS)
     """
-    target_abs = os.path.join(output_dir, rel_path)
+    # セキュリティ対策: パストラバーサル (Path Traversal) を防止するため、指定されたパスが出力ディレクトリ外を指していないか検証
+    output_dir_abs = os.path.abspath(output_dir)
+    target_abs = os.path.abspath(os.path.join(output_dir, rel_path))
+
+    if os.path.commonpath([output_dir_abs, target_abs]) != output_dir_abs:
+        logger.error(
+            f"現象: 出力ディレクトリ外のパスが指定されました ({rel_path})。 原因: パストラバーサルの可能性があります。 対処方法: 正しい相対パスを指定してください。"
+        )
+        raise ValueError(f"無効な相対パスです (ディレクトリトラバーサルの検知): {rel_path}")
 
     if not os.path.exists(target_abs):
         logger.info(f"退避/削除対象のパスが存在しません (スキップ): {rel_path}")
