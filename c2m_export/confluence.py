@@ -127,3 +127,76 @@ class ConfluenceClient:
             start += len(results)
 
         return root_pages
+
+    def download_attachment(
+        self,
+        download_path: str,
+        dest_file: str,
+        max_bytes: Optional[int] = None,
+        retries: int = 3,
+        backoff: float = 2.0,
+    ) -> int:
+        """添付バイナリをストリーミングダウンロードして保存する.
+
+        Args:
+            download_path: `_links.download` 等のダウンロード用パス (コンテキスト相対または絶対URL)
+            dest_file: 保存先ローカルファイルパス
+            max_bytes: 単一ファイルの許容最大バイト数 (到達時に即時停止して削除・例外発生)
+            retries: リトライ回数
+            backoff: 指数バックオフの係数
+
+        Returns:
+            保存されたファイルのバイト数
+
+        Raises:
+            ValueError: `max_bytes` を超えた場合
+            requests.exceptions.RequestException: ダウンロード失敗時
+        """
+        import os
+
+        if download_path.startswith("http://") or download_path.startswith("https://"):
+            url = download_path
+        else:
+            url = f"{self.base_url}{download_path}"
+
+        for i in range(retries):
+            try:
+                response = self.session.get(url, stream=True, timeout=60)
+                if response.status_code == 200:
+                    written_bytes = 0
+                    os.makedirs(os.path.dirname(os.path.abspath(dest_file)), exist_ok=True)
+                    try:
+                        with open(dest_file, "wb") as f:
+                            for chunk in response.iter_content(chunk_size=8192):
+                                if chunk:
+                                    written_bytes += len(chunk)
+                                    if max_bytes is not None and written_bytes > max_bytes:
+                                        f.close()
+                                        if os.path.exists(dest_file):
+                                            os.remove(dest_file)
+                                        raise ValueError(
+                                            f"単一ファイルサイズ上限 ({max_bytes} バイト) を超過したためダウンロードを中断しました"
+                                        )
+                                    f.write(chunk)
+                        return written_bytes
+                    except Exception:
+                        if os.path.exists(dest_file):
+                            os.remove(dest_file)
+                        raise
+                elif 500 <= response.status_code < 600:
+                    logger.warning(
+                        f"サーバーエラー {response.status_code} が発生しました ({url})。再試行中 ({i + 1}/{retries})..."
+                    )
+                    time.sleep(backoff * (2**i))
+                    continue
+                else:
+                    response.raise_for_status()
+            except ValueError:
+                raise
+            except requests.exceptions.RequestException as e:
+                if i == retries - 1:
+                    raise
+                logger.warning(f"添付ダウンロードリクエストが失敗しました: {e}。再試行中 ({i + 1}/{retries})...")
+                time.sleep(backoff * (2**i))
+
+        raise requests.exceptions.RequestException(f"{retries} 回の試行後も {url} のダウンロードに失敗しました")

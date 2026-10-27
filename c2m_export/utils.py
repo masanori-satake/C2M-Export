@@ -76,6 +76,38 @@ def bytes_to_mb(b: int) -> float:
     return b / (1024 * 1024)
 
 
+def bytes_to_gb(b: int) -> float:
+    """バイト数をギガバイト (GB) に変換する."""
+    return b / (1024 * 1024 * 1024)
+
+
+def generate_unique_name(base_name: str, existing_names: List[str]) -> str:
+    """同一階層における名前の衝突を回避するための一意な名称を採番する.
+
+    拡張子がある場合は拡張子の手前に ` (2)`, ` (3)` ... を付与する。
+
+    Args:
+        base_name: 正規化済みのベース名称 (例: "設計書", "画像.png")
+        existing_names: 同一階層で既に採番済みの名称一覧
+
+    Returns:
+        一意な名称
+    """
+    if base_name not in existing_names:
+        return base_name
+
+    path = Path(base_name)
+    stem = path.stem
+    suffix = path.suffix
+
+    counter = 2
+    while True:
+        candidate = f"{stem} ({counter}){suffix}"
+        if candidate not in existing_names:
+            return candidate
+        counter += 1
+
+
 def generate_zip_filename(space_key: Optional[str], title: Optional[str], suffix: str = "") -> str:
     """
     【spaceKey】 Title.zip 形式のファイル名を生成する。

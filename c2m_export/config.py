@@ -133,6 +133,182 @@ class Config:
         self.base_url = self.base_url.rstrip("/")
 
 
+class FsExportConfig:
+    """ファイルシステムエクスポートモードの設定を管理するクラス.
+
+    CLI引数、環境変数、設定ファイル (YAML) の順で優先順位を制御する。
+    """
+
+    def __init__(self):
+        self.base_url: Optional[str] = None
+        self.root_page_ids: List[str] = []
+        self.space_keys: List[str] = []
+        self.output_dir: str = "."
+        self.proxy: Optional[str] = None
+        self.token: Optional[str] = None
+        self.overwrite: bool = False
+
+        # ファイルシステムモード固有設定
+        self.attachment_dir_name: str = DEFAULT_ATTACHMENT_DIR_NAME
+        self.attachment_link_mode: str = "relative"  # "relative" | "original"
+        self.page_filename_mode: str = "title"  # "title" | "index"
+        self.single_file_max_mb: float = float(DEFAULT_SINGLE_FILE_MAX_MB)
+        self.exclude_extensions: List[str] = []
+        self.path_length_limit: int = DEFAULT_PATH_LENGTH_LIMIT
+        self.frontmatter_fields: Optional[List[str]] = None
+
+    def load(self):
+        """設定を読み込む。優先順位は CLI > 設定ファイル > デフォルト."""
+        pre_parser = argparse.ArgumentParser(add_help=False)
+        pre_parser.add_argument("--config", type=str, default=str(DEFAULT_CONFIG_PATH))
+        pre_args, _ = pre_parser.parse_known_args()
+
+        config_path = Path(pre_args.config) if pre_args.config else DEFAULT_CONFIG_PATH
+
+        if config_path.exists():
+            try:
+                with open(config_path, encoding="utf-8") as f:
+                    file_config = yaml.safe_load(f)
+                    if file_config:
+                        self.base_url = file_config.get("base_url", self.base_url)
+                        root_ids = file_config.get("root_page_ids")
+                        if root_ids:
+                            if isinstance(root_ids, list):
+                                self.root_page_ids = [str(i) for i in root_ids]
+                            else:
+                                self.root_page_ids = [str(root_ids)]
+                        s_keys = file_config.get("space_keys")
+                        if s_keys:
+                            if isinstance(s_keys, list):
+                                self.space_keys = [str(k) for k in s_keys]
+                            else:
+                                self.space_keys = [str(s_keys)]
+
+                        self.output_dir = file_config.get("output_dir", self.output_dir)
+                        self.proxy = file_config.get("proxy", self.proxy)
+                        self.token = file_config.get("token", self.token)
+                        self.overwrite = file_config.get("overwrite", self.overwrite)
+
+                        # filesystem_export セクション
+                        fs_sec = file_config.get("filesystem_export", {})
+                        if isinstance(fs_sec, dict):
+                            self.attachment_dir_name = fs_sec.get(
+                                "attachment_dir_name", self.attachment_dir_name
+                            )
+                            self.attachment_link_mode = fs_sec.get(
+                                "attachment_link_mode", self.attachment_link_mode
+                            )
+                            self.page_filename_mode = fs_sec.get(
+                                "page_filename_mode", self.page_filename_mode
+                            )
+                            if "single_file_max_mb" in fs_sec:
+                                self.single_file_max_mb = float(fs_sec["single_file_max_mb"])
+                            e_exts = fs_sec.get("exclude_extensions")
+                            if e_exts and isinstance(e_exts, list):
+                                self.exclude_extensions = [str(e) for e in e_exts]
+                            if "path_length_limit" in fs_sec:
+                                self.path_length_limit = int(fs_sec["path_length_limit"])
+                            fm_fields = fs_sec.get("frontmatter_fields")
+                            if fm_fields and isinstance(fm_fields, list):
+                                self.frontmatter_fields = [str(f) for f in fm_fields]
+            except Exception as e:
+                print(
+                    f"設定ファイル {config_path} の読み込みに失敗しました（現象）。詳細: {e}（原因）。ファイル形式を確認してください（対処方法）"
+                )
+
+        env_https_proxy = os.environ.get("HTTPS_PROXY")
+        env_http_proxy = os.environ.get("HTTP_PROXY")
+        if env_https_proxy:
+            self.proxy = env_https_proxy
+        elif env_http_proxy:
+            self.proxy = env_http_proxy
+
+        parser = argparse.ArgumentParser(description="Confluenceページ階層をディレクトリ/ファイル階層として出力するツール")
+        parser.add_argument("--base-url", type=str, help="ConfluenceのベースURL (例: https://host/wiki)")
+        parser.add_argument(
+            "--root-page-id", type=str, nargs="+", help="エクスポートを開始するルートページのID（複数指定可能）"
+        )
+        parser.add_argument("--space-key", type=str, nargs="+", help="エクスポートを開始するSpaceキー（複数指定可能）")
+        parser.add_argument("--output-dir", type=str, help="出力先ルートディレクトリ")
+        parser.add_argument("--proxy", type=str, help="HTTP/HTTPS プロキシURL")
+        parser.add_argument("--config", type=str, help="設定ファイルのパス (既定: c2m_config.yaml)")
+        parser.add_argument("--token", type=str, help="ConfluenceのBearerトークン")
+        parser.add_argument("--overwrite", action="store_true", help="既存の出力先を上書きする")
+
+        parser.add_argument("--attachment-dir", type=str, help="添付サブディレクトリ名 (既定: _attachments)")
+        parser.add_argument(
+            "--attachment-link-mode",
+            type=str,
+            choices=["relative", "original"],
+            help="本文中の添付参照のリンク先 (relative | original)",
+        )
+        parser.add_argument(
+            "--page-filename-mode",
+            type=str,
+            choices=["title", "index"],
+            help="本文ファイル命名方式 (title | index)",
+        )
+        parser.add_argument("--single-file-max-mb", type=float, help="単一ファイルサイズ上限 (MB)")
+        parser.add_argument("--exclude-ext", type=str, nargs="+", help="除外する添付拡張子のリスト")
+        parser.add_argument("--path-length-limit", type=int, help="パス長警告しきい値 (文字数)")
+
+        cli_args = parser.parse_args()
+
+        if cli_args.base_url:
+            self.base_url = cli_args.base_url
+        if cli_args.root_page_id:
+            self.root_page_ids = cli_args.root_page_id
+        if cli_args.space_key:
+            self.space_keys = cli_args.space_key
+
+        if self.root_page_ids:
+            seen = set()
+            self.root_page_ids = [x for x in self.root_page_ids if not (x in seen or seen.add(x))]
+        if self.space_keys:
+            seen_s = set()
+            self.space_keys = [x for x in self.space_keys if not (x in seen_s or seen_s.add(x))]
+
+        if cli_args.output_dir:
+            self.output_dir = cli_args.output_dir
+        if cli_args.proxy:
+            self.proxy = cli_args.proxy
+        if cli_args.token:
+            self.token = cli_args.token
+        if cli_args.overwrite:
+            self.overwrite = True
+
+        if cli_args.attachment_dir:
+            self.attachment_dir_name = cli_args.attachment_dir
+        if cli_args.attachment_link_mode:
+            self.attachment_link_mode = cli_args.attachment_link_mode
+        if cli_args.page_filename_mode:
+            self.page_filename_mode = cli_args.page_filename_mode
+        if cli_args.single_file_max_mb is not None:
+            self.single_file_max_mb = cli_args.single_file_max_mb
+        if cli_args.exclude_ext:
+            self.exclude_extensions = cli_args.exclude_ext
+        if cli_args.path_length_limit is not None:
+            self.path_length_limit = cli_args.path_length_limit
+
+    def validate(self):
+        """必須設定の有無を確認し、URLの正規化を行う."""
+        if not self.base_url:
+            raise ValueError("base_url is required (use --base-url or config file)")
+        if not self.root_page_ids and not self.space_keys:
+            raise ValueError(
+                "At least one root_page_id or space_key is required (use --root-page-id, --space-key, or config file)"
+            )
+        if not self.token:
+            raise ValueError("token is required (use --token or config file)")
+
+        if self.attachment_link_mode not in ["relative", "original"]:
+            raise ValueError("attachment_link_mode must be 'relative' or 'original'")
+        if self.page_filename_mode not in ["title", "index"]:
+            raise ValueError("page_filename_mode must be 'title' or 'index'")
+
+        self.base_url = self.base_url.rstrip("/")
+
+
 class AssessConfig:
     """アセスメント（分析モード）の設定を管理するクラス."""
 

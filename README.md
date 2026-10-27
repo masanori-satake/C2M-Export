@@ -72,7 +72,29 @@ python -m c2m_export.assess --space-key SPACE_A SPACE_B
 
 ---
 
-### 3. エクスポート（結合モード）の実行
+### 3. ファイルシステムモードの実行
+
+Confluence のページ階層および添付ファイル（バイナリ）を、OS のディレクトリ・ファイル構造としてローカルに書き出したい場合は、以下のコマンドを実行します。
+
+```cmd
+python -m c2m_export.fsexport
+```
+
+`fsexport` の主要なオプション：
+- `--root-page-id`: エクスポートの起点となるページ ID（複数指定可）
+- `--space-key`: エクスポートの起点となる Space キー（複数指定可）
+- `--attachment-dir`: 添付ファイルを格納するサブディレクトリ名 (既定: `_attachments`)
+- `--attachment-link-mode`: 本文中の添付参照のリンク先 (`relative` | `original` / 既定: `relative`)
+- `--page-filename-mode`: ページ本文ファイル命名方式 (`title` | `index` / 既定: `title`)
+- `--single-file-max-mb`: 単一ファイルの保存サイズ上限 MB (既定: 250)
+- `--exclude-ext`: 保存から除外する添付ファイルの拡張子リスト
+- `--overwrite`: 既存の出力先を上書き許可する
+
+エクスポート完了後、`output_dir` 配下にディレクトリ/ファイル構造、Markdown ファイル、添付バイナリ、および実行結果サマリファイル `fsexport_summary_<YYMMDD_HHMMSS>.txt` が出力されます。
+
+---
+
+### 4. エクスポート（結合モード）の実行
 
 #### 最も簡単な実行方法
 設定ファイル（`c2m_config.yaml`）が準備されている場合、引数なしで実行可能です。

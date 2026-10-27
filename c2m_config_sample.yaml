@@ -74,3 +74,37 @@ assessment:
 
   # 出力フォーマット: md, json, both (既定: both)
   report_format: "both"
+
+# ==============================================================================
+# ファイルシステムモード固有の設定 (python -m c2m_export.fsexport で使用)
+# ==============================================================================
+filesystem_export:
+  # 添付ファイルを格納するサブディレクトリ名 (既定: _attachments)
+  attachment_dir_name: "_attachments"
+
+  # 本文中の添付参照のリンク書き換えモード: relative (相対パス), original (Confluence絶対URL) (既定: relative)
+  attachment_link_mode: "relative"
+
+  # ページ本文ファイル命名方式: title (ページタイトル由来), index (固定 index.md) (既定: title)
+  page_filename_mode: "title"
+
+  # 単一添付ファイルの最大保存サイズ上限 (MB) (既定: 250)
+  single_file_max_mb: 250
+
+  # 保存をスキップする添付拡張子のリスト
+  # exclude_extensions:
+  #   - zip
+  #   - exe
+
+  # パス長警告のしきい値 (既定: 400)
+  path_length_limit: 400
+
+  # Frontmatter に出力するメタデータフィールドの選択
+  # frontmatter_fields:
+  #   - confluence_url
+  #   - confluence_page_id
+  #   - confluence_space_key
+  #   - title
+  #   - version
+  #   - last_modified
+  #   - exported_at

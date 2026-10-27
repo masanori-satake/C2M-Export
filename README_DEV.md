@@ -54,10 +54,19 @@ graph TD
 
 ```
 c2m_export/
-├── confluence.py      # [拡張] get_attachments, get_restrictions, get_space_root_pages 等を追加
-├── config.py          # [拡張] AssessConfig を追加
-├── assess.py          # [新規] 分析モードのエントリーポイント（python -m c2m_export.assess）
-└── assessment/        # [新規] 分析ロジック一式
+├── confluence.py      # [拡張] get_attachments, download_attachment, get_restrictions, get_space_root_pages 等を追加
+├── config.py          # [拡張] AssessConfig, FsExportConfig を追加
+├── assess.py          # 分析モードのエントリーポイント（python -m c2m_export.assess）
+├── fsexport.py        # [新規] ファイルシステムモードのエントリーポイント（python -m c2m_export.fsexport）
+├── fs_export/         # [新規] ファイルシステム出力ロジック一式
+│   ├── __init__.py
+│   ├── models.py      # PageNode / AttachmentRef / SkipRecord / ExportResult 等
+│   ├── tree.py        # DFS 巡回とローカルパス割当（命名・衝突回避・パス長警告）
+│   ├── writer.py      # 本文 + Frontmatter 書き込み、添付 DL 保存、単一ファイル上限判定
+│   ├── frontmatter.py # YAML フロントマターの生成（純粋関数）
+│   ├── links.py       # 本文中の添付参照リンク書き換え（純粋関数）
+│   └── summary.py     # 実行結果サマリ生成（ログ + 日時サフィックス付きファイル出力）
+└── assessment/        # 分析ロジック一式
     ├── __init__.py
     ├── models.py      # PageMeta / AttachmentMeta / RestrictionMeta / RawInventory / AssessmentResult 等
     ├── collector.py   # DFS巡回でページ/添付/権限/更新情報のメタデータを収集する I/O 層
