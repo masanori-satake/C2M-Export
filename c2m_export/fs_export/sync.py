@@ -256,10 +256,10 @@ def execute_sync(
             manifest.pages.pop(page_act.page_id, None)
             save_manifest(manifest, output_dir, manifest_name)
 
-    # 2. 親を先に移動し、子孫の移動元も実際の配置へ追従させる。
+    # 2. 新しい保存先の親を先に移動し、子孫の移動元も実際の配置へ追従させる。
     move_actions = sorted(
         (a for a in plan.page_actions if a.action == ActionType.MOVE_RENAME and a.old_entry),
-        key=lambda a: a.old_entry.rel_path.count("/") if a.old_entry else 0,
+        key=lambda a: computed_paths.get(a.page_id, (a.old_entry.rel_path if a.old_entry else "", ""))[0].count("/"),
     )
     for page_act in move_actions:
         if page_act.action == ActionType.MOVE_RENAME and page_act.old_entry:

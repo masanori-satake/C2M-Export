@@ -216,6 +216,47 @@ def test_sync_moves_parent_and_descendants_without_leaving_old_directories(tmp_p
     assert not list(tmp_path.rglob("*Old*"))
 
 
+@pytest.mark.parametrize("reverse_order", [False, True])
+def test_sync_moves_new_parent_before_child_when_hierarchy_is_reversed(tmp_path, reverse_order):
+    """親子関係が逆転しても、新しい親を先に移動して既存ファイルを保全する."""
+    manifest = Manifest(
+        "https://confluence.example.com",
+        ManifestRoots(root_page_ids=["r"]),
+        pages={
+            "r": PageManifestEntry(1, "Root", None, "【DEV】 Root", "Root.md"),
+            "c": PageManifestEntry(1, "Child", "r", "【DEV】 Root/Child", "Child.md"),
+            "p": PageManifestEntry(1, "Parent", "c", "【DEV】 Root/Child/Parent", "Parent.md"),
+        },
+    )
+    for pid, entry in manifest.pages.items():
+        directory = tmp_path / entry.rel_path
+        directory.mkdir(parents=True, exist_ok=True)
+        (directory / entry.body_file).write_text(pid, encoding="utf-8")
+        (directory / "keep.bin").write_bytes(pid.encode())
+    inventory = Inventory(
+        pages={
+            "r": PageInventoryEntry("r", 1, "Root", None, "DEV"),
+            "c": PageInventoryEntry("c", 1, "Child", "p", "DEV"),
+            "p": PageInventoryEntry("p", 1, "Parent", "r", "DEV"),
+        }
+    )
+    plan = compute_diff(manifest, inventory)
+    plan.page_actions.sort(key=lambda a: manifest.pages[a.page_id].rel_path.count("/"), reverse=reverse_order)
+
+    execute_sync(_sync_client(), MagicMock(convert=lambda *a, **kw: "本文"), str(tmp_path), manifest, inventory, plan)
+
+    saved = load_manifest(str(tmp_path))
+    assert saved is not None
+    assert saved.completed is True
+    for pid, relative in {"r": "【DEV】 Root", "p": "【DEV】 Root/Parent", "c": "【DEV】 Root/Parent/Child"}.items():
+        assert saved.pages[pid].rel_path == relative
+        assert saved.pages[pid].parent_id == inventory.pages[pid].parent_id
+        assert (tmp_path / relative / "keep.bin").read_bytes() == pid.encode()
+        assert (tmp_path / relative / saved.pages[pid].body_file).is_file()
+    assert not (tmp_path / "【DEV】 Root/Child").exists()
+    assert not (tmp_path / "【DEV】 Root/Parent/Child/Parent").exists()
+
+
 def test_sync_rejects_existing_move_destination_without_nesting(tmp_path):
     """移動先が既にあるとき、既存ディレクトリへ移動元を入れ子にしない."""
     old_dir = tmp_path / "【DEV】 Old"
