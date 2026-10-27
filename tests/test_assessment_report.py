@@ -53,8 +53,12 @@ def dummy_result():
         max_depth=1,
         level_distribution={1: 1},
         space_summary={"DEMO": {"pages": 1, "attachments": 1, "attachment_bytes": 2048}},
-        extension_summary=[{"extension": "png", "count": 1, "total_size": 2048, "max_size": 2048}],
-        mime_summary=[{"media_type": "image/png", "count": 1, "total_size": 2048, "max_size": 2048}],
+        extension_summary=[
+            {"extension": "png", "count": 1, "total_size": 2048, "max_size": 2048}
+        ],
+        mime_summary=[
+            {"media_type": "image/png", "count": 1, "total_size": 2048, "max_size": 2048}
+        ],
         stale_page_count=0,
         empty_page_count=0,
         freshness_distribution={"within_30_days": 1},

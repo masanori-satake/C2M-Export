@@ -2,7 +2,7 @@
 
 実装は依存関係とテスト容易性を考慮し、「データモデル → 権限取得クライアント確認 → 収集（I/O）→ レポート生成（純粋）→ サマリ → 設定 → エントリーポイント → ドキュメント → 検証」の順で進める。純粋関数（`report`）を先に厚くテストし、I/O（`collector`）は `ConfluenceClient` モックで検証する。すべてのコメント・docstring・ログは日本語（PEP 257 準拠）で記述し、エラーは「現象・原因・対処方法」構成とする。
 
-> 前提: 0003（分析）で `ConfluenceClient.get_restrictions`（`/rest/api/content/{id}/restriction/byOperation` の JSON を返す）が追加済みの場合は再利用する。未追加の場合は本 spec のタスク 2 で追加する。`get_child_pages` / `get_space_root_pages` も再利用する。本機能はオプトインであり、未指定時は 0004 のファイルシステム出力・結合モードの挙動を変更しない。継承は展開せず「継承/制限なし」と記す方針（案A）に従う。
+> 前提: 0003（分析）で `ConfluenceClient.get_restrictions`（`/rest/api/content/{id}/restriction/byOperation` から read/update のユーザー/グループを抽出）が追加済みの場合は再利用する。未追加の場合は本 spec のタスク 2 で追加する。`get_child_pages` / `get_space_root_pages` も再利用する。本機能はオプトインであり、未指定時は 0004 のファイルシステム出力・結合モードの挙動を変更しない。継承は展開せず「継承/制限なし」と記す方針（案A）に従う。
 
 - [ ] 1. 権限エクスポートパッケージの骨格とデータモデルを作成する
   - `c2m_export/permission/__init__.py` を新規作成する。
@@ -11,14 +11,13 @@
   - _要件: 1, 3_
 
 - [ ] 2. ConfluenceClient の権限取得を確認/追加する
-  - 既存 `get_restrictions(page_id)` は `/rest/api/content/{id}/restriction/byOperation` の JSON を返す。未実装の場合のみ同じ契約で追加する。既存 `_request` を用いてリトライ・Proxy・認証を自動適用する。ユーザー/グループの抽出と識別子表現は Collector が担当する。
+  - 0003 で `get_restrictions(page_id)` が未実装の場合のみ追加する。`/rest/api/content/{id}/restriction/byOperation` を取得し、`read` / `update` それぞれの `restrictions.user.results`（username / displayName）と `restrictions.group.results`（name）を抽出する。既存 `_request` を用いてリトライ・Proxy・認証を自動適用する。
   - `tests/test_perm_client.py`（0003 で済なら不要）を作成し、`requests` をモックして read/update 抽出・空（制限なし）応答の扱いを検証する。
   - _要件: 1, 7_
 
 - [ ] 3. 権限収集（collector）を実装する
   - `c2m_export/permission/collector.py` を作成し、既存 DFS 骨格で巡回しながら各ページの `get_restrictions` を呼び `PagePermission` を構築する。
-  - ユーザー識別子は design.md の契約に従い username → userKey の優先順とする。displayName は表示専用、前後空白のみ除去、両キー欠落も「識別子不明」として残し制限あり判定に含める。実環境の匿名化済みレスポンス fixture を収録・照合し、優先順位・正規化・全欠落パターンを検証する（既存 fixture はモックのみで照合未完了）。
-  - 個別制限判定（案A）: 取得成功時だけ read・update ともに空なら `has_explicit=False`（継承/制限なし）、いずれかに対象があれば `True`。失敗時は has_explicit を判定に使わない。親さかのぼりの実効権限展開は行わない。
+  - 個別制限判定（案A）: read・update ともに空なら `has_explicit=False`（継承/制限なし）、いずれかに対象があれば `True`。親さかのぼりの実効権限展開は行わない。
   - 複数起点（root_page_ids / space_keys）と訪問済み集合による二重処理防止に対応する。
   - 権限取得失敗は本文処理と独立に `fetch_failed=True`・理由を記録して継続（部分成功）。進捗を日本語ログで定期報告する。
   - 0004 併用時の `rel_path` 算出のため、0004 の命名ユーティリティ（タイトル正規化・相対パス構築）を再利用する（単独時は rel_path=None）。
@@ -30,15 +29,14 @@
   - **集約（既定）**: 出力先ルート直下に俯瞰ファイル（`_permissions.md`）を生成。全ページを表形式（ページ/個別制限有無/Read 保有者/Read+Write 保有者/URL）で一覧し、個別制限ありを識別しやすくする。
   - **分散（per_page）**: 各ページ対応ディレクトリ（`rel_path`）に権限ファイルを配置。`rel_path` が無い（単独実行）場合は集約にフォールバックし日本語で通知する。
   - 各ページ出力に page_id / タイトル / Confluence URL /（併用時）ローカル相対パス、Read 権・Read+Write 権（ユーザー/グループ）または「継承/制限なし」を含める。
-  - 識別子は design.md の表示形式（username 優先、userKey フォールバック、識別子不明）・グループ名を使う。冒頭に「Confluence 側権限の記録であり配置先への自動適用ではない」「継承は展開していない」旨の注記を入れる。
-  - 集約・分散・JSON ともに `fetch_failed` を `has_explicit` より優先する。失敗ページは「取得失敗」と `fail_reason` を出力し、確定した権限や「継承/制限なし」として扱わない。両方の has_explicit 値との組合せを検証する。
+  - 識別子は `displayName (username)` 併記・グループ名。冒頭に「Confluence 側権限の記録であり配置先への自動適用ではない」「継承は展開していない」旨の注記を入れる。
   - 任意 JSON 出力（`report_formats` に json 指定時）をキー安定な構造で生成する。
   - `tests/test_perm_report.py` を作成し、Read/Read+Write 区別・継承表記・識別子併記・注記・集約/分散/JSON の各出力・キー安定性を検証する。
   - _要件: 3, 4_
 
 - [ ] 5. 処理サマリ（summary）を実装する
   - `c2m_export/permission/summary.py` を作成する。入力は `PermissionResult`。
-  - 権限を出力したページ数・個別制限ありページ数・継承/制限なしページ数・取得失敗件数（対象 page_id）を集計する。失敗ページは exported_count / explicit_count / inherited_count から除外し、failed_page_ids に一度だけ記録する。`exported_count = explicit_count + inherited_count` を検証する。
+  - 権限を出力したページ数・個別制限ありページ数・継承/制限なしページ数・取得失敗件数（対象 page_id）を集計する。
   - 標準出力（ログ）＋ 実行日時サフィックス付きファイル（年月日・時分秒、ミリ秒なし。例 `permexport_summary_YYMMDD_HHMMSS.txt`）を `output_dir` 配下に出力する（0004/0005 のサマリ方針と整合）。
   - `tests/test_perm_summary.py` を作成し、件数集計・失敗一覧・日時サフィックス形式を検証する。
   - _要件: 6, 8_

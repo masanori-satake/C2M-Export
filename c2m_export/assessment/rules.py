@@ -105,7 +105,9 @@ def check_invalid_chars_or_name(name: str) -> Optional[str]:
     return None
 
 
-def check_blocked_extension(extension: str, blocked_extensions: Optional[Set[str]] = None) -> Optional[str]:
+def check_blocked_extension(
+    extension: str, blocked_extensions: Optional[Set[str]] = None
+) -> Optional[str]:
     """ブロック対象の拡張子か判定する."""
     blocked = blocked_extensions if blocked_extensions is not None else DEFAULT_BLOCKED_EXTENSIONS
     ext_clean = extension.lower().lstrip(".")

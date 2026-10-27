@@ -27,7 +27,9 @@ def generate_markdown_report(result: AssessmentResult) -> str:
     lines.append("# Confluence アセスメントレポート")
     lines.append("")
     lines.append("> **注意・前提事項**:")
-    lines.append("> 本レポートの集計値は Confluence REST API のメタデータに基づいた**概算値**です。")
+    lines.append(
+        "> 本レポートの集計値は Confluence REST API のメタデータに基づいた**概算値**です。"
+    )
     lines.append(
         "> 添付ファイルのサイズはメタデータ（実測と同等）から算出していますが、"
         "ページ本文のサイズは Storage Format (XHTML) のUTF-8バイト数から試算しているため、"
@@ -41,7 +43,9 @@ def generate_markdown_report(result: AssessmentResult) -> str:
     lines.append(f"- **総添付ファイル数**: {result.total_attachments:,} 件")
     lines.append(f"- **推定本文総サイズ**: {format_size(result.estimated_body_bytes)}")
     lines.append(f"- **添付ファイル総サイズ**: {format_size(result.total_attachment_bytes)}")
-    lines.append(f"- **推定データ総容量**: {format_size(result.estimated_body_bytes + result.total_attachment_bytes)}")
+    lines.append(
+        f"- **推定データ総容量**: {format_size(result.estimated_body_bytes + result.total_attachment_bytes)}"
+    )
     lines.append(f"- **最大階層深さ**: Level {result.max_depth}")
     lines.append("")
 
@@ -51,7 +55,9 @@ def generate_markdown_report(result: AssessmentResult) -> str:
     lines.append("|---|---|---|---|")
     for space_key, sdata in sorted(result.space_summary.items()):
         att_bytes_str = format_size(sdata["attachment_bytes"])
-        lines.append(f"| {space_key} | {sdata['pages']:,} | {sdata['attachments']:,} | {att_bytes_str} |")
+        lines.append(
+            f"| {space_key} | {sdata['pages']:,} | {sdata['attachments']:,} | {att_bytes_str} |"
+        )
     lines.append("")
 
     # 2. 構造・階層分布
@@ -104,16 +110,10 @@ def generate_markdown_report(result: AssessmentResult) -> str:
     lines.append(f"  - **Read+Write(編集)制限設定**: {result.read_write_restriction_count:,} ページ")
     lines.append(f"- **制限に登場するユニークユーザー数**: {len(result.unique_restriction_users):,} 名")
     if result.unique_restriction_users:
-        lines.append(
-            f"  - ユーザー一覧: {', '.join(result.unique_restriction_users[:30])}"
-            + ("..." if len(result.unique_restriction_users) > 30 else "")
-        )
+        lines.append(f"  - ユーザー一覧: {', '.join(result.unique_restriction_users[:30])}" + ("..." if len(result.unique_restriction_users) > 30 else ""))
     lines.append(f"- **制限に登場するユニークグループ数**: {len(result.unique_restriction_groups):,} グループ")
     if result.unique_restriction_groups:
-        lines.append(
-            f"  - グループ一覧: {', '.join(result.unique_restriction_groups[:30])}"
-            + ("..." if len(result.unique_restriction_groups) > 30 else "")
-        )
+        lines.append(f"  - グループ一覧: {', '.join(result.unique_restriction_groups[:30])}" + ("..." if len(result.unique_restriction_groups) > 30 else ""))
     lines.append("")
 
     # 6. 鮮度・棚卸し分析

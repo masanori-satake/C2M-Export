@@ -2,13 +2,6 @@
 
 このドキュメントは、C2M-Export の内部構造、設計思想、および拡張方法について解説します。
 
-## 設計中の同期・権限出力の契約
-
-- [0005 設計](.kiro/specs/0005_resume_and_sync/design.md): diff は移動/改名＋変更を排他的に分類し、ページ削除は添付削除を包含します。skipped / incomplete の範囲は `delete` でも保持します。親の移設後に子の実パスを更新して新パスを再計算し、レジュームは削除/保留を優先して存在確認済みの対象だけを合流します。
-- [0006 設計](.kiro/specs/0006_permission_export/design.md): Collector は username → userKey の優先順で識別し、前後空白のみを除去します。識別子欠落ユーザーも残します。report / summary は fetch_failed を最優先とし、失敗ページを exported / explicit / inherited の成功件数から除外します。実環境の匿名化済みレスポンス fixture による照合は未完了です。
-
-上記は未実装機能の契約です。実装・検証タスクは各 spec の `tasks.md` に記載しています。
-
 ## システム概要
 
 C2M-Export は、Confluence Data Center のページツリーを再帰的に取得し、1つの Markdown ファイルに統合する Python ベースの CLI ツールです。また、実エクスポート前に Confluence ワークスペース全体の規模・構造・移設リスク（SharePoint/OneDrive 向け制約など）を把握するための**アセスメント（分析）機能**も提供しています。

@@ -69,8 +69,8 @@ flowchart TD
 ### 1. 権限取得（collector.py / 要件1・3）
 
 - 既存 DFS 骨格で巡回し、各ページについて `get_restrictions(page_id)` を呼ぶ。
-- 現行 `get_restrictions` は `byOperation` の JSON をそのまま返す。Collector が read / update それぞれの `restrictions.user.results`（`username` / `userKey` / `displayName`）と `restrictions.group.results`（`name`）を参照し、下記「識別子表現」に従って表示用文字列へ変換する。
-- **個別制限の有無判定（案A / 要件3）**: 権限取得に成功し、read・update ともにユーザー/グループが空なら「継承/制限なし」とする。識別子欠落ユーザーも対象として残し、いずれかに対象があれば「個別制限あり」。取得失敗時は `has_explicit` を判定に使わない。親をさかのぼる実効権限展開は行わない。
+- `get_restrictions` は `byOperation` の結果から read / update それぞれの `restrictions.user.results`（`username` / `displayName`）と `restrictions.group.results`（`name`）を抽出して返す（0003 で実装）。
+- **個別制限の有無判定（案A / 要件3）**: read・update ともにユーザー/グループが空なら「継承/制限なし」とする。いずれかに対象があれば「個別制限あり」。親をさかのぼる実効権限展開は行わない。
 - 本文・添付は扱わない（権限のみ）。0004 と併用時も権限取得は独立に行う。
 
 ### 2. データモデル（models.py）
@@ -83,8 +83,8 @@ class PagePermission:
     space_key: str
     url: str                      # Confluence オリジナル URL
     rel_path: Optional[str]       # 0004 併用時のローカル相対パス（単独時は None）
-    has_explicit: bool            # 取得成功時のみ有効。個別制限あり=True / 継承・制限なし=False
-    read_users: list[str]         # 下記の識別子契約で正規化した表示用文字列
+    has_explicit: bool            # 個別制限あり=True / 継承・制限なし=False
+    read_users: list[str]         # "displayName (username)" 等の表示用文字列
     read_groups: list[str]
     readwrite_users: list[str]    # update 操作キー = Read+Write
     readwrite_groups: list[str]
@@ -98,30 +98,17 @@ class PermissionReport:
 @dataclass
 class PermissionResult:
     report: PermissionReport
-    exported_count: int          # 権限取得に成功して出力したページ数（失敗ページを除く）
-    explicit_count: int          # fetch_failed=False かつ has_explicit=True
-    inherited_count: int         # fetch_failed=False かつ has_explicit=False
+    exported_count: int
+    explicit_count: int
+    inherited_count: int
     failed_page_ids: list[str]
 ```
 
 ### 3. 識別子表現（要件4.5）
 
-- **選択優先順位**: Collector は非空の `username`（ログイン名）を突き合わせキーとして優先し、欠落時のみ非空の `userKey` を使う。`displayName` は表示専用であり、突き合わせキーには使わない。両キーがある場合も `username` を選ぶ。
-- **正規化**: 各フィールドは文字列の前後の空白だけを `strip()` で除去する。キー欠落・`null`・非文字列・空文字・空白のみは「欠落」とする。大文字小文字変換・Unicode 正規化・内部空白の圧縮は行わず、別アカウントの混同を避ける。
-- **表示形式と欠落時の扱い**:
-
-  | username | userKey | displayName | 出力するユーザー文字列 |
-  |---|---|---|---|
-  | `t.yamada` | 任意 | `山田太郎` | `山田太郎 (t.yamada)` |
-  | `t.yamada` | 任意 | 欠落 | `t.yamada` |
-  | 欠落 | `key-001` | `山田太郎` | `山田太郎 (userKey: key-001)` |
-  | 欠落 | `key-001` | 欠落 | `userKey: key-001` |
-  | 欠落 | 欠落 | `山田太郎` | `山田太郎 (識別子不明)` |
-  | 欠落 | 欠落 | 欠落 | `識別子不明` |
-
-- **識別子欠落ユーザーは除外しない**: Read / Read+Write の元の列に残し、`has_explicit=True` の判定対象にも含める。識別子欠落を日本語の警告に記録し、配置先との突き合わせは不可と明示する。表示名からキーを捏造したり、同じ表示名のユーザーを統合したりしない。機械的な識別子の併記を必須とした従来案に対し、欠落時だけは「識別子不明」を許容する。
-- グループ: グループ名（`name`）を使う。ユーザーの `userKey` フォールバックは `userKey:` の種別表示を含め、ログイン名と区別する。この表示契約は Markdown と任意 JSON のユーザー配列で共通とする。
-- **確認根拠と fixture の制約**: 既存の `tests/test_confluence_assess_client.py::test_get_restrictions` は `username` のみを持つモックであり、実環境採取 fixture ではない。[Data Center 9.2 公式スキーマ](https://developer.atlassian.com/server/confluence/9.2.0.swagger.v3.json) の `User` は `username` / `userKey` / `displayName` を定義している。上表の欠落ケースは本 spec で定めるフォールバック契約である。実環境の匿名化済みレスポンス fixture は現在未収録のため、実装前に採取してフィールド・欠落パターンを照合し、`tests/test_perm_collector.py` の入力として保存する。実レスポンスで検証済みとは扱わない。
+- ユーザー: `displayName`（表示名）と `username`（ログイン名）を併記（例: `山田太郎 (t.yamada)`）。Data Center 対象のため `username` を突き合わせキーとして保持。
+- グループ: グループ名（`name`）。
+- 配置先アカウントとの突き合わせを容易にするため、表示名だけでなく機械的な識別子（username / group name）を必ず含める。
 
 ### 4. レポート出力（report.py / 要件4）
 
@@ -130,19 +117,16 @@ class PermissionResult:
 - **集約（既定 / `report_layout=aggregate`）**: 出力先ルート直下に俯瞰ファイル（例: `_permissions.md`）を 1 つ生成。全ページを表形式で一覧し、どのページにどの権限が付与されているかを俯瞰できる。個別制限ありページを上に集める、または「個別制限あり」列で絞り込める構成とする。
 - **分散（`report_layout=per_page`）**: 各ページ対応ディレクトリ（0004 の `rel_path`）に権限ファイル（例: `_permissions.md`）を配置。0004 併用時のみ有効（`rel_path` が必要）。単独実行時は集約にフォールバックし、その旨を日本語で通知。
 - Markdown 内容: ページごとに page_id / タイトル / Confluence URL /（併用時）ローカル相対パス、Read 権（ユーザー・グループ）、Read+Write 権（ユーザー・グループ）、または「継承/制限なし」。
-- **取得失敗の表示優先順位**: 集約・分散・任意 JSON ともに `fetch_failed` を最初に評価する。`True` のページは `has_explicit` の値によらず「取得失敗」と日本語の `fail_reason` を出力し、「継承/制限なし」や確定した権限一覧として表示しない。JSON は `fetch_failed` / `fail_reason` を保持し、失敗時の `has_explicit` とユーザー/グループ配列は未確定値として扱う。
-- **件数の契約**: 失敗ページの行/ファイルも出力するが、`explicit_count`・`inherited_count`・`exported_count` のすべてから除外し、`failed_page_ids` に一度だけ算入する。出力成功時は `exported_count = explicit_count + inherited_count`、`len(report.pages) = exported_count + len(failed_page_ids)`。集約/分散や出力形式の数によってページ件数を増やさない。
 - 冒頭注記: 本レポートは Confluence 側権限の記録であり配置先への自動適用ではないこと、継承は展開せず個別制限のみを示すこと、を明示（要件4.8・3.4）。
 - **任意 JSON（要件4.7）**: `report_formats` に `json` を含める場合、機械可読な権限データも出力（キー安定）。既定は Markdown のみ。
 
 集約レポートの表イメージ:
 
 ```
-| ページ | 個別制限/取得状態 | Read(ユーザー/グループ) | Read+Write(ユーザー/グループ) | URL | 失敗理由 |
-|---|---|---|---|---|---|
-| 設計方針 | あり | 山田太郎 (t.yamada) / dev-team | 鈴木 (suzuki) / — | https://... | — |
-| 議事録   | 継承/制限なし | — | — | https://... | — |
-| 運用手順 | 取得失敗 | 未確定 | 未確定 | https://... | 権限取得に失敗。原因: 権限不足。対処: 閲覧権限を確認。 |
+| ページ | 個別制限 | Read(ユーザー/グループ) | Read+Write(ユーザー/グループ) | URL |
+|---|---|---|---|---|
+| 設計方針 | あり | 山田太郎 (t.yamada) / dev-team | 鈴木 (suzuki) / — | https://... |
+| 議事録   | 継承/制限なし | — | — | https://... |
 ```
 
 ### 5. 対象範囲と起点解決（要件2）
@@ -194,9 +178,9 @@ def main():
 
 ## テスト戦略
 
-- `tests/test_perm_report.py`: `PermissionReport` から集約 Markdown / per_page Markdown / JSON を生成し、Read・Read+Write の区別、継承表記、識別子契約、自動適用でない旨の注記、キー安定性を検証。`fetch_failed=True` と `has_explicit=True/False` の両組合せで「取得失敗」・理由が優先され、確定した権限/継承として表示されないことも検証（API モック不要）。
-- `tests/test_perm_collector.py`: `ConfluenceClient` をモックし、個別制限あり/継承判定、部分成功を検証。識別子表の全ケース、両キー存在時の優先順位、空白・null・非文字列、識別子欠落ユーザーを除外せず制限ありとすることを検証。実環境採取 fixture による照合は収録後に実施する。
-- `tests/test_perm_summary.py`: 成功/失敗混在時の件数契約（失敗は成功3件数の対象外、`exported_count = explicit_count + inherited_count`）、失敗IDの重複なし、日時サフィックスファイル名形式。
+- `tests/test_perm_report.py`: `PermissionReport` から集約 Markdown / per_page Markdown / JSON を生成し、Read・Read+Write の区別、継承/制限なしの表記、識別子併記（displayName+username）、自動適用でない旨の注記、キー安定性を検証（API モック不要）。
+- `tests/test_perm_collector.py`: `ConfluenceClient` をモックし、`get_restrictions` 結果からの個別制限あり/継承判定、部分成功（取得失敗の集計と継続）を検証。
+- `tests/test_perm_summary.py`: 出力/個別制限/継承/失敗の件数集計と日時サフィックスファイル名形式。
 - `tests/test_permexport_config.py`: 優先順位・rstrip・既定値・必須チェック・`report_layout`/`report_formats` 列挙値・per_page フォールバック。
 - 既存（結合モード・0004）テストが不変で通ること（非破壊）。
 
@@ -204,14 +188,13 @@ def main():
 
 1. **継承は展開しない（案A）**: 個別制限を持たないページは「継承/制限なし」。意図的な権限操作箇所を浮かび上がらせる。
 2. **格納形態**: 既定は集約（トップレベル俯瞰ファイル）、`per_page` も選択可（0004 併用時のみ有効、単独時は集約フォールバック）。
-3. **識別子**: username → userKey の優先順、displayName は表示専用。前後空白のみ除去し、両キー欠落ユーザーは「識別子不明」として残す。
+3. **識別子**: `displayName (username)` 併記、グループ名。配置先突き合わせのため機械的識別子を必ず含む。
 4. **独立性**: `PermissionExportConfig` を新設し単独実行可能。0004 併用時は命名規約を共有して `rel_path` を対応付け。
 5. **API 負荷**: `byOperation` で read/update を 1 リクエスト取得。
 6. **自動適用はしない**: 記録のみ。レポートに明示。
-7. **取得失敗の優先**: fetch_failed を最優先で表示し、理由を記録。失敗ページは exported/explicit/inherited の成功件数に含めない。
 
 ## 未確定事項（実装時に詰める）
 
 - 集約レポートが大規模ページ数で肥大化する場合の分割（Space 別ファイル等）の要否。
 - スペース権限・グローバル権限を補足情報として併記するか（本 spec の主対象はページのコンテンツ制限）。
-- 実環境の匿名化済み `get_restrictions` レスポンス fixture の収録・照合（識別子の優先順位・正規化・欠落時の表記契約は上記で確定）。
+- `get_restrictions` が返すユーザー識別子の正確なフィールド（`username` / `userKey` / `displayName`）の実レスポンス確認と表記の最終化。
