@@ -133,6 +133,167 @@ class Config:
         self.base_url = self.base_url.rstrip("/")
 
 
+class PermissionExportConfig:
+    """権限エクスポート（permission_export）の設定を管理するクラス.
+
+    CLI引数、環境変数、設定ファイル (YAML) の順で優先順位を制御する。
+    """
+
+    def __init__(self):
+        self.base_url: Optional[str] = None
+        self.root_page_ids: List[str] = []
+        self.space_keys: List[str] = []
+        self.output_dir: str = "."
+        self.proxy: Optional[str] = None
+        self.token: Optional[str] = None
+        self.overwrite: bool = False
+
+        # 権限エクスポート固有設定
+        self.report_layout: str = "aggregate"  # "aggregate" | "per_page"
+        self.report_formats: str = "md"  # "md" | "json" | "both"
+        self.attachment_dir_name: str = DEFAULT_ATTACHMENT_DIR_NAME
+        self.page_filename_mode: str = "title"  # "title" | "index"
+
+    def load(self):
+        """設定を読み込む。優先順位は CLI > 設定ファイル > デフォルト."""
+        pre_parser = argparse.ArgumentParser(add_help=False)
+        pre_parser.add_argument("--config", type=str, default=str(DEFAULT_CONFIG_PATH))
+        pre_args, _ = pre_parser.parse_known_args()
+
+        config_path = Path(pre_args.config) if pre_args.config else DEFAULT_CONFIG_PATH
+
+        if config_path.exists():
+            try:
+                with open(config_path, encoding="utf-8") as f:
+                    file_config = yaml.safe_load(f)
+                    if file_config:
+                        self.base_url = file_config.get("base_url", self.base_url)
+                        root_ids = file_config.get("root_page_ids")
+                        if root_ids:
+                            if isinstance(root_ids, list):
+                                self.root_page_ids = [str(i) for i in root_ids]
+                            else:
+                                self.root_page_ids = [str(root_ids)]
+                        s_keys = file_config.get("space_keys")
+                        if s_keys:
+                            if isinstance(s_keys, list):
+                                self.space_keys = [str(k) for k in s_keys]
+                            else:
+                                self.space_keys = [str(s_keys)]
+
+                        self.output_dir = file_config.get("output_dir", self.output_dir)
+                        self.proxy = file_config.get("proxy", self.proxy)
+                        self.token = file_config.get("token", self.token)
+                        self.overwrite = file_config.get("overwrite", self.overwrite)
+
+                        # permission_export セクション
+                        perm_sec = file_config.get("permission_export", {})
+                        if isinstance(perm_sec, dict):
+                            self.report_layout = perm_sec.get("report_layout", self.report_layout)
+                            self.report_formats = perm_sec.get("report_formats", self.report_formats)
+                            self.attachment_dir_name = perm_sec.get("attachment_dir_name", self.attachment_dir_name)
+                            self.page_filename_mode = perm_sec.get("page_filename_mode", self.page_filename_mode)
+            except Exception as e:
+                print(
+                    f"設定ファイル {config_path} の読み込みに失敗しました（現象）。詳細: {e}（原因）。ファイル形式を確認してください（対処方法）"
+                )
+
+        env_https_proxy = os.environ.get("HTTPS_PROXY")
+        env_http_proxy = os.environ.get("HTTP_PROXY")
+        if env_https_proxy:
+            self.proxy = env_https_proxy
+        elif env_http_proxy:
+            self.proxy = env_http_proxy
+
+        parser = argparse.ArgumentParser(
+            description="Confluenceのページアクセス権限（コンテンツ制限）を取得・出力するツール"
+        )
+        parser.add_argument("--base-url", type=str, help="ConfluenceのベースURL (例: https://host/wiki)")
+        parser.add_argument(
+            "--root-page-id", type=str, nargs="+", help="対象を開始するルートページのID（複数指定可能）"
+        )
+        parser.add_argument("--space-key", type=str, nargs="+", help="対象を開始するSpaceキー（複数指定可能）")
+        parser.add_argument("--output-dir", type=str, help="権限レポートを保存するディレクトリ")
+        parser.add_argument("--proxy", type=str, help="HTTP/HTTPS プロキシURL")
+        parser.add_argument("--config", type=str, help="設定ファイルのパス (既定: c2m_config.yaml)")
+        parser.add_argument("--token", type=str, help="ConfluenceのBearerトークン")
+        parser.add_argument("--overwrite", action="store_true", help="既存のレポートを上書きする")
+
+        parser.add_argument(
+            "--report-layout",
+            type=str,
+            choices=["aggregate", "per_page"],
+            help="レポート格納形態 (aggregate | per_page)",
+        )
+        parser.add_argument(
+            "--report-format",
+            type=str,
+            choices=["md", "json", "both"],
+            help="出力形式 (md | json | both)",
+        )
+        parser.add_argument("--attachment-dir", type=str, help="添付サブディレクトリ名 (既定: _attachments)")
+        parser.add_argument(
+            "--page-filename-mode",
+            type=str,
+            choices=["title", "index"],
+            help="本文ファイル命名方式 (title | index)",
+        )
+
+        cli_args = parser.parse_args()
+
+        if cli_args.base_url:
+            self.base_url = cli_args.base_url
+        if cli_args.root_page_id:
+            self.root_page_ids = cli_args.root_page_id
+        if cli_args.space_key:
+            self.space_keys = cli_args.space_key
+
+        if self.root_page_ids:
+            seen = set()
+            self.root_page_ids = [x for x in self.root_page_ids if not (x in seen or seen.add(x))]
+        if self.space_keys:
+            seen_s = set()
+            self.space_keys = [x for x in self.space_keys if not (x in seen_s or seen_s.add(x))]
+
+        if cli_args.output_dir:
+            self.output_dir = cli_args.output_dir
+        if cli_args.proxy:
+            self.proxy = cli_args.proxy
+        if cli_args.token:
+            self.token = cli_args.token
+        if cli_args.overwrite:
+            self.overwrite = True
+
+        if cli_args.report_layout:
+            self.report_layout = cli_args.report_layout
+        if cli_args.report_format:
+            self.report_formats = cli_args.report_format
+        if cli_args.attachment_dir:
+            self.attachment_dir_name = cli_args.attachment_dir
+        if cli_args.page_filename_mode:
+            self.page_filename_mode = cli_args.page_filename_mode
+
+    def validate(self):
+        """必須設定の有無を確認し、URLの正規化を行う."""
+        if not self.base_url:
+            raise ValueError("base_url is required (use --base-url or config file)")
+        if not self.root_page_ids and not self.space_keys:
+            raise ValueError(
+                "At least one root_page_id or space_key is required (use --root-page-id, --space-key, or config file)"
+            )
+        if not self.token:
+            raise ValueError("token is required (use --token or config file)")
+
+        if self.report_layout not in ["aggregate", "per_page"]:
+            raise ValueError("report_layout must be 'aggregate' or 'per_page'")
+        if self.report_formats not in ["md", "json", "both"]:
+            raise ValueError("report_formats must be 'md', 'json', or 'both'")
+        if self.page_filename_mode not in ["title", "index"]:
+            raise ValueError("page_filename_mode must be 'title' or 'index'")
+
+        self.base_url = self.base_url.rstrip("/")
+
+
 class FsExportConfig:
     """ファイルシステムエクスポートモードの設定を管理するクラス.
 

@@ -123,3 +123,19 @@ filesystem_export:
 
   # 退避ディレクトリ名 (既定: _c2m_quarantine)
   # quarantine_dir_name: "_c2m_quarantine"
+
+# ==============================================================================
+# 権限エクスポートモード固有の設定 (python -m c2m_export.permexport で使用)
+# ==============================================================================
+permission_export:
+  # レポートの格納形態: aggregate (トップレベル直下に集約), per_page (各ページディレクトリに分散) (既定: aggregate)
+  report_layout: "aggregate"
+
+  # レポートの出力フォーマット: md, json, both (既定: md)
+  report_formats: "md"
+
+  # 添付サブディレクトリ名 (per_page 時の相対パス整合用) (既定: _attachments)
+  attachment_dir_name: "_attachments"
+
+  # ページ本文ファイル命名方式 (per_page 時の相対パス整合用) (既定: title)
+  page_filename_mode: "title"

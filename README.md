@@ -9,9 +9,10 @@ Confluence Data Center 9.2 のページツリーを REST API で取得し、AI�
 C2M-Export は以下の 3 ステップのワークフローで利用することを推奨しています。
 
 ```
-[1. 分析 (assess)] ──> [2. ルール決定・設定] ──> [3. エクスポート実行 (fsexport / cli)]
+[1. 分析 (assess)] ──> [2. ルール決定・設定] ──> [3. エクスポート実行 (fsexport / permexport / cli)]
   - 規模・構造・リスク把握      - 制限サイズ・除外設定          - ディレクトリ階層出力 (fsexport)
-  - 権限・鮮度レポート          - リンクモード等の選択         - 1ファイル統合出力 (cli)
+  - 権限・鮮度レポート          - リンクモード等の選択         - アクセス権限出力 (permexport)
+                                                               - 1ファイル統合出力 (cli)
 ```
 
 ## 主な機能（モード）
@@ -20,7 +21,9 @@ C2M-Export は以下の 3 ステップのワークフローで利用すること
    - 添付バイナリをダウンロードせずに高速にメタデータを収集し、規模・構造・移設リスク（SharePoint/OneDrive 向け制約など）・権限・鮮度のレポート（Markdown & JSON）を出力します。
 2. **ファイルシステムエクスポート（ファイルシステムモード / `fsexport`）**:
    - Confluence のページツリーを OS のディレクトリ/ファイル構造に再現し、ページ本文（YAML Frontmatter 付き Markdown）と添付バイナリを保存します。
-3. **統合エクスポート（結合モード / `cli`）**:
+3. **権限エクスポート（権限モード / `permexport`）**:
+   - Confluence のページに設定されたコンテンツ制限 (Read / Read+Write) を収集し、管理者向けの参照用権限レポート（Markdown & JSON）を出力します。
+4. **統合エクスポート（結合モード / `cli`）**:
    - ページツリーを再帰的に取得し、全ページを 1 つの Markdown ファイルに結合して出力します（サイズ制限・Zip 圧縮対応）。
 
 ## 共通仕様・特徴
@@ -121,6 +124,29 @@ python -m c2m_export.fsexport
 
 ---
 
+### 4. 権限エクスポートモードの実行
+
+Confluence ページに設定されたアクセス権限（コンテンツ制限: Read / Read+Write）を単独またはファイルシステムエクスポートと対応付けて記録・出力したい場合は、以下のコマンドを実行します。
+
+```cmd
+python -m c2m_export.permexport
+```
+
+`permexport` の主要なオプション：
+- `--root-page-id`: 対象を開始するルートページの ID（複数指定可能）
+- `--space-key`: 対象を開始する Space キー（複数指定可能）
+- `--report-layout`: レポート格納形態 (`aggregate` 集約 | `per_page` 分散 / 既定: `aggregate`)
+- `--report-format`: 出力形式 (`md` | `json` | `both` / 既定: `md`)
+- `--attachment-dir`: 分散モード時の相対パス計算用添付ディレクトリ名 (既定: `_attachments`)
+- `--page-filename-mode`: 分散モード時の相対パス計算用本文ファイル命名方式 (`title` | `index` / 既定: `title`)
+- `--overwrite`: 既存のレポートを上書き許可する
+
+実行後、指定したフォーマットのレポート (`_permissions.md`, `_permissions.json`) およびサマリファイル (`permexport_summary_<YYYYMMDD_HHMMSS>.txt`) が `output_dir` 配下に出力されます。
+
+※本機能は Confluence 側の権限設定の**記録・参照情報の提供**を目的としており、移行先（SharePoint 等）への権限の自動適用は行いません。また、親からの権限継承の実効展開は行わず、個別制限が「あり」の箇所のみを明確化する設計（継承/制限なしと区別）となっています。
+
+---
+
 ### 5. 差分同期とレジューム（中断再開）機能
 
 大規模な Confluence ツリーのエクスポートでは、ネットワーク切断による中断や、定期実行時の変更追従が必要となります。
@@ -142,7 +168,7 @@ python -m c2m_export.fsexport
 
 ---
 
-### 4. エクスポート（結合モード）の実行
+### 6. エクスポート（結合モード）の実行
 
 #### 最も簡単な実行方法
 設定ファイル（`c2m_config.yaml`）が準備されている場合、引数なしで実行可能です。
