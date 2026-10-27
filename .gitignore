@@ -51,4 +51,5 @@ c2m_config.yaml
 !README_DEV.md
 !AGENTS.md
 !.kiro/**/*.md
+!.github/**/*.md
 *.zip
