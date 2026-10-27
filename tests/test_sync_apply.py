@@ -1,11 +1,13 @@
 """同期・レジューム実行ロジック (execute_sync) の単体テスト."""
 
 import os
-from unittest.mock import MagicMock
+import shutil
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from c2m_export.fs_export.diff import ActionType, DiffPlan, PageDiffAction, compute_diff
+from c2m_export.fs_export.frontmatter import generate_frontmatter
 from c2m_export.fs_export.manifest import (
     AttachmentManifestEntry,
     Manifest,
@@ -282,6 +284,227 @@ def test_sync_rejects_existing_move_destination_without_nesting(tmp_path):
     assert list(new_dir.iterdir()) == [new_dir / "keep.txt"]
     assert manifest.pages["r"].rel_path == old_dir.name
     client.get_page.assert_not_called()
+
+
+@pytest.mark.parametrize("cycle", [False, True])
+@pytest.mark.parametrize("reverse_order", [False, True])
+def test_sync_vacates_move_destinations_before_reusing_them(tmp_path, cycle, reverse_order):
+    """改名の連鎖・循環でも、ページと未変更の子孫の実体を混在させない."""
+    manifest = Manifest(
+        "https://confluence.example.com",
+        ManifestRoots(),
+        pages={
+            "a": PageManifestEntry(1, "A", None, "【DEV】 A", "A.md"),
+            "b": PageManifestEntry(1, "B", None, "【DEV】 B", "B.md"),
+            "c": PageManifestEntry(1, "C", None, "【DEV】 C", "C.md"),
+            "child": PageManifestEntry(1, "Child", "a", "【DEV】 A/Child", "Child.md"),
+        },
+    )
+    for pid, entry in manifest.pages.items():
+        directory = tmp_path / entry.rel_path
+        directory.mkdir(parents=True, exist_ok=True)
+        (directory / entry.body_file).write_text(pid, encoding="utf-8")
+        (directory / "keep.bin").write_bytes(pid.encode())
+    inventory = Inventory(
+        pages={
+            "a": PageInventoryEntry("a", 1, "B", None, "DEV"),
+            "b": PageInventoryEntry("b", 1, "C", None, "DEV"),
+            "c": PageInventoryEntry("c", 1, "A" if cycle else "D", None, "DEV"),
+            "child": PageInventoryEntry("child", 1, "Child", "a", "DEV"),
+        }
+    )
+    plan = compute_diff(manifest, inventory)
+    plan.page_actions.sort(key=lambda a: a.page_id, reverse=reverse_order)
+    client = _sync_client()
+
+    execute_sync(client, MagicMock(convert=lambda *a, **kw: "本文"), str(tmp_path), manifest, inventory, plan)
+
+    saved = load_manifest(str(tmp_path))
+    expected = {
+        "a": "【DEV】 B",
+        "b": "【DEV】 C",
+        "c": "【DEV】 A" if cycle else "【DEV】 D",
+        "child": "【DEV】 B/Child",
+    }
+    for pid, relative in expected.items():
+        assert saved.pages[pid].rel_path == relative
+        assert (tmp_path / relative / "keep.bin").read_bytes() == pid.encode()
+        assert (tmp_path / relative / saved.pages[pid].body_file).is_file()
+    assert not list(tmp_path.glob(".c2m_move_*"))
+    assert client.get_page.call_count == 3
+
+
+@pytest.mark.parametrize("reverse_order", [False, True])
+def test_sync_vacates_destination_when_occupant_becomes_a_child(tmp_path, reverse_order):
+    """移動先の占有者が新しい子になる場合も、深さに依存せず退避で解決する."""
+    manifest = Manifest(
+        "https://confluence.example.com",
+        ManifestRoots(),
+        pages={
+            "a": PageManifestEntry(1, "A", None, "【DEV】 A", "A.md"),
+            "b": PageManifestEntry(1, "B", None, "【DEV】 B", "B.md"),
+        },
+    )
+    for pid, entry in manifest.pages.items():
+        directory = tmp_path / entry.rel_path
+        directory.mkdir()
+        (directory / "keep.bin").write_bytes(pid.encode())
+    inventory = Inventory(
+        pages={
+            "a": PageInventoryEntry("a", 1, "B", None, "DEV"),
+            "b": PageInventoryEntry("b", 1, "Child", "a", "DEV"),
+        }
+    )
+    plan = compute_diff(manifest, inventory)
+    plan.page_actions.sort(key=lambda a: a.page_id, reverse=reverse_order)
+
+    execute_sync(_sync_client(), MagicMock(convert=lambda *a, **kw: "本文"), str(tmp_path), manifest, inventory, plan)
+
+    for pid, relative in {"a": "【DEV】 B", "b": "【DEV】 B/Child"}.items():
+        assert (tmp_path / relative / "keep.bin").read_bytes() == pid.encode()
+        assert manifest.pages[pid].rel_path == relative
+    assert not (tmp_path / "【DEV】 A").exists()
+    assert not list(tmp_path.glob(".c2m_move_*"))
+
+
+def test_sync_resumes_cycle_after_temporary_move_is_saved(tmp_path):
+    """循環の退避後に中断しても、保存した実配置から再開できる."""
+    manifest = Manifest(
+        "https://confluence.example.com",
+        ManifestRoots(),
+        pages={
+            "a": PageManifestEntry(1, "A", None, "【DEV】 A", "A.md"),
+            "b": PageManifestEntry(1, "B", None, "【DEV】 B", "B.md"),
+        },
+    )
+    for pid, entry in manifest.pages.items():
+        directory = tmp_path / entry.rel_path
+        directory.mkdir()
+        (directory / "keep.bin").write_bytes(pid.encode())
+    inventory = Inventory(
+        pages={
+            "a": PageInventoryEntry("a", 1, "B", None, "DEV"),
+            "b": PageInventoryEntry("b", 1, "A", None, "DEV"),
+        }
+    )
+    move = shutil.move
+    count = 0
+
+    def interrupt_second_move(source, destination):
+        nonlocal count
+        count += 1
+        if count == 2:
+            raise OSError("中断")
+        return move(source, destination)
+
+    with patch("c2m_export.fs_export.sync.shutil.move", side_effect=interrupt_second_move):
+        with pytest.raises(OSError, match="中断"):
+            execute_sync(
+                _sync_client(), MagicMock(), str(tmp_path), manifest, inventory, compute_diff(manifest, inventory)
+            )
+
+    resumed = load_manifest(str(tmp_path))
+    assert any(entry.rel_path.startswith(".c2m_move_") for entry in resumed.pages.values())
+    execute_sync(
+        _sync_client(),
+        MagicMock(convert=lambda *a, **kw: "本文"),
+        str(tmp_path),
+        resumed,
+        inventory,
+        compute_diff(resumed, inventory),
+        resume=True,
+    )
+
+    for pid, relative in {"a": "【DEV】 B", "b": "【DEV】 A"}.items():
+        assert (tmp_path / relative / "keep.bin").read_bytes() == pid.encode()
+        assert resumed.pages[pid].rel_path == relative
+    assert not list(tmp_path.glob(".c2m_move_*"))
+
+
+@pytest.mark.parametrize("old_exists", [False, True])
+@pytest.mark.parametrize("destination", ["directory", "file"])
+@pytest.mark.parametrize("resume", [False, True])
+def test_sync_checks_move_collision_even_when_source_is_missing(tmp_path, old_exists, destination, resume):
+    """移動元の欠落時にも未知の既存出力を本文・添付処理へ渡さない."""
+    old_dir = tmp_path / "【DEV】 Old"
+    new_dir = tmp_path / "【DEV】 New"
+    if old_exists:
+        old_dir.mkdir()
+        (old_dir / "Old.md").write_text("old", encoding="utf-8")
+    if destination == "directory":
+        new_dir.mkdir()
+        target = new_dir / "New.md"
+    else:
+        target = new_dir
+    target.write_text("existing", encoding="utf-8")
+    manifest = Manifest(
+        "https://confluence.example.com",
+        ManifestRoots(),
+        pages={"r": PageManifestEntry(1, "Old", None, old_dir.name, "Old.md")},
+    )
+    inventory = Inventory(pages={"r": PageInventoryEntry("r", 1, "New", None, "DEV")})
+    client = _sync_client()
+
+    with pytest.raises(FileExistsError, match="移動先"):
+        execute_sync(
+            client, MagicMock(), str(tmp_path), manifest, inventory, compute_diff(manifest, inventory), resume=resume
+        )
+
+    assert target.read_text(encoding="utf-8") == "existing"
+    assert manifest.pages["r"].rel_path == old_dir.name
+    client.get_page.assert_not_called()
+
+
+@pytest.mark.parametrize("resume", [False, True])
+@pytest.mark.parametrize("identity", ["same", "other", "url_only", "foreign_server", "invalid"])
+@pytest.mark.parametrize("body_name", ["Old.md", "New.md"])
+def test_sync_only_accepts_identified_same_page_at_resumed_destination(tmp_path, resume, identity, body_name):
+    """移動記録前の中断は、レジューム指定と同一ページの本文確認でのみ復旧する."""
+    new_dir = tmp_path / "【DEV】 New"
+    new_dir.mkdir()
+    page_id = "other" if identity == "other" else "r"
+    content = (
+        generate_frontmatter(
+            page_id,
+            "DEV",
+            "https://foreign.example.com" if identity == "foreign_server" else "https://confluence.example.com",
+            "Old",
+            fields=["confluence_url"] if identity == "url_only" else None,
+        )
+        if identity != "invalid"
+        else "---\ninvalid: [\n---\n"
+    )
+    body = new_dir / body_name
+    body.write_text(content, encoding="utf-8")
+    (new_dir / "keep.bin").write_bytes(b"keep")
+    manifest = Manifest(
+        "https://confluence.example.com",
+        ManifestRoots(),
+        pages={"r": PageManifestEntry(1, "Old", None, "【DEV】 Old", "Old.md")},
+    )
+    inventory = Inventory(pages={"r": PageInventoryEntry("r", 1, "New", None, "DEV")})
+    client = _sync_client()
+    args = (
+        client,
+        MagicMock(convert=lambda *a, **kw: "本文"),
+        str(tmp_path),
+        manifest,
+        inventory,
+        compute_diff(manifest, inventory),
+    )
+
+    if resume and identity in ("same", "url_only"):
+        execute_sync(*args, resume=resume)
+        assert manifest.pages["r"].rel_path == new_dir.name
+        assert (new_dir / "New.md").is_file()
+        assert not (new_dir / "Old.md").exists()
+        assert (new_dir / "keep.bin").read_bytes() == b"keep"
+    else:
+        with pytest.raises(FileExistsError, match="移動先"):
+            execute_sync(*args, resume=resume)
+        assert body.read_text(encoding="utf-8") == content
+        assert manifest.pages["r"].rel_path == "【DEV】 Old"
+        client.get_page.assert_not_called()
 
 
 @pytest.mark.parametrize("body_missing", [False, True])

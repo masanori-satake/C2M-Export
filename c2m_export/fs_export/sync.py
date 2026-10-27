@@ -7,9 +7,12 @@ Confluence REST API からメタデータ（軽量インベントリ）を高速
 import logging
 import os
 import shutil
+import tempfile
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Dict, List, Optional, Set, Tuple
+
+import yaml
 
 from c2m_export.confluence import ConfluenceClient
 from c2m_export.converter import MarkdownConverter
@@ -227,6 +230,7 @@ def execute_sync(
     quarantine_dir_name: str = "_c2m_quarantine",
     manifest_name: str = ".c2m_manifest.json",
     page_filename_mode: str = "title",
+    resume: bool = False,
 ) -> ExportResult:
     """算出された DiffPlan を適用し、実出力とマニフェストを更新する.
 
@@ -256,39 +260,63 @@ def execute_sync(
             manifest.pages.pop(page_act.page_id, None)
             save_manifest(manifest, output_dir, manifest_name)
 
-    # 2. 新しい保存先の親を先に移動し、子孫の移動元も実際の配置へ追従させる。
+    # 2. 保存先の親と現在の占有者の移動を待ち、循環時のみ一時退避する。
     move_actions = sorted(
         (a for a in plan.page_actions if a.action == ActionType.MOVE_RENAME and a.old_entry),
         key=lambda a: computed_paths.get(a.page_id, (a.old_entry.rel_path if a.old_entry else "", ""))[0].count("/"),
     )
-    for page_act in move_actions:
-        if page_act.action == ActionType.MOVE_RENAME and page_act.old_entry:
+    staged_page_ids: Set[str] = set()
+    while move_actions:
+        progressed = False
+        for page_act in move_actions[:]:
+            assert page_act.old_entry is not None
             old_rel = page_act.old_entry.rel_path
             new_rel, new_body_file = computed_paths.get(page_act.page_id, (old_rel, page_act.old_entry.body_file))
 
             if old_rel != new_rel:
                 old_abs = os.path.join(output_dir, old_rel)
                 new_abs = os.path.join(output_dir, new_rel)
+                # 子を先に置くと親の移動先を作ってしまうため、新しい親の確定を待つ。
+                if any(
+                    other.page_id != page_act.page_id and new_rel.startswith(computed_paths[other.page_id][0] + "/")
+                    for other in move_actions
+                ):
+                    continue
+                # 移動先やその祖先・子孫を占有するページが移動するまで保留する。
+                if any(
+                    other.page_id != page_act.page_id
+                    and other.old_entry
+                    and other.old_entry.rel_path != computed_paths[other.page_id][0]
+                    and os.path.lexists(os.path.join(output_dir, other.old_entry.rel_path))
+                    and (
+                        new_rel == other.old_entry.rel_path
+                        or new_rel.startswith(other.old_entry.rel_path + "/")
+                        or other.old_entry.rel_path.startswith(new_rel + "/")
+                    )
+                    for other in move_actions
+                ):
+                    continue
+                if new_rel.startswith(old_rel + "/") and os.path.lexists(old_abs):
+                    continue
 
-                if os.path.exists(old_abs):
-                    if os.path.exists(new_abs):
+                if os.path.lexists(new_abs):
+                    if not (
+                        resume
+                        and not os.path.lexists(old_abs)
+                        and _is_resumed_move_destination(
+                            new_abs,
+                            {page_act.old_entry.body_file, new_body_file},
+                            page_act.page_id,
+                            manifest.base_url,
+                        )
+                    ):
                         raise FileExistsError(
                             f"現象: 移動先 ({new_rel}) が既に存在します。 原因: ローカルパスの競合。 対処方法: 既存の移動先を確認し、別の場所へ退避してから再実行してください。"
                         )
-                    os.makedirs(os.path.dirname(new_abs), exist_ok=True)
-                    try:
-                        shutil.move(old_abs, new_abs)
-                        logger.info(f"[移動/改名] ローカル配置を変更しました: {old_rel} -> {new_rel}")
-                    except Exception as e:
-                        logger.error(
-                            f"現象: ローカルパスの移動 ({old_rel} -> {new_rel}) に失敗しました。 原因: {e} 対処方法: ファイルのアクセス権限を確認してください。"
-                        )
-                        raise
-
-                    for entry in manifest.pages.values():
-                        if entry.rel_path == old_rel or entry.rel_path.startswith(old_rel + "/"):
-                            entry.rel_path = new_rel + entry.rel_path[len(old_rel) :]
-                    save_manifest(manifest, output_dir, manifest_name)
+                    # 記録直前の中断でも、一緒に移動した子孫の配置を復元する。
+                    _update_moved_paths(manifest, old_rel, new_rel)
+                elif os.path.lexists(old_abs):
+                    _move_sync_directory(output_dir, old_rel, new_rel, manifest, manifest_name)
 
             # 古いファイル名と新しいファイル名が異なる場合の調整
             if page_act.old_entry.body_file != new_body_file:
@@ -307,6 +335,23 @@ def execute_sync(
             page_act.old_entry.parent_id = page_act.current_parent_id
             page_act.old_entry.state = "pending"
             save_manifest(manifest, output_dir, manifest_name)
+            move_actions.remove(page_act)
+            progressed = True
+
+        if not progressed:
+            # 退避済みのページを再退避せず、循環を構成する別の占有者を空ける。
+            page_act = next(
+                a
+                for a in move_actions
+                if a.page_id not in staged_page_ids
+                and a.old_entry
+                and os.path.lexists(os.path.join(output_dir, a.old_entry.rel_path))
+            )
+            assert page_act.old_entry is not None
+            temporary_dir = tempfile.mkdtemp(prefix=".c2m_move_", dir=output_dir)
+            temporary_rel = os.path.join(os.path.relpath(temporary_dir, output_dir), "page")
+            _move_sync_directory(output_dir, page_act.old_entry.rel_path, temporary_rel, manifest, manifest_name)
+            staged_page_ids.add(page_act.page_id)
 
     # 3. 追加・変更・未変更（レジューム整合含む）の処理
     for page_act in plan.page_actions:
@@ -383,6 +428,63 @@ def execute_sync(
     save_manifest(manifest, output_dir, manifest_name)
 
     return result
+
+
+def _update_moved_paths(manifest: Manifest, old_rel: str, new_rel: str) -> None:
+    """実体とともに移動したページと子孫の記録を追従させる."""
+    for entry in manifest.pages.values():
+        if entry.rel_path == old_rel or entry.rel_path.startswith(old_rel + "/"):
+            entry.rel_path = new_rel + entry.rel_path[len(old_rel) :]
+
+
+def _move_sync_directory(output_dir: str, old_rel: str, new_rel: str, manifest: Manifest, manifest_name: str) -> None:
+    """一時退避も通常移動と同じく記録し、中断後の再開に備える."""
+    old_abs = os.path.join(output_dir, old_rel)
+    new_abs = os.path.join(output_dir, new_rel)
+    os.makedirs(os.path.dirname(new_abs), exist_ok=True)
+    try:
+        shutil.move(old_abs, new_abs)
+    except Exception as e:
+        logger.error(
+            f"現象: ローカルパスの移動 ({old_rel} -> {new_rel}) に失敗しました。 原因: {e} 対処方法: ファイルのアクセス権限を確認してください。"
+        )
+        raise
+    logger.info(f"[移動/改名] ローカル配置を変更しました: {old_rel} -> {new_rel}")
+    _update_moved_paths(manifest, old_rel, new_rel)
+    save_manifest(manifest, output_dir, manifest_name)
+    if os.path.basename(old_abs) == "page" and os.path.basename(os.path.dirname(old_abs)).startswith(".c2m_move_"):
+        os.rmdir(os.path.dirname(old_abs))
+
+
+def _is_resumed_move_destination(directory: str, body_files: Set[str], page_id: str, base_url: str) -> bool:
+    """移動済み本文のフロントマターで、再開先が同じサーバの同じページか確認する."""
+    found = False
+    for body_file in body_files:
+        body_path = os.path.join(directory, body_file)
+        if not os.path.lexists(body_path):
+            continue
+        try:
+            with open(body_path, encoding="utf-8") as body:
+                if body.readline().strip() != "---":
+                    return False
+                lines = []
+                for line in body:
+                    if line.strip() == "---":
+                        break
+                    lines.append(line)
+                else:
+                    return False
+            metadata = yaml.safe_load("".join(lines))
+        except (OSError, UnicodeError, yaml.YAMLError):
+            return False
+        if not isinstance(metadata, dict):
+            return False
+        if metadata.get("confluence_url") != f"{base_url.rstrip('/')}/pages/viewpage.action?pageId={page_id}":
+            return False
+        if str(metadata.get("confluence_page_id", page_id)) != page_id:
+            return False
+        found = True
+    return found
 
 
 def _process_single_page_sync(

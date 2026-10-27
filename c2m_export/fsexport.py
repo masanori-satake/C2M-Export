@@ -145,6 +145,7 @@ def main():
             quarantine_dir_name=config.quarantine_dir_name,
             manifest_name=config.manifest_name,
             page_filename_mode=config.page_filename_mode,
+            resume=config.resume,
         )
 
         logger.info("サマリの出力と完了処理を実行しています...")

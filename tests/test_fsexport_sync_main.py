@@ -17,6 +17,7 @@ from c2m_export.fsexport import main
 @patch("c2m_export.fsexport.load_manifest")
 @patch("c2m_export.fsexport.ConfluenceClient")
 @patch("c2m_export.fsexport.FsExportConfig")
+@pytest.mark.parametrize("resume", [False, True])
 def test_fsexport_main_sync_path(
     mock_config_cls,
     mock_client_cls,
@@ -26,11 +27,12 @@ def test_fsexport_main_sync_path(
     mock_execute_sync,
     mock_write_summary,
     tmp_path,
+    resume,
 ):
     """--sync オプション指定時に sync 経路へ分岐することを検証する."""
     config_mock = MagicMock()
-    config_mock.sync = True
-    config_mock.resume = False
+    config_mock.sync = not resume
+    config_mock.resume = resume
     config_mock.full = False
     config_mock.output_dir = str(tmp_path)
     config_mock.overwrite = True
@@ -60,6 +62,7 @@ def test_fsexport_main_sync_path(
     assert mock_collect_inv.called
     assert mock_compute_diff.called
     assert mock_execute_sync.called
+    assert mock_execute_sync.call_args.kwargs["resume"] is resume
     assert mock_write_summary.called
 
 
