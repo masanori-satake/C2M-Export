@@ -55,11 +55,15 @@ graph TD
 ```
 c2m_export/
 ├── confluence.py      # [拡張] get_attachments, download_attachment, get_restrictions, get_space_root_pages 等を追加
-├── config.py          # [拡張] AssessConfig, FsExportConfig を追加
+├── config.py          # [拡張] AssessConfig, FsExportConfig (sync/resume/full/deletion_policy 等) を追加
 ├── assess.py          # 分析モードのエントリーポイント（python -m c2m_export.assess）
-├── fsexport.py        # [新規] ファイルシステムモードのエントリーポイント（python -m c2m_export.fsexport）
-├── fs_export/         # [新規] ファイルシステム出力ロジック一式
+├── fsexport.py        # ファイルシステムモードのエントリーポイント（python -m c2m_export.fsexport / sync・resume分岐）
+├── fs_export/         # ファイルシステム出力ロジック一式
 │   ├── __init__.py
+│   ├── manifest.py    # [新規 0005] マニフェストモデル・原子的保存/読み込み・破損検出・スコープ検証
+│   ├── diff.py        # [新規 0005] 前回マニフェスト × 現在インベントリの差分判定純粋ロジック (DiffPlan)
+│   ├── sync.py        # [新規 0005] 軽量インベントリ収集・同期実行・レジューム処理・マニフェスト更新
+│   ├── quarantine.py  # [新規 0005] 削除・置換時の退避ディレクトリ操作 (_c2m_quarantine)
 │   ├── models.py      # PageNode / AttachmentRef / SkipRecord / ExportResult 等
 │   ├── tree.py        # DFS 巡回とローカルパス割当（命名・衝突回避・パス長警告）
 │   ├── writer.py      # 本文 + Frontmatter 書き込み、添付 DL 保存、単一ファイル上限判定
@@ -83,6 +87,15 @@ c2m_export/
 `fsexport.py` は探索失敗を `ExportResult.skipped_pages` に合流してからサマリを出力します。全起点の取得失敗時も、失敗サマリを出力して終了コード 1 で終了します。
 
 サマリ出力は、出力先ディレクトリの作成とファイル書き込みを同じ例外処理で保護し、失敗時もサマリのログ出力と戻り値を維持します。
+
+### 同期時の探索・パス・マニフェスト
+
+`Inventory.discovery_incomplete` は Space のルート一覧、ページ詳細、子ページ一覧、添付一覧の取得失敗時に設定し、`compute_diff` はページ・添付の DELETE を保留します。保留した添付のマニフェスト情報も保持します。
+`compute_paths_for_inventory` は仮想ルートを含む親の処理時に兄弟のディレクトリ名を確定し、全階層で衝突を回避します。
+MOVE_RENAME は `computed_paths` で再計算した新しい親と、移動先を現在占有するページの移動完了を待って実行します。保留が解消しない循環では出力先直下の `.c2m_move_*` へ一時退避し、通常移動・退避とも子孫の記録を実配置へ更新して保存します。退避後の中断もマニフェストの保存先から再開できます。
+移動対象以外の既存出力は、移動元が存在しなくても入れ子や上書きを行わずエラー停止します（設計書の一般的な競合時退避から変更）。例外は `--resume` 指定時の同一ページの移動済み出力のみです。改名前・改名後の既存本文すべてのフロントマターを検査し、`confluence_url` が同じサーバ・ページを指し、任意の `confluence_page_id` も一致することを確認します。識別不能な出力は停止します。UNCHANGED も再計算した保存先で本文を確認し、欠落時はそのパスへ再取得します。
+添付の DELETE と改名前の旧保存名は、ページ移動後の相対パスと `attachment_dir_name` を用いて `deletion_policy` に従い処理します。
+フル出力の writer は任意の `manifest_pages` 辞書へ本文出力に成功したページの取得済みメタデータ・実際の保存先・添付状態を追記し、`fsexport.py` はそれを含むマニフェストを保存します。
 
 ### 本文サイズ概算の偏りについての設計背景
 
@@ -327,3 +340,10 @@ mypy
 - `tests/test_assessment_report.py`: Markdown / JSON レポート生成および上書き挙動のテスト。
 - `tests/test_assess_config.py`: AssessConfig の設定読み込み・優先順位のテスト。
 - `tests/test_assess_main.py`: assess.py メイン処理およびルート解決のテスト。
+- `tests/test_sync_manifest.py`: マニフェストのモデル、原子的保存/読み込み、破損検出、スコープ検証のテスト。
+- `tests/test_sync_inventory.py`: 軽量インベントリ収集と失敗 page_id の記録のテスト。
+- `tests/test_sync_diff.py`: 差分判定純粋ロジック (追加・変更・移動/改名・削除・未変更・削除誤認防止) のテスト。
+- `tests/test_sync_quarantine.py`: 削除同期時の退避 (quarantine / delete / report) のテスト。
+- `tests/test_sync_apply.py`: DiffPlan 適用、移動・改名追従、レジューム再帰のテスト。
+- `tests/test_fsexport_sync_config.py`: FsExportConfig の sync 関連キー解決・バリデーションのテスト。
+- `tests/test_fsexport_sync_main.py`: fsexport main 処理での sync 経路分岐のテスト。

@@ -108,3 +108,18 @@ filesystem_export:
   #   - version
   #   - last_modified
   #   - exported_at
+
+  # 差分同期を有効化する (既定: false)
+  # sync: true
+
+  # 中断からのレジューム再開を有効化する (既定: false)
+  # resume: true
+
+  # マニフェストを無視して全件フル再取得する (既定: false)
+  # full: false
+
+  # 削除同期の方針: quarantine (退避ディレクトリへ移動), delete (物理削除), report (報告のみ) (既定: quarantine)
+  # deletion_policy: "quarantine"
+
+  # 退避ディレクトリ名 (既定: _c2m_quarantine)
+  # quarantine_dir_name: "_c2m_quarantine"

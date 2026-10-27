@@ -157,6 +157,14 @@ class FsExportConfig:
         self.path_length_limit: int = DEFAULT_PATH_LENGTH_LIMIT
         self.frontmatter_fields: Optional[List[str]] = None
 
+        # 0005 差分同期・レジューム設定
+        self.sync: bool = False
+        self.resume: bool = False
+        self.full: bool = False
+        self.deletion_policy: str = "quarantine"  # "quarantine" | "delete" | "report"
+        self.quarantine_dir_name: str = "_c2m_quarantine"
+        self.manifest_name: str = ".c2m_manifest.json"
+
     def load(self):
         """設定を読み込む。優先順位は CLI > 設定ファイル > デフォルト."""
         pre_parser = argparse.ArgumentParser(add_help=False)
@@ -205,6 +213,13 @@ class FsExportConfig:
                             fm_fields = fs_sec.get("frontmatter_fields")
                             if fm_fields and isinstance(fm_fields, list):
                                 self.frontmatter_fields = [str(f) for f in fm_fields]
+
+                            self.sync = bool(fs_sec.get("sync", self.sync))
+                            self.resume = bool(fs_sec.get("resume", self.resume))
+                            self.full = bool(fs_sec.get("full", self.full))
+                            self.deletion_policy = str(fs_sec.get("deletion_policy", self.deletion_policy))
+                            self.quarantine_dir_name = str(fs_sec.get("quarantine_dir_name", self.quarantine_dir_name))
+                            self.manifest_name = str(fs_sec.get("manifest_name", self.manifest_name))
             except Exception as e:
                 print(
                     f"設定ファイル {config_path} の読み込みに失敗しました（現象）。詳細: {e}（原因）。ファイル形式を確認してください（対処方法）"
@@ -248,6 +263,18 @@ class FsExportConfig:
         parser.add_argument("--exclude-ext", type=str, nargs="+", help="除外する添付拡張子のリスト")
         parser.add_argument("--path-length-limit", type=int, help="パス長警告しきい値 (文字数)")
 
+        # 0005 差分同期・レジューム CLI 引数
+        parser.add_argument("--sync", action="store_true", help="差分同期を有効化する")
+        parser.add_argument("--resume", action="store_true", help="中断からのレジューム再開を有効化する")
+        parser.add_argument("--full", action="store_true", help="マニフェストを無視し全件フル再取得する")
+        parser.add_argument(
+            "--deletion-policy",
+            type=str,
+            choices=["quarantine", "delete", "report"],
+            help="削除同期の方針 (quarantine | delete | report)",
+        )
+        parser.add_argument("--quarantine-dir", type=str, help="退避ディレクトリ名 (既定: _c2m_quarantine)")
+
         cli_args = parser.parse_args()
 
         if cli_args.base_url:
@@ -286,6 +313,17 @@ class FsExportConfig:
         if cli_args.path_length_limit is not None:
             self.path_length_limit = cli_args.path_length_limit
 
+        if cli_args.sync:
+            self.sync = True
+        if cli_args.resume:
+            self.resume = True
+        if cli_args.full:
+            self.full = True
+        if cli_args.deletion_policy:
+            self.deletion_policy = cli_args.deletion_policy
+        if cli_args.quarantine_dir:
+            self.quarantine_dir_name = cli_args.quarantine_dir
+
     def validate(self):
         """必須設定の有無を確認し、URLの正規化を行う."""
         if not self.base_url:
@@ -301,6 +339,8 @@ class FsExportConfig:
             raise ValueError("attachment_link_mode must be 'relative' or 'original'")
         if self.page_filename_mode not in ["title", "index"]:
             raise ValueError("page_filename_mode must be 'title' or 'index'")
+        if self.deletion_policy not in ["quarantine", "delete", "report"]:
+            raise ValueError("deletion_policy must be 'quarantine', 'delete', or 'report'")
 
         self.base_url = self.base_url.rstrip("/")
 

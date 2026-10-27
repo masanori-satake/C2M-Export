@@ -5,12 +5,13 @@
 
 import logging
 import os
-from typing import List, Optional, Set
+from typing import Dict, List, Optional, Set
 
 from c2m_export.confluence import ConfluenceClient
 from c2m_export.converter import MarkdownConverter
 from c2m_export.fs_export.frontmatter import generate_frontmatter
 from c2m_export.fs_export.links import rewrite_attachment_links
+from c2m_export.fs_export.manifest import AttachmentManifestEntry, PageManifestEntry
 from c2m_export.fs_export.models import AttachmentRef, ExportResult, PageNode, SkipRecord
 from c2m_export.utils import generate_unique_name, mb_to_bytes, sanitize_filename
 
@@ -29,6 +30,7 @@ def export_tree_fs(
     frontmatter_fields: Optional[List[str]] = None,
     base_url: str = "",
     renamed_nodes_map: Optional[dict] = None,
+    manifest_pages: Optional[Dict[str, PageManifestEntry]] = None,
 ) -> ExportResult:
     """PageNode ツリーに従ってファイルシステムへの出力・変換・添付DLを実行する.
 
@@ -44,6 +46,7 @@ def export_tree_fs(
         frontmatter_fields: Frontmatter フィールドリスト
         base_url: Confluence ベース URL
         renamed_nodes_map: ノード改名記録マップ
+        manifest_pages: 成功したページの保存情報を追記する辞書
 
     Returns:
         ExportResult: 実行サマリ結果
@@ -71,6 +74,7 @@ def export_tree_fs(
             exclude_ext_set=exclude_ext_set,
             frontmatter_fields=frontmatter_fields,
             base_url=base_url,
+            manifest_pages=manifest_pages,
         )
 
     return result
@@ -89,6 +93,8 @@ def _process_node(
     exclude_ext_set: Set[str],
     frontmatter_fields: Optional[List[str]],
     base_url: str,
+    manifest_pages: Optional[Dict[str, PageManifestEntry]] = None,
+    parent_id: Optional[str] = None,
 ):
     # 1. ページ詳細の取得
     try:
@@ -124,11 +130,14 @@ def _process_node(
                 exclude_ext_set,
                 frontmatter_fields,
                 base_url,
+                manifest_pages,
+                node.page_id,
             )
         return
 
     # 2. 添付ファイル一覧の処理
     att_refs: List[AttachmentRef] = []
+    att_manifest_map: Dict[str, AttachmentManifestEntry] = {}
     try:
         raw_atts = client.get_attachments(node.page_id)
         saved_names: List[str] = []
@@ -138,10 +147,19 @@ def _process_node(
             file_size = att.get("extensions", {}).get("fileSize", 0)
             links = att.get("_links", {})
             dl_path = links.get("download", "")
+            att_id = str(att.get("id") or orig_title)
+            att_entry = AttachmentManifestEntry(
+                version=int(att.get("version", {}).get("number", 1)),
+                size=file_size,
+                saved_name=orig_title,
+                state="failed",
+            )
+            att_manifest_map[att_id] = att_entry
 
             # 拡張子チェック
             ext = os.path.splitext(orig_title)[1].lstrip(".").lower()
             if ext in exclude_ext_set:
+                att_entry.state = "skipped"
                 result.skipped_attachments.append(
                     SkipRecord(
                         target_id=att.get("id", orig_title),
@@ -166,6 +184,7 @@ def _process_node(
 
             # 単一ファイル上限判定 (事前メタデータチェック)
             if file_size > max_bytes:
+                att_entry.state = "skipped"
                 logger.warning(
                     f"現象: 添付ファイル {orig_title} ({file_size} バイト) は単一ファイル上限 ({single_file_max_mb} MB) を超えているためスキップします。 原因: 設定された上限サイズ超過。 対処方法: 必要に応じて single_file_max_mb を変更してください。"
                 )
@@ -195,6 +214,7 @@ def _process_node(
             safe_att_name = sanitize_filename(orig_title) or "unnamed"
             unique_att_name = generate_unique_name(safe_att_name, saved_names)
             saved_names.append(unique_att_name)
+            att_entry.saved_name = unique_att_name
 
             dest_att_path = os.path.join(output_dir, node.relative_dir_path, attachment_dir_name, unique_att_name)
 
@@ -205,6 +225,8 @@ def _process_node(
                 )
                 result.total_attachments += 1
                 result.total_bytes += written_b
+                att_entry.state = "done"
+                att_entry.size = written_b
                 att_refs.append(
                     AttachmentRef(
                         original_filename=orig_title,
@@ -215,6 +237,7 @@ def _process_node(
                     )
                 )
             except ValueError as ve:
+                att_entry.state = "skipped"
                 # DL中上限超過中断
                 result.skipped_attachments.append(
                     SkipRecord(
@@ -311,6 +334,18 @@ def _process_node(
         result.total_pages += 1
         result.total_bytes += len(encoded_bytes)
 
+        if manifest_pages is not None:
+            ancestors = page_detail.get("ancestors", [])
+            actual_parent_id = str(ancestors[-1]["id"]) if ancestors else parent_id
+            manifest_pages[node.page_id] = PageManifestEntry(
+                version=int(version_num or 1),
+                title=node.title,
+                parent_id=actual_parent_id,
+                rel_path=node.relative_dir_path,
+                body_file=node.body_file_name,
+                attachments=att_manifest_map,
+            )
+
     except Exception as pe:
         logger.warning(
             f"現象: ページ {node.page_id} ({node.title}) の書き込みに失敗しました。 原因: {pe} 対処方法: 書き込み権限を確認してください。"
@@ -346,4 +381,6 @@ def _process_node(
             exclude_ext_set,
             frontmatter_fields,
             base_url,
+            manifest_pages,
+            node.page_id,
         )
