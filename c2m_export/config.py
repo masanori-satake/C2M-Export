@@ -1,17 +1,24 @@
 import argparse
 import os
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Set
 
 import yaml
+
+from c2m_export.assessment.rules import (
+    DEFAULT_ATTACHMENT_DIR_NAME,
+    DEFAULT_BLOCKED_EXTENSIONS,
+    DEFAULT_PATH_LENGTH_LIMIT,
+    DEFAULT_SINGLE_FILE_MAX_MB,
+)
 
 # デフォルト設定ファイルの保存場所 (ツールと同じディレクトリ)
 DEFAULT_CONFIG_PATH = Path(__file__).resolve().parent.parent / "c2m_config.yaml"
 
 
 class Config:
-    """
-    ツールの設定を管理するクラス。
+    """ツールの設定を管理するクラス.
+
     CLI引数、環境変数、設定ファイルの順で優先順位を制御し、
     企業環境（Proxy等）での実行に必要な設定を保持する。
     """
@@ -28,9 +35,7 @@ class Config:
         self.overwrite: bool = False
 
     def load(self):
-        """
-        設定を読み込む。優先順位は CLI > 設定ファイル > デフォルト。
-        """
+        """設定を読み込む。優先順位は CLI > 設定ファイル > デフォルト."""
         # 設定ファイルパスを特定するために一度パース
         pre_parser = argparse.ArgumentParser(add_help=False)
         pre_parser.add_argument("--config", type=str, default=str(DEFAULT_CONFIG_PATH))
@@ -116,9 +121,7 @@ class Config:
             self.overwrite = True
 
     def validate(self):
-        """
-        必須設定の有無を確認し、URLの正規化を行う。
-        """
+        """必須設定の有無を確認し、URLの正規化を行う."""
         if not self.base_url:
             raise ValueError("base_url is required (use --base-url or config file)")
         if not self.root_page_ids:
@@ -127,4 +130,159 @@ class Config:
             raise ValueError("token is required (use --token or config file)")
 
         # 後続のパス結合時に重複を防ぐための正規化
+        self.base_url = self.base_url.rstrip("/")
+
+
+class AssessConfig:
+    """アセスメント（分析モード）の設定を管理するクラス."""
+
+    def __init__(self):
+        self.base_url: Optional[str] = None
+        self.root_page_ids: List[str] = []
+        self.space_keys: List[str] = []
+        self.output_dir: str = "."
+        self.proxy: Optional[str] = None
+        self.token: Optional[str] = None
+        self.overwrite: bool = False
+
+        # 分析固有オプション
+        self.analyze_restrictions: bool = True
+        self.single_file_max_mb: int = DEFAULT_SINGLE_FILE_MAX_MB
+        self.path_length_limit: int = DEFAULT_PATH_LENGTH_LIMIT
+        self.blocked_extensions: Set[str] = set(DEFAULT_BLOCKED_EXTENSIONS)
+        self.attachment_dir_name: str = DEFAULT_ATTACHMENT_DIR_NAME
+        self.stale_days: int = 365
+        self.min_body_bytes: int = 200
+        self.report_format: str = "both"
+
+    def load(self):
+        """設定を読み込む。優先順位は CLI > 設定ファイル > デフォルト."""
+        pre_parser = argparse.ArgumentParser(add_help=False)
+        pre_parser.add_argument("--config", type=str, default=str(DEFAULT_CONFIG_PATH))
+        pre_args, _ = pre_parser.parse_known_args()
+
+        config_path = Path(pre_args.config) if pre_args.config else DEFAULT_CONFIG_PATH
+
+        if config_path.exists():
+            try:
+                with open(config_path, encoding="utf-8") as f:
+                    file_config = yaml.safe_load(f)
+                    if file_config:
+                        self.base_url = file_config.get("base_url", self.base_url)
+                        root_ids = file_config.get("root_page_ids")
+                        if root_ids:
+                            if isinstance(root_ids, list):
+                                self.root_page_ids = [str(i) for i in root_ids]
+                            else:
+                                self.root_page_ids = [str(root_ids)]
+                        s_keys = file_config.get("space_keys")
+                        if s_keys:
+                            if isinstance(s_keys, list):
+                                self.space_keys = [str(k) for k in s_keys]
+                            else:
+                                self.space_keys = [str(s_keys)]
+
+                        self.output_dir = file_config.get("output_dir", self.output_dir)
+                        self.proxy = file_config.get("proxy", self.proxy)
+                        self.token = file_config.get("token", self.token)
+                        self.overwrite = file_config.get("overwrite", self.overwrite)
+
+                        # assessment セクション
+                        assess_sec = file_config.get("assessment", {})
+                        if isinstance(assess_sec, dict):
+                            self.analyze_restrictions = assess_sec.get("analyze_restrictions", self.analyze_restrictions)
+                            self.single_file_max_mb = assess_sec.get("single_file_max_mb", self.single_file_max_mb)
+                            self.path_length_limit = assess_sec.get("path_length_limit", self.path_length_limit)
+                            b_exts = assess_sec.get("blocked_extensions")
+                            if b_exts and isinstance(b_exts, list):
+                                self.blocked_extensions = {str(e).lower().lstrip(".") for e in b_exts}
+                            self.attachment_dir_name = assess_sec.get("attachment_dir_name", self.attachment_dir_name)
+                            self.stale_days = assess_sec.get("stale_days", self.stale_days)
+                            self.min_body_bytes = assess_sec.get("min_body_bytes", self.min_body_bytes)
+                            self.report_format = assess_sec.get("report_format", self.report_format)
+            except Exception as e:
+                print(
+                    f"設定ファイル {config_path} の読み込みに失敗しました（現象）。詳細: {e}（原因）。ファイル形式を確認してください（対処方法）"
+                )
+
+        env_https_proxy = os.environ.get("HTTPS_PROXY")
+        env_http_proxy = os.environ.get("HTTP_PROXY")
+        if env_https_proxy:
+            self.proxy = env_https_proxy
+        elif env_http_proxy:
+            self.proxy = env_http_proxy
+
+        parser = argparse.ArgumentParser(description="Confluenceのコンテンツ分析（アセスメント）を実行するツール")
+        parser.add_argument("--base-url", type=str, help="ConfluenceのベースURL (例: https://host/wiki)")
+        parser.add_argument("--root-page-id", type=str, nargs="+", help="分析を開始するルートページのID（複数指定可能）")
+        parser.add_argument("--space-key", type=str, nargs="+", help="分析を開始するSpaceキー（複数指定可能）")
+        parser.add_argument("--output-dir", type=str, help="レポートを保存するディレクトリ")
+        parser.add_argument("--proxy", type=str, help="HTTP/HTTPS プロキシURL")
+        parser.add_argument("--config", type=str, help="設定ファイルのパス (既定: c2m_config.yaml)")
+        parser.add_argument("--token", type=str, help="ConfluenceのBearerトークン")
+        parser.add_argument("--overwrite", action="store_true", help="既存のレポートを上書きする")
+
+        parser.add_argument("--restrictions", action="store_true", default=None, help="権限分析を有効化する")
+        parser.add_argument("--no-restrictions", action="store_false", dest="restrictions", help="権限分析を無効化する")
+        parser.add_argument("--single-file-max-mb", type=int, help="巨大添付判定の閾値(MB)")
+        parser.add_argument("--path-length-limit", type=int, help="パス長リスク判定の文字数上限")
+        parser.add_argument("--blocked-ext", type=str, nargs="+", help="ブロック対象の拡張子")
+        parser.add_argument("--attachment-dir", type=str, help="パス長計算時の添付フォルダ名")
+        parser.add_argument("--stale-days", type=int, help="長期未更新判定の経過日数")
+        parser.add_argument("--min-body-bytes", type=int, help="空/極小ページ判定のバイト数上限")
+        parser.add_argument("--report-format", type=str, choices=["md", "json", "both"], help="出力フォーマット")
+
+        cli_args = parser.parse_args()
+
+        if cli_args.base_url:
+            self.base_url = cli_args.base_url
+        if cli_args.root_page_id:
+            self.root_page_ids = cli_args.root_page_id
+        if cli_args.space_key:
+            self.space_keys = cli_args.space_key
+
+        if self.root_page_ids:
+            seen = set()
+            self.root_page_ids = [x for x in self.root_page_ids if not (x in seen or seen.add(x))]
+        if self.space_keys:
+            seen_s = set()
+            self.space_keys = [x for x in self.space_keys if not (x in seen_s or seen_s.add(x))]
+
+        if cli_args.output_dir:
+            self.output_dir = cli_args.output_dir
+        if cli_args.proxy:
+            self.proxy = cli_args.proxy
+        if cli_args.token:
+            self.token = cli_args.token
+        if cli_args.overwrite:
+            self.overwrite = True
+
+        if cli_args.restrictions is not None:
+            self.analyze_restrictions = cli_args.restrictions
+        if cli_args.single_file_max_mb is not None:
+            self.single_file_max_mb = cli_args.single_file_max_mb
+        if cli_args.path_length_limit is not None:
+            self.path_length_limit = cli_args.path_length_limit
+        if cli_args.blocked_ext:
+            self.blocked_extensions = {str(e).lower().lstrip(".") for e in cli_args.blocked_ext}
+        if cli_args.attachment_dir:
+            self.attachment_dir_name = cli_args.attachment_dir
+        if cli_args.stale_days is not None:
+            self.stale_days = cli_args.stale_days
+        if cli_args.min_body_bytes is not None:
+            self.min_body_bytes = cli_args.min_body_bytes
+        if cli_args.report_format:
+            self.report_format = cli_args.report_format
+
+    def validate(self):
+        """必須設定の有無を確認し、URLの正規化を行う."""
+        if not self.base_url:
+            raise ValueError("base_url is required (use --base-url or config file)")
+        if not self.root_page_ids and not self.space_keys:
+            raise ValueError(
+                "At least one root_page_id or space_key is required (use --root-page-id, --space-key, or config file)"
+            )
+        if not self.token:
+            raise ValueError("token is required (use --token or config file)")
+
         self.base_url = self.base_url.rstrip("/")

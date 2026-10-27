@@ -13,6 +13,11 @@ root_page_ids:
   - "12345678"
   - "98765432"
 
+# （分析モード用）起点となる Space キーのリスト
+# space_keys:
+#   - "SPACE_A"
+#   - "SPACE_B"
+
 # Bearerトークン
 token: "your_bearer_token_here"
 
@@ -31,3 +36,41 @@ stop_threshold_mb: 95.0
 
 # エクスポート結果をZip圧縮する (既定: false)
 zip_output: false
+
+# 既存の出力ファイルを上書きする (既定: false)
+overwrite: false
+
+# ==============================================================================
+# 分析（アセスメント）モード固有の設定 (python -m c2m_export.assess で使用)
+# ==============================================================================
+assessment:
+  # ページの個別アクセス制限（コンテンツ制限）を分析対象に含めるか (既定: true)
+  analyze_restrictions: true
+
+  # 巨大添付ファイルとして警告・検出する閾値 (MB) (既定: 250)
+  single_file_max_mb: 250
+
+  # パス長リスク検出の文字数上限 (既定: 400)
+  path_length_limit: 400
+
+  # ブロック対象の拡張子リスト (既定: exe, bat, cmd, sh, vbs, ps1, msi, com, scr, dll, sys, reg, jar)
+  blocked_extensions:
+    - exe
+    - bat
+    - cmd
+    - sh
+    - vbs
+    - ps1
+    - msi
+
+  # パス長計算時に想定する添付ファイル格納サブフォルダ名 (既定: _attachments)
+  attachment_dir_name: "_attachments"
+
+  # 長期未更新ページとして集計する経過日数 (既定: 365)
+  stale_days: 365
+
+  # 本文が空/極小と判定するバイト数上限 (既定: 200)
+  min_body_bytes: 200
+
+  # 出力フォーマット: md, json, both (既定: both)
+  report_format: "both"
