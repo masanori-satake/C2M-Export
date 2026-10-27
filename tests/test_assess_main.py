@@ -24,7 +24,6 @@ def test_assess_main_execution():
         with patch("c2m_export.assess.AssessConfig") as mock_cfg_cls, patch(
             "c2m_export.assess.ConfluenceClient"
         ) as mock_client_cls, patch("c2m_export.assess.Collector") as mock_collector_cls:
-
             mock_cfg = mock_cfg_cls.return_value
             mock_cfg.base_url = "https://confluence.example.com"
             mock_cfg.token = "dummy"

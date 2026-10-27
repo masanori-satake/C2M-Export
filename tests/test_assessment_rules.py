@@ -12,9 +12,7 @@ def test_calculate_relative_paths():
     page_path = calculate_page_relative_path(["Space Root", "Parent Page"], "Target Page")
     assert page_path == "Space Root/Parent Page/Target Page.md"
 
-    att_path = calculate_attachment_relative_path(
-        ["Space Root"], "Target Page", "sample file.pdf", "_attachments"
-    )
+    att_path = calculate_attachment_relative_path(["Space Root"], "Target Page", "sample file.pdf", "_attachments")
     assert att_path == "Space Root/Target Page/_attachments/sample file.pdf"
 
 
@@ -27,7 +25,7 @@ def test_check_path_length():
 
 def test_check_invalid_chars_or_name():
     assert check_invalid_chars_or_name("ValidName.txt") is None
-    assert "禁止文字" in check_invalid_chars_or_name('Invalid:Name?.txt')
+    assert "禁止文字" in check_invalid_chars_or_name("Invalid:Name?.txt")
     assert "末尾" in check_invalid_chars_or_name("TrailingSpace .txt")
     assert "予約語" in check_invalid_chars_or_name("CON.txt")
     assert "予約語" in check_invalid_chars_or_name("aux")

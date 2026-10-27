@@ -190,7 +190,9 @@ class AssessConfig:
                         # assessment セクション
                         assess_sec = file_config.get("assessment", {})
                         if isinstance(assess_sec, dict):
-                            self.analyze_restrictions = assess_sec.get("analyze_restrictions", self.analyze_restrictions)
+                            self.analyze_restrictions = assess_sec.get(
+                                "analyze_restrictions", self.analyze_restrictions
+                            )
                             self.single_file_max_mb = assess_sec.get("single_file_max_mb", self.single_file_max_mb)
                             self.path_length_limit = assess_sec.get("path_length_limit", self.path_length_limit)
                             b_exts = assess_sec.get("blocked_extensions")
@@ -214,7 +216,9 @@ class AssessConfig:
 
         parser = argparse.ArgumentParser(description="Confluenceのコンテンツ分析（アセスメント）を実行するツール")
         parser.add_argument("--base-url", type=str, help="ConfluenceのベースURL (例: https://host/wiki)")
-        parser.add_argument("--root-page-id", type=str, nargs="+", help="分析を開始するルートページのID（複数指定可能）")
+        parser.add_argument(
+            "--root-page-id", type=str, nargs="+", help="分析を開始するルートページのID（複数指定可能）"
+        )
         parser.add_argument("--space-key", type=str, nargs="+", help="分析を開始するSpaceキー（複数指定可能）")
         parser.add_argument("--output-dir", type=str, help="レポートを保存するディレクトリ")
         parser.add_argument("--proxy", type=str, help="HTTP/HTTPS プロキシURL")

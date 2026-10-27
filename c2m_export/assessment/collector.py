@@ -44,9 +44,7 @@ class Collector:
 
             # 1. ページ詳細取得
             try:
-                page_data = self.client.get_page(
-                    page_id, expand="body.storage,space,version,history.lastUpdated"
-                )
+                page_data = self.client.get_page(page_id, expand="body.storage,space,version,history.lastUpdated")
             except Exception as e:
                 logger.warning(f"ページ (ID: {page_id}) のメタデータ取得に失敗しました。スキップします: {e}")
                 inventory.skipped_page_ids.append(page_id)
@@ -60,10 +58,9 @@ class Collector:
             body_bytes = len(body_storage.encode("utf-8")) if body_storage else 0
 
             # 最終更新日時 (version.when や history.lastUpdated.when)
-            last_modified = (
-                page_data.get("version", {}).get("when")
-                or page_data.get("history", {}).get("lastUpdated", {}).get("when")
-            )
+            last_modified = page_data.get("version", {}).get("when") or page_data.get("history", {}).get(
+                "lastUpdated", {}
+            ).get("when")
 
             # 2. 添付ファイルメタデータ取得
             attachments_meta: List[AttachmentMeta] = []

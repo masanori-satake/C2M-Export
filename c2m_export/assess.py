@@ -1,8 +1,8 @@
 """Confluence アセスメント（分析モード）のエントリーポイント."""
 
-from datetime import datetime
 import logging
 import sys
+from datetime import datetime
 from typing import List
 
 from c2m_export.assessment.analyzers import analyze_inventory
@@ -24,9 +24,7 @@ def resolve_roots(client: ConfluenceClient, config: AssessConfig) -> List[str]:
         try:
             root_pages = client.get_space_root_pages(space_key)
             if not root_pages:
-                logger.warning(
-                    f"Space キー '{space_key}' にトップレベルページが見つかりませんでした。"
-                )
+                logger.warning(f"Space キー '{space_key}' にトップレベルページが見つかりませんでした。")
             for page in root_pages:
                 resolved_ids.append(str(page["id"]))
         except Exception as e:

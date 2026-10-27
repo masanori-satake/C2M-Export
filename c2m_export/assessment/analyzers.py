@@ -1,8 +1,8 @@
 """アセスメントインベントリの分析・集計・リスク集約を行う純粋ロジック."""
 
+import logging
 from collections import defaultdict
 from datetime import datetime, timezone
-import logging
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from c2m_export.assessment.models import (
@@ -70,12 +70,8 @@ def analyze_inventory(
         lambda: {"pages": 0, "attachments": 0, "attachment_bytes": 0}
     )
 
-    ext_counter: Dict[str, Dict[str, Any]] = defaultdict(
-        lambda: {"count": 0, "total_size": 0, "max_size": 0}
-    )
-    mime_counter: Dict[str, Dict[str, Any]] = defaultdict(
-        lambda: {"count": 0, "total_size": 0, "max_size": 0}
-    )
+    ext_counter: Dict[str, Dict[str, Any]] = defaultdict(lambda: {"count": 0, "total_size": 0, "max_size": 0})
+    mime_counter: Dict[str, Dict[str, Any]] = defaultdict(lambda: {"count": 0, "total_size": 0, "max_size": 0})
 
     stale_page_count = 0
     empty_page_count = 0
