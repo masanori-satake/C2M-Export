@@ -1,7 +1,7 @@
 """アセスメント機能のデータモデル定義."""
 
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Dict, List, Optional
 
 
 @dataclass
@@ -39,10 +39,10 @@ class RestrictionMeta:
     """
 
     has_explicit: bool
-    read_users: list[str] = field(default_factory=list)
-    read_groups: list[str] = field(default_factory=list)
-    update_users: list[str] = field(default_factory=list)
-    update_groups: list[str] = field(default_factory=list)
+    read_users: List[str] = field(default_factory=list)
+    read_groups: List[str] = field(default_factory=list)
+    update_users: List[str] = field(default_factory=list)
+    update_groups: List[str] = field(default_factory=list)
     fetch_failed: bool = False
 
 
@@ -68,8 +68,8 @@ class PageMeta:
     level: int
     body_bytes: int
     last_modified: Optional[str]
-    ancestors_titles: list[str]
-    attachments: list[AttachmentMeta] = field(default_factory=list)
+    ancestors_titles: List[str]
+    attachments: List[AttachmentMeta] = field(default_factory=list)
     restriction: Optional[RestrictionMeta] = None
 
 
@@ -85,10 +85,10 @@ class RawInventory:
         size_meta_missing_count: fileSize メタデータが欠落していた添付件数
     """
 
-    pages: list[PageMeta] = field(default_factory=list)
-    skipped_page_ids: list[str] = field(default_factory=list)
-    skipped_attachment_refs: list[str] = field(default_factory=list)
-    restriction_failed_page_ids: list[str] = field(default_factory=list)
+    pages: List[PageMeta] = field(default_factory=list)
+    skipped_page_ids: List[str] = field(default_factory=list)
+    skipped_attachment_refs: List[str] = field(default_factory=list)
+    restriction_failed_page_ids: List[str] = field(default_factory=list)
     size_meta_missing_count: int = 0
 
 
@@ -143,18 +143,18 @@ class AssessmentResult:
     estimated_body_bytes: int
     total_attachment_bytes: int
     max_depth: int
-    level_distribution: dict[int, int]
-    space_summary: dict[str, dict[str, int]]
-    extension_summary: list[dict[str, object]]
-    mime_summary: list[dict[str, object]]
+    level_distribution: Dict[int, int]
+    space_summary: Dict[str, Dict[str, int]]
+    extension_summary: List[Dict[str, object]]
+    mime_summary: List[Dict[str, object]]
     stale_page_count: int
     empty_page_count: int
-    freshness_distribution: dict[str, int]
+    freshness_distribution: Dict[str, int]
     explicit_restriction_count: int
-    unique_restriction_users: list[str]
-    unique_restriction_groups: list[str]
+    unique_restriction_users: List[str]
+    unique_restriction_groups: List[str]
     read_only_restriction_count: int
     read_write_restriction_count: int
-    risk_items: list[RiskItem]
-    risk_summary_counts: dict[str, int]
+    risk_items: List[RiskItem]
+    risk_summary_counts: Dict[str, int]
     raw_inventory: RawInventory

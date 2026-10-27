@@ -90,10 +90,10 @@ def write_summary(result: ExportResult, output_dir: str, execution_dt: Optional[
 
     # ファイル書き出し (例: fsexport_summary_20260201_120000.txt)
     file_name = f"fsexport_summary_{suffix_time}.txt"
-    os.makedirs(output_dir, exist_ok=True)
     file_path = os.path.join(output_dir, file_name)
 
     try:
+        os.makedirs(output_dir, exist_ok=True)
         with open(file_path, "w", encoding="utf-8") as f:
             f.write(summary_text)
         logger.info(f"実行サマリをファイルに出力しました: {file_path}")

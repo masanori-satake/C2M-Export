@@ -1,7 +1,7 @@
 """移設先（SharePoint/OneDrive）制約の判定ルールおよび相対パス算出モジュール."""
 
 import re
-from typing import Optional, Set
+from typing import List, Optional, Set
 
 from c2m_export.utils import sanitize_filename
 
@@ -60,14 +60,14 @@ RESERVED_NAMES = {
 }
 
 
-def calculate_page_relative_path(ancestors_titles: list[str], title: str) -> str:
+def calculate_page_relative_path(ancestors_titles: List[str], title: str) -> str:
     """ページの相対パス（`ancestor1/ancestor2/title.md`）を算出する."""
     path_segments = [sanitize_filename(t) for t in ancestors_titles] + [f"{sanitize_filename(title)}.md"]
     return "/".join(path_segments)
 
 
 def calculate_attachment_relative_path(
-    ancestors_titles: list[str], title: str, attachment_filename: str, attachment_dir_name: str = "_attachments"
+    ancestors_titles: List[str], title: str, attachment_filename: str, attachment_dir_name: str = "_attachments"
 ) -> str:
     """添付ファイルの相対パス（`ancestor/title/attachment_dir/filename`）を算出する."""
     path_segments = (

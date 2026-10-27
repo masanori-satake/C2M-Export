@@ -2,7 +2,7 @@
 
 import json
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, List, Tuple
 
 from c2m_export.assessment.models import AssessmentResult
 from c2m_export.utils import bytes_to_mb
@@ -22,7 +22,7 @@ def format_size(b: int) -> str:
 
 def generate_markdown_report(result: AssessmentResult) -> str:
     """AssessmentResult から Markdown 形式のアセスメントレポート文字列を生成する."""
-    lines: list[str] = []
+    lines: List[str] = []
 
     lines.append("# Confluence アセスメントレポート")
     lines.append("")
@@ -201,7 +201,7 @@ def write_reports(
     base_filename: str,
     report_format: str = "both",
     overwrite: bool = False,
-) -> tuple[Path, Path]:
+) -> Tuple[Path, Path]:
     """Markdown および JSON レポートを出力ディレクトリに書き出す.
 
     returns: (markdown_path, json_path)

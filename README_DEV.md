@@ -81,6 +81,8 @@ c2m_export/
 `build_page_tree` は任意の `skipped_pages` リストにルートページ・子ページ・Space のルート一覧の取得失敗を追記します（既存の戻り値は維持）。
 `fsexport.py` は探索失敗を `ExportResult.skipped_pages` に合流してからサマリを出力します。全起点の取得失敗時も、失敗サマリを出力して終了コード 1 で終了します。
 
+サマリ出力は、出力先ディレクトリの作成とファイル書き込みを同じ例外処理で保護し、失敗時もサマリのログ出力と戻り値を維持します。
+
 ### 本文サイズ概算の偏りについての設計背景
 
 アセスメント機能では、大量ページの巡回および API 負荷の抑制・処理時間短縮を目的として、**添付バイナリのダウンロードや Markdown 変換処理を行いません**。
@@ -302,6 +304,7 @@ PYTHONPATH=. pytest
 ```
 
 静的型検査は mypy で行います（対象や設定は `pyproject.toml` の `[tool.mypy]` を参照）。
+Python 3.8 を対象とし、対応する mypy 1.10 以上 1.15 未満を使用します。型注釈は `typing.List` / `typing.Dict` / `typing.Tuple` などの Python 3.8 互換形式を使用します。
 
 ```bash
 mypy
