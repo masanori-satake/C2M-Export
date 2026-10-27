@@ -12,7 +12,6 @@ from c2m_export.converter import MarkdownConverter
 from c2m_export.fs_export.frontmatter import generate_frontmatter
 from c2m_export.fs_export.links import rewrite_attachment_links
 from c2m_export.fs_export.models import AttachmentRef, ExportResult, PageNode, SkipRecord
-from c2m_export.fs_export.tree import build_page_tree
 from c2m_export.utils import generate_unique_name, mb_to_bytes, sanitize_filename
 
 logger = logging.getLogger(__name__)
@@ -197,9 +196,7 @@ def _process_node(
             unique_att_name = generate_unique_name(safe_att_name, saved_names)
             saved_names.append(unique_att_name)
 
-            dest_att_path = os.path.join(
-                output_dir, node.relative_dir_path, attachment_dir_name, unique_att_name
-            )
+            dest_att_path = os.path.join(output_dir, node.relative_dir_path, attachment_dir_name, unique_att_name)
 
             # ダウンロードと保存
             try:

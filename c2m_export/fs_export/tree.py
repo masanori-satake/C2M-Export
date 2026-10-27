@@ -68,7 +68,9 @@ def build_page_tree(
                 if node:
                     root_nodes.append(node)
             except Exception as e:
-                logger.warning(f"現象: ルートページ {target_val} の取得に失敗しました。 原因: {e} 対処方法: ページIDまたは権限を確認してください。")
+                logger.warning(
+                    f"現象: ルートページ {target_val} の取得に失敗しました。 原因: {e} 対処方法: ページIDまたは権限を確認してください。"
+                )
         elif target_type == "space":
             try:
                 space_roots = client.get_space_root_pages(target_val)
@@ -88,7 +90,9 @@ def build_page_tree(
                         if node:
                             root_nodes.append(node)
             except Exception as e:
-                logger.warning(f"現象: Space {target_val} のルートページ一覧取得に失敗しました。 原因: {e} 対処方法: Space キーまたは権限を確認してください。")
+                logger.warning(
+                    f"現象: Space {target_val} のルートページ一覧取得に失敗しました。 原因: {e} 対処方法: Space キーまたは権限を確認してください。"
+                )
 
     return root_nodes, renamed_nodes, visited_ids
 
@@ -182,7 +186,9 @@ def _traverse_dfs(
             if c_node:
                 node.children.append(c_node)
     except Exception as e:
-        logger.warning(f"現象: ページ {page_id} ({title}) の子ページ取得に失敗しました。 原因: {e} 対処方法: ネットワーク状態を確認してください。")
+        logger.warning(
+            f"現象: ページ {page_id} ({title}) の子ページ取得に失敗しました。 原因: {e} 対処方法: ネットワーク状態を確認してください。"
+        )
 
     return node
 
@@ -254,6 +260,8 @@ def _traverse_dfs_child(
             if c_node:
                 node.children.append(c_node)
     except Exception as e:
-        logger.warning(f"現象: ページ {page_id} ({title}) の子ページ取得に失敗しました。 原因: {e} 対処方法: ネットワーク状態を確認してください。")
+        logger.warning(
+            f"現象: ページ {page_id} ({title}) の子ページ取得に失敗しました。 原因: {e} 対処方法: ネットワーク状態を確認してください。"
+        )
 
     return node

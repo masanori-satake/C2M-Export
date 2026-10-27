@@ -192,15 +192,9 @@ class FsExportConfig:
                         # filesystem_export セクション
                         fs_sec = file_config.get("filesystem_export", {})
                         if isinstance(fs_sec, dict):
-                            self.attachment_dir_name = fs_sec.get(
-                                "attachment_dir_name", self.attachment_dir_name
-                            )
-                            self.attachment_link_mode = fs_sec.get(
-                                "attachment_link_mode", self.attachment_link_mode
-                            )
-                            self.page_filename_mode = fs_sec.get(
-                                "page_filename_mode", self.page_filename_mode
-                            )
+                            self.attachment_dir_name = fs_sec.get("attachment_dir_name", self.attachment_dir_name)
+                            self.attachment_link_mode = fs_sec.get("attachment_link_mode", self.attachment_link_mode)
+                            self.page_filename_mode = fs_sec.get("page_filename_mode", self.page_filename_mode)
                             if "single_file_max_mb" in fs_sec:
                                 self.single_file_max_mb = float(fs_sec["single_file_max_mb"])
                             e_exts = fs_sec.get("exclude_extensions")
@@ -223,7 +217,9 @@ class FsExportConfig:
         elif env_http_proxy:
             self.proxy = env_http_proxy
 
-        parser = argparse.ArgumentParser(description="Confluenceページ階層をディレクトリ/ファイル階層として出力するツール")
+        parser = argparse.ArgumentParser(
+            description="Confluenceページ階層をディレクトリ/ファイル階層として出力するツール"
+        )
         parser.add_argument("--base-url", type=str, help="ConfluenceのベースURL (例: https://host/wiki)")
         parser.add_argument(
             "--root-page-id", type=str, nargs="+", help="エクスポートを開始するルートページのID（複数指定可能）"
