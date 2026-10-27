@@ -58,6 +58,18 @@ def test_rewrite_attachment_links_original():
     assert unresolved == 0
 
 
+@pytest.mark.parametrize("target", ["<http://example.com/a (1)>", "<https://example.com/a (1)>", "<#section>"])
+@pytest.mark.parametrize("link_mode", ["relative", "original"])
+def test_external_angle_destination_is_preserved(target, link_mode):
+    content = f"[参照]({target})"
+    attachments = [AttachmentRef(original_filename="doc.pdf", saved_filename="doc.pdf", saved=True)]
+
+    new_content, unresolved = rewrite_attachment_links(content, attachments, link_mode=link_mode)
+
+    assert new_content == content
+    assert unresolved == 0
+
+
 @pytest.mark.parametrize("filename", ["image space.png", "image(1).png", "image (1).png"])
 @pytest.mark.parametrize("tag", ["image", "link"])
 @pytest.mark.parametrize("link_mode", ["relative", "original"])

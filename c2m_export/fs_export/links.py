@@ -47,14 +47,14 @@ def rewrite_attachment_links(
         prefix = match.group(1)
         target = match.group(2).strip()
 
-        # 外部 URL またはアンカー等はスキップ
-        if target.startswith("http://") or target.startswith("https://") or target.startswith("#"):
-            return match.group(0)
-
         # target が <> で囲まれている場合の解除
         clean_target = target
         if clean_target.startswith("<") and clean_target.endswith(">"):
             clean_target = clean_target[1:-1]
+
+        # 外部 URL またはアンカー等はスキップ
+        if clean_target.startswith("http://") or clean_target.startswith("https://") or clean_target.startswith("#"):
+            return match.group(0)
 
         # att_map にマッチするか
         att = att_map.get(clean_target)
