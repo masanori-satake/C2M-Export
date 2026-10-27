@@ -173,6 +173,11 @@ def main():
         logger.info(f"ツリー探索完了: {len(root_nodes)} 個の起点ノード、全 {len(visited_ids)} ページを検出しました。")
         logger.info("ファイルシステム構造への書き込み・本文変換・添付保存を開始します...")
 
+        manifest = Manifest(
+            base_url=config.base_url,
+            roots=ManifestRoots(root_page_ids=config.root_page_ids, space_keys=config.space_keys),
+            started_at=datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ"),
+        )
         result = export_tree_fs(
             client=client,
             converter=converter,
@@ -185,19 +190,14 @@ def main():
             frontmatter_fields=config.frontmatter_fields,
             base_url=config.base_url,
             renamed_nodes_map=renamed_map,
+            manifest_pages=manifest.pages,
         )
         result.skipped_pages.extend(tree_result.skipped_pages)
 
         # フル出力完了時にもマニフェストを新規保存しておく（次回 sync/resume 用）
         try:
-            m_roots = ManifestRoots(root_page_ids=config.root_page_ids, space_keys=config.space_keys)
-            manifest = Manifest(
-                base_url=config.base_url,
-                roots=m_roots,
-                completed=True,
-                started_at=datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ"),
-                finished_at=datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ"),
-            )
+            manifest.completed = True
+            manifest.finished_at = datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ")
             save_manifest(manifest, config.output_dir, config.manifest_name)
         except Exception as me:
             logger.warning(f"フル出力完了後のマニフェスト初期保存に失敗しました: {me}")

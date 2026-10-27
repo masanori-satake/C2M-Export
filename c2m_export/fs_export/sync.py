@@ -13,7 +13,7 @@ from typing import Dict, List, Optional, Set, Tuple
 
 from c2m_export.confluence import ConfluenceClient
 from c2m_export.converter import MarkdownConverter
-from c2m_export.fs_export.diff import ActionType, DiffPlan
+from c2m_export.fs_export.diff import ActionType, AttachmentDiffAction, DiffPlan
 from c2m_export.fs_export.frontmatter import generate_frontmatter
 from c2m_export.fs_export.links import rewrite_attachment_links
 from c2m_export.fs_export.manifest import (
@@ -57,6 +57,7 @@ class Inventory:
 
     pages: Dict[str, PageInventoryEntry] = field(default_factory=dict)
     failed_page_ids: Set[str] = field(default_factory=set)
+    discovery_incomplete: bool = False
 
 
 def collect_inventory(
@@ -89,6 +90,7 @@ def collect_inventory(
                     if r_id and r_id not in start_page_ids:
                         start_page_ids.append(r_id)
             except Exception as e:
+                inventory.discovery_incomplete = True
                 logger.error(
                     f"現象: Space ({space_key}) のルートページ一覧取得に失敗しました。 原因: {e} 対処方法: Space キーおよびアクセス権限を確認してください。"
                 )
@@ -134,6 +136,7 @@ def collect_inventory(
                         size=size,
                     )
             except Exception as ae:
+                inventory.discovery_incomplete = True
                 logger.warning(f"ページ (ID: {current_id}) の添付ファイル一覧取得に失敗しました: {ae}")
 
             inventory.pages[current_id] = PageInventoryEntry(
@@ -153,6 +156,7 @@ def collect_inventory(
                     if child_id and child_id not in visited_ids:
                         stack.append((child_id, current_id))
             except Exception as ce:
+                inventory.discovery_incomplete = True
                 logger.warning(f"ページ (ID: {current_id}) の子ページ一覧取得に失敗しました: {ce}")
 
         except Exception as e:
@@ -160,6 +164,7 @@ def collect_inventory(
                 f"現象: ページ (ID: {current_id}) のメタデータ取得に失敗しました。 原因: {e} 対処方法: ネットワーク状況およびアクセス権限を確認してください。"
             )
             inventory.failed_page_ids.add(current_id)
+            inventory.discovery_incomplete = True
 
     return inventory
 
@@ -181,70 +186,26 @@ def compute_paths_for_inventory(inventory: Inventory, page_filename_mode: str = 
             parent_id = None
         children_map.setdefault(parent_id, []).append(pid)
 
-    # DFS でパスを決定
-    stack: List[Tuple[str, str, int]] = []
-    # ルートノードの追加
-    root_ids = children_map.get(None, [])
-    for rid in root_ids:
-        stack.append((rid, "", 1))
-
-    visited: Set[str] = set()
-
+    # 仮想ルートを含む各親の処理時に、兄弟の名前を一度だけ確定する。
+    stack: List[Tuple[Optional[str], str]] = [(None, "")]
     while stack:
-        pid, parent_rel_dir, level = stack.pop()
-        if pid in visited or pid not in pages:
-            continue
-        visited.add(pid)
-
-        p_entry = pages[pid]
-        title = p_entry.title or "untitled"
-        space_key = p_entry.space_key or "UNKNOWN"
-
-        if level == 1:
-            base_dir_name = f"【{space_key}】 {sanitize_filename(title)}"
-        else:
-            base_dir_name = sanitize_filename(title)
-
-        if not base_dir_name:
-            base_dir_name = "untitled"
-
-        if parent_rel_dir:
-            dir_path = f"{parent_rel_dir}/{base_dir_name}"
-        else:
-            dir_path = base_dir_name
-
-        if page_filename_mode == "index":
-            body_file_name = "index.md"
-        else:
-            body_file_name = f"{base_dir_name if level > 1 else sanitize_filename(title) or 'untitled'}.md"
-
-        paths_map[pid] = (dir_path, body_file_name)
-
-        # 子ノードの探索
-        child_ids = children_map.get(pid, [])
-        existing_child_names: List[str] = []
-        for cid in child_ids:
-            if cid in visited or cid not in pages:
+        parent_id, parent_rel_dir = stack.pop()
+        existing_names: List[str] = []
+        for pid in children_map.get(parent_id, []):
+            if pid in paths_map:
                 continue
-            c_entry = pages[cid]
-            c_title = c_entry.title or "untitled"
-            c_base = sanitize_filename(c_title) or "untitled"
-            unique_c_name = generate_unique_name(c_base, existing_child_names)
-            existing_child_names.append(unique_c_name)
-
-            c_dir_path = f"{dir_path}/{unique_c_name}"
+            entry = pages[pid]
+            title_name = sanitize_filename(entry.title or "untitled") or "untitled"
+            base_name = f"【{entry.space_key or 'UNKNOWN'}】 {title_name}" if parent_id is None else title_name
+            unique_name = generate_unique_name(base_name, existing_names)
+            existing_names.append(unique_name)
+            dir_path = f"{parent_rel_dir}/{unique_name}" if parent_rel_dir else unique_name
             if page_filename_mode == "index":
-                c_body_file = "index.md"
+                body_file = "index.md"
             else:
-                c_body_file = f"{unique_c_name}.md"
-
-            paths_map[cid] = (c_dir_path, c_body_file)
-            visited.add(cid)
-
-            # 孫ノードをスタックに追加
-            grand_child_ids = children_map.get(cid, [])
-            for gcid in reversed(grand_child_ids):
-                stack.append((gcid, c_dir_path, level + 2))
+                body_file = f"{title_name if parent_id is None else unique_name}.md"
+            paths_map[pid] = (dir_path, body_file)
+            stack.append((pid, dir_path))
 
     return paths_map
 
@@ -295,8 +256,12 @@ def execute_sync(
             manifest.pages.pop(page_act.page_id, None)
             save_manifest(manifest, output_dir, manifest_name)
 
-    # 2. 移動・改名アクション (MOVE_RENAME) の処理
-    for page_act in plan.page_actions:
+    # 2. 親を先に移動し、子孫の移動元も実際の配置へ追従させる。
+    move_actions = sorted(
+        (a for a in plan.page_actions if a.action == ActionType.MOVE_RENAME and a.old_entry),
+        key=lambda a: a.old_entry.rel_path.count("/") if a.old_entry else 0,
+    )
+    for page_act in move_actions:
         if page_act.action == ActionType.MOVE_RENAME and page_act.old_entry:
             old_rel = page_act.old_entry.rel_path
             new_rel, new_body_file = computed_paths.get(page_act.page_id, (old_rel, page_act.old_entry.body_file))
@@ -306,6 +271,10 @@ def execute_sync(
                 new_abs = os.path.join(output_dir, new_rel)
 
                 if os.path.exists(old_abs):
+                    if os.path.exists(new_abs):
+                        raise FileExistsError(
+                            f"現象: 移動先 ({new_rel}) が既に存在します。 原因: ローカルパスの競合。 対処方法: 既存の移動先を確認し、別の場所へ退避してから再実行してください。"
+                        )
                     os.makedirs(os.path.dirname(new_abs), exist_ok=True)
                     try:
                         shutil.move(old_abs, new_abs)
@@ -314,6 +283,12 @@ def execute_sync(
                         logger.error(
                             f"現象: ローカルパスの移動 ({old_rel} -> {new_rel}) に失敗しました。 原因: {e} 対処方法: ファイルのアクセス権限を確認してください。"
                         )
+                        raise
+
+                    for entry in manifest.pages.values():
+                        if entry.rel_path == old_rel or entry.rel_path.startswith(old_rel + "/"):
+                            entry.rel_path = new_rel + entry.rel_path[len(old_rel) :]
+                    save_manifest(manifest, output_dir, manifest_name)
 
             # 古いファイル名と新しいファイル名が異なる場合の調整
             if page_act.old_entry.body_file != new_body_file:
@@ -330,6 +305,8 @@ def execute_sync(
             page_act.old_entry.body_file = new_body_file
             page_act.old_entry.title = page_act.current_title
             page_act.old_entry.parent_id = page_act.current_parent_id
+            page_act.old_entry.state = "pending"
+            save_manifest(manifest, output_dir, manifest_name)
 
     # 3. 追加・変更・未変更（レジューム整合含む）の処理
     for page_act in plan.page_actions:
@@ -355,11 +332,21 @@ def execute_sync(
                 exclude_ext_set=exclude_ext_set,
                 frontmatter_fields=frontmatter_fields,
                 base_url=base_url,
+                attachment_actions=page_act.attachment_actions,
+                deletion_policy=deletion_policy,
+                quarantine_dir_name=quarantine_dir_name,
+                timestamp=timestamp,
             )
         elif page_act.action == ActionType.UNCHANGED and page_act.old_entry:
             # 要件 6.1: マニフェストに完了と記録されているがローカルに実ファイルが存在しない場合は未処理として再取得
-            old_rel = page_act.old_entry.rel_path
-            body_path = os.path.join(output_dir, old_rel, page_act.old_entry.body_file)
+            current_rel, current_body = computed_paths.get(
+                pid, (page_act.old_entry.rel_path, page_act.old_entry.body_file)
+            )
+            if (page_act.old_entry.rel_path, page_act.old_entry.body_file) != (current_rel, current_body):
+                page_act.old_entry.rel_path = current_rel
+                page_act.old_entry.body_file = current_body
+                save_manifest(manifest, output_dir, manifest_name)
+            body_path = os.path.join(output_dir, current_rel, current_body)
 
             if not os.path.exists(body_path) or page_act.old_entry.state != "done":
                 logger.info(f"実ファイル欠落または未完了のため再取得します: {page_act.old_entry.title} ({pid})")
@@ -368,8 +355,8 @@ def execute_sync(
                     converter=converter,
                     output_dir=output_dir,
                     page_id=pid,
-                    rel_path=old_rel,
-                    body_file_name=page_act.old_entry.body_file,
+                    rel_path=current_rel,
+                    body_file_name=current_body,
                     title=page_act.current_title,
                     parent_id=page_act.current_parent_id,
                     manifest=manifest,
@@ -382,6 +369,10 @@ def execute_sync(
                     exclude_ext_set=exclude_ext_set,
                     frontmatter_fields=frontmatter_fields,
                     base_url=base_url,
+                    attachment_actions=page_act.attachment_actions,
+                    deletion_policy=deletion_policy,
+                    quarantine_dir_name=quarantine_dir_name,
+                    timestamp=timestamp,
                 )
             else:
                 # 正常スキップ（再利用）
@@ -413,8 +404,14 @@ def _process_single_page_sync(
     exclude_ext_set: Set[str],
     frontmatter_fields: Optional[List[str]],
     base_url: str,
+    attachment_actions: Optional[List[AttachmentDiffAction]] = None,
+    deletion_policy: str = "quarantine",
+    quarantine_dir_name: str = "_c2m_quarantine",
+    timestamp: str = "",
 ) -> None:
     """単一ページの取得・変換・書き込みおよびマニフェスト原子的更新を行う."""
+    previous_entry = manifest.pages.get(page_id)
+    previous_attachments = dict(previous_entry.attachments) if previous_entry else {}
     manifest.pages[page_id] = PageManifestEntry(
         version=0,
         title=title,
@@ -422,6 +419,7 @@ def _process_single_page_sync(
         rel_path=rel_path,
         body_file=body_file_name,
         state="pending",
+        attachments=previous_attachments,
     )
     save_manifest(manifest, output_dir, manifest_name)
 
@@ -452,11 +450,43 @@ def _process_single_page_sync(
     manifest.pages[page_id].version = version_num
 
     # 2. 添付ファイル処理
+    att_manifest_map = dict(previous_attachments)
+    for att_action in attachment_actions or []:
+        if att_action.action == ActionType.DELETE and att_action.old_saved_name:
+            quarantine_path(
+                rel_path=os.path.join(rel_path, attachment_dir_name, att_action.old_saved_name),
+                output_dir=output_dir,
+                deletion_policy=deletion_policy,
+                quarantine_dir_name=quarantine_dir_name,
+                timestamp=timestamp,
+            )
+            att_manifest_map.pop(att_action.attachment_id, None)
+    old_names = {a.attachment_id: a.old_saved_name for a in attachment_actions or [] if a.action != ActionType.DELETE}
     att_refs: List[AttachmentRef] = []
-    att_manifest_map: Dict[str, AttachmentManifestEntry] = {}
     try:
         raw_atts = client.get_attachments(page_id)
         saved_names: List[str] = []
+        assigned_names: Dict[str, str] = {}
+
+        # 旧名が他の添付の新名になる場合に備え、退避をすべての保存より先に行う。
+        for att in raw_atts:
+            orig_title = str(att.get("title", "unnamed"))
+            ext = os.path.splitext(orig_title)[1].lstrip(".").lower()
+            if ext in exclude_ext_set or int(att.get("extensions", {}).get("fileSize", 0)) > max_bytes:
+                continue
+            key = str(att.get("id", "")) or orig_title
+            unique_att_name = generate_unique_name(sanitize_filename(orig_title) or "unnamed", saved_names)
+            saved_names.append(unique_att_name)
+            assigned_names[key] = unique_att_name
+            old_name = old_names.get(key)
+            if old_name and old_name != unique_att_name:
+                quarantine_path(
+                    rel_path=os.path.join(rel_path, attachment_dir_name, old_name),
+                    output_dir=output_dir,
+                    deletion_policy=deletion_policy,
+                    quarantine_dir_name=quarantine_dir_name,
+                    timestamp=timestamp,
+                )
 
         for att in raw_atts:
             att_id = str(att.get("id", ""))
@@ -479,9 +509,7 @@ def _process_single_page_sync(
                 )
                 continue
 
-            safe_att_name = sanitize_filename(orig_title) or "unnamed"
-            unique_att_name = generate_unique_name(safe_att_name, saved_names)
-            saved_names.append(unique_att_name)
+            unique_att_name = assigned_names[key]
 
             dest_att_path = os.path.join(output_dir, rel_path, attachment_dir_name, unique_att_name)
 

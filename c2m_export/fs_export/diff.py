@@ -141,6 +141,8 @@ def compute_diff(
 
         # 添付の差分計算
         att_actions = _compute_attachment_diff(prev_p.attachments, curr_p.attachments)
+        if inventory.discovery_incomplete:
+            att_actions = [a for a in att_actions if a.action != ActionType.DELETE]
         has_att_changes = any(a.action != ActionType.UNCHANGED for a in att_actions)
 
         # アクション種別の判定
@@ -167,6 +169,9 @@ def compute_diff(
     # 3. 前回のみ存在 -> 削除 (DELETE)
     # ただし、収集時に通信失敗した page_id は削除と誤認せず除外する (要件 4.6)
     removed_ids = prev_page_ids - curr_page_ids
+    if inventory.discovery_incomplete:
+        logger.warning("インベントリの探索が不完全なため、削除判定を保留します。通信状態と権限を確認してください。")
+        removed_ids = set()
     for pid in sorted(removed_ids):
         if pid in failed_ids:
             logger.warning(f"ページ (ID: {pid}) は取得失敗のため削除判定から保留されました。")

@@ -118,3 +118,37 @@ def test_compute_diff_all_actions():
     assert actions_by_id["100"].action == ActionType.UNCHANGED
     assert actions_by_id["400"].action == ActionType.DELETE
     assert "500" not in actions_by_id  # 失敗したページは削除アクションに含まれないこと
+
+
+def test_compute_diff_defers_all_deletions_when_discovery_is_incomplete():
+    """探索できなかった子孫と添付の削除を保留し、確認できた追加・変更は判定する."""
+    manifest = Manifest(
+        base_url="https://confluence.example.com",
+        roots=ManifestRoots(root_page_ids=["100"]),
+        pages={
+            "100": PageManifestEntry(
+                1,
+                "Root",
+                None,
+                "【DEV】 Root",
+                "Root.md",
+                attachments={"old": AttachmentManifestEntry(1, 3, "old.txt")},
+            ),
+            "200": PageManifestEntry(1, "Child", "100", "【DEV】 Root/Child", "Child.md"),
+            "300": PageManifestEntry(1, "Grandchild", "200", "【DEV】 Root/Child/Grandchild", "Grandchild.md"),
+        },
+    )
+    inventory = Inventory(
+        discovery_incomplete=True,
+        pages={
+            "100": PageInventoryEntry("100", 2, "Root", None, "DEV"),
+            "400": PageInventoryEntry("400", 1, "New", "100", "DEV"),
+        },
+    )
+
+    plan = compute_diff(manifest, inventory)
+
+    assert plan.delete_count == 0
+    assert plan.change_count == 1
+    assert plan.add_count == 1
+    assert all(a.action != ActionType.DELETE for page in plan.page_actions for a in page.attachment_actions)

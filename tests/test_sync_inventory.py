@@ -60,6 +60,7 @@ def test_collect_inventory_success():
 
     assert inv.pages["200"].parent_id == "100"
     assert len(inv.failed_page_ids) == 0
+    assert inv.discovery_incomplete is False
 
 
 def test_collect_inventory_failure_handling():
@@ -73,3 +74,19 @@ def test_collect_inventory_failure_handling():
 
     assert len(inv.pages) == 0
     assert "999" in inv.failed_page_ids
+    assert inv.discovery_incomplete is True
+
+
+@pytest.mark.parametrize("failed_method", ["get_space_root_pages", "get_child_pages", "get_page", "get_attachments"])
+def test_collect_inventory_marks_incomplete_discovery(failed_method):
+    """一覧や詳細の取得失敗を探索全体の不完全状態として記録する."""
+    client = MagicMock()
+    client.get_space_root_pages.return_value = [{"id": "100"}]
+    client.get_page.return_value = {"id": "100", "title": "Root"}
+    client.get_child_pages.return_value = []
+    client.get_attachments.return_value = []
+    getattr(client, failed_method).side_effect = RuntimeError("通信エラー")
+
+    inventory = collect_inventory(client, root_page_ids=[], space_keys=["DEV"])
+
+    assert inventory.discovery_incomplete is True

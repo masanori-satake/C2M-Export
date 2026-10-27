@@ -100,3 +100,34 @@ def test_export_tree_fs_single_file_max_mb(tmp_path):
     assert result.total_attachments == 0
     assert len(result.skipped_attachments) == 1
     assert "単一ファイルサイズ上限超過" in result.skipped_attachments[0].reason
+
+
+def test_manifest_records_only_written_pages_and_attachment_states(tmp_path):
+    """ページ出力失敗は完了記録から除外し、添付の失敗・除外状態も保持する."""
+    client = MagicMock()
+    client.get_page.side_effect = [RuntimeError("取得失敗"), {"version": {"number": 2}}]
+    client.get_attachments.return_value = [
+        {"id": "skip", "title": "skip.exe", "version": {"number": 3}},
+        {"id": "fail", "title": "fail.txt", "version": {"number": 4}},
+    ]
+    client.download_attachment.side_effect = RuntimeError("ダウンロード失敗")
+    child = PageNode("child", "Child", 2, "Root/Child", "Child.md")
+    root = PageNode("root", "Root", 1, "Root", "Root.md", children=[child])
+    manifest_pages = {}
+
+    result = export_tree_fs(
+        client,
+        MagicMock(convert=lambda *a, **kw: "本文"),
+        str(tmp_path),
+        [root],
+        exclude_extensions=["exe"],
+        manifest_pages=manifest_pages,
+    )
+
+    assert result.total_pages == 1
+    assert set(manifest_pages) == {"child"}
+    assert manifest_pages["child"].parent_id == "root"
+    assert manifest_pages["child"].attachments["skip"].state == "skipped"
+    assert manifest_pages["child"].attachments["skip"].version == 3
+    assert manifest_pages["child"].attachments["fail"].state == "failed"
+    assert manifest_pages["child"].attachments["fail"].version == 4
