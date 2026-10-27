@@ -1,7 +1,7 @@
 """Confluence REST API を用いたメタデータ収集モジュール."""
 
 import logging
-from typing import List, Set, Union
+from typing import List, Set, Tuple, Union
 
 from c2m_export.assessment.models import (
     AttachmentMeta,
@@ -27,7 +27,7 @@ class Collector:
         visited_page_ids: Set[str] = set()
 
         # (page_id, level, ancestors_titles) のスタック
-        stack: List[tuple[str, int, list[str]]] = [(rid, 1, []) for rid in reversed(root_ids)]
+        stack: List[Tuple[str, int, List[str]]] = [(rid, 1, []) for rid in reversed(root_ids)]
 
         processed_count = 0
 

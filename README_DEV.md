@@ -54,10 +54,19 @@ graph TD
 
 ```
 c2m_export/
-├── confluence.py      # [拡張] get_attachments, get_restrictions, get_space_root_pages 等を追加
-├── config.py          # [拡張] AssessConfig を追加
-├── assess.py          # [新規] 分析モードのエントリーポイント（python -m c2m_export.assess）
-└── assessment/        # [新規] 分析ロジック一式
+├── confluence.py      # [拡張] get_attachments, download_attachment, get_restrictions, get_space_root_pages 等を追加
+├── config.py          # [拡張] AssessConfig, FsExportConfig を追加
+├── assess.py          # 分析モードのエントリーポイント（python -m c2m_export.assess）
+├── fsexport.py        # [新規] ファイルシステムモードのエントリーポイント（python -m c2m_export.fsexport）
+├── fs_export/         # [新規] ファイルシステム出力ロジック一式
+│   ├── __init__.py
+│   ├── models.py      # PageNode / AttachmentRef / SkipRecord / ExportResult 等
+│   ├── tree.py        # DFS 巡回とローカルパス割当（命名・衝突回避・パス長警告）
+│   ├── writer.py      # 本文 + Frontmatter 書き込み、添付 DL 保存、単一ファイル上限判定
+│   ├── frontmatter.py # YAML フロントマターの生成（純粋関数）
+│   ├── links.py       # 本文中の添付参照リンク書き換え（純粋関数）
+│   └── summary.py     # 実行結果サマリ生成（ログ + 日時サフィックス付きファイル出力）
+└── assessment/        # 分析ロジック一式
     ├── __init__.py
     ├── models.py      # PageMeta / AttachmentMeta / RestrictionMeta / RawInventory / AssessmentResult 等
     ├── collector.py   # DFS巡回でページ/添付/権限/更新情報のメタデータを収集する I/O 層
@@ -65,6 +74,15 @@ c2m_export/
     ├── analyzers.py   # RawInventory を入力とする純粋関数群（API非依存＝テスト容易）
     └── report.py      # AssessmentResult から Markdown / JSON を生成
 ```
+
+### ファイルシステムエクスポートのリンクと探索失敗
+
+`fs_export/links.py` は山括弧付きの添付参照を認識し、書き換え先に空白や丸括弧が含まれる場合はリンク先を山括弧で囲みます。
+`#` で始まる参照は添付マップとの照合を優先し、一致しない場合のみアンカーとして保持します。一致した添付は通常どおり書き換え、`relative` モードで未保存の場合は未解決件数に含めます。
+`build_page_tree` は任意の `skipped_pages` リストにルートページ・子ページ・Space のルート一覧の取得失敗を追記します（既存の戻り値は維持）。
+`fsexport.py` は探索失敗を `ExportResult.skipped_pages` に合流してからサマリを出力します。全起点の取得失敗時も、失敗サマリを出力して終了コード 1 で終了します。
+
+サマリ出力は、出力先ディレクトリの作成とファイル書き込みを同じ例外処理で保護し、失敗時もサマリのログ出力と戻り値を維持します。
 
 ### 本文サイズ概算の偏りについての設計背景
 
@@ -287,6 +305,7 @@ PYTHONPATH=. pytest
 ```
 
 静的型検査は mypy で行います（対象や設定は `pyproject.toml` の `[tool.mypy]` を参照）。
+Python 3.8 を対象とし、対応する mypy 1.10 以上 1.15 未満を使用します。型注釈は `typing.List` / `typing.Dict` / `typing.Tuple` などの Python 3.8 互換形式を使用します。
 
 ```bash
 mypy

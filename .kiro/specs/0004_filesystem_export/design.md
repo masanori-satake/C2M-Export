@@ -214,7 +214,7 @@ exported_at: "2026-10-27T11:00:00+09:00"
 `summary.py` が `ExportResult` から生成する。
 
 - 内容: 出力ページ数・出力添付数・総出力サイズ（MB/GB）・各スキップ件数に加え、**成功一覧と失敗/スキップ個別一覧**（対象識別子＝page_id/ファイル名・パス・理由）を含む（要件6.4）。
-- 出力: 標準出力（ログ）＋ **実行日時サフィックス付きファイル**（年月日・時分秒、ミリ秒なし。例: `fsexport_summary_261027_110500.txt` 等）。形式はテキスト（人間可読）を既定とし、機械可読化は将来拡張。
+- 出力: 標準出力（ログ）＋ **実行日時サフィックス付きファイル**（年月日・時分秒、ミリ秒なし。形式: `YYYYMMDD_HHMMSS`、例: `fsexport_summary_20261027_110500.txt` 等）。形式はテキスト（人間可読）を既定とし、機械可読化は将来拡張。
 - 出力先は `output_dir` 配下。
 
 ### 10. 設定（FsExportConfig / config.py）
@@ -245,14 +245,16 @@ exported_at: "2026-10-27T11:00:00+09:00"
 
 ```python
 def main():
-    logging.basicConfig(...)                 # 既存同様の日本語フォーマット
-    config = FsExportConfig(); config.load(); config.validate()
+    logging.basicConfig(...)  # 既存同様の日本語フォーマット
+    config = FsExportConfig()
+    config.load()
+    config.validate()
     client = ConfluenceClient(config.base_url, config.token, config.proxy)
     converter = MarkdownConverter(config.base_url)
-    roots = resolve_roots(client, config)    # root_page_ids / space_keys
-    fail_fast_check(config, roots)           # 書き込み可否・既存競合（既存方針踏襲）
+    roots = resolve_roots(client, config)  # root_page_ids / space_keys
+    fail_fast_check(config, roots)  # 書き込み可否・既存競合（既存方針踏襲）
     result = export_tree_fs(client, converter, config, roots)  # tree + writer
-    write_summary(result, config)            # ログ + 日時サフィックスファイル
+    write_summary(result, config)  # ログ + 日時サフィックスファイル
 ```
 
 ## エラーハンドリング
