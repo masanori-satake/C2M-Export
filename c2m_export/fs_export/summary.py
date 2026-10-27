@@ -66,7 +66,9 @@ def generate_summary_text(result: ExportResult, timestamp_str: str) -> str:
     return "\n".join(lines)
 
 
-def write_summary(result: ExportResult, output_dir: str, execution_dt: datetime = None) -> Tuple[str, str]:
+def write_summary(
+    result: ExportResult, output_dir: str, execution_dt: datetime = None
+) -> Tuple[str, str]:
     """サマリテキストを標準出力ログに出力し、実行日時サフィックス付きファイルとして書き出す.
 
     Args:

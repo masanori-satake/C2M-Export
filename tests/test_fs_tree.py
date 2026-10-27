@@ -52,6 +52,8 @@ def test_build_page_tree_index_mode():
     }
     client.get_child_pages.return_value = []
 
-    root_nodes, _, _ = build_page_tree(client, root_page_ids=["200"], space_keys=[], page_filename_mode="index")
+    root_nodes, _, _ = build_page_tree(
+        client, root_page_ids=["200"], space_keys=[], page_filename_mode="index"
+    )
 
     assert root_nodes[0].body_file_name == "index.md"

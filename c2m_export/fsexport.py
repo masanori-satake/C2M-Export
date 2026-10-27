@@ -30,14 +30,10 @@ def main():
         config.load()
         config.validate()
     except ValueError as ve:
-        logger.error(
-            f"現象: 設定の検証に失敗しました。 原因: {ve} 対処方法: --help または設定ファイルを確認してください。"
-        )
+        logger.error(f"現象: 設定の検証に失敗しました。 原因: {ve} 対処方法: --help または設定ファイルを確認してください。")
         sys.exit(1)
     except Exception as e:
-        logger.error(
-            f"現象: 設定の読み込みに失敗しました。 原因: {e} 対処方法: 設定ファイル等の記述を確認してください。"
-        )
+        logger.error(f"現象: 設定の読み込みに失敗しました。 原因: {e} 対処方法: 設定ファイル等の記述を確認してください。")
         sys.exit(1)
 
     # フェイルファスト: 出力先書き込み・競合チェック

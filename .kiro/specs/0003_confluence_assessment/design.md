@@ -133,34 +133,31 @@ def get_space_root_pages(self, space_key, limit=25):
 class AttachmentMeta:
     page_id: str
     filename: str
-    extension: str  # 小文字化・ドットなし。無い場合は空文字
-    media_type: str  # MIME。取得不能なら空文字
+    extension: str          # 小文字化・ドットなし。無い場合は空文字
+    media_type: str         # MIME。取得不能なら空文字
     file_size: Optional[int]  # バイト。メタ欠落時は None
     version: Optional[int]
 
-
 @dataclass
 class RestrictionMeta:
-    has_explicit: bool  # 個別制限の有無（False=継承/制限なし）
+    has_explicit: bool              # 個別制限の有無（False=継承/制限なし）
     read_users: list[str]
     read_groups: list[str]
     update_users: list[str]
     update_groups: list[str]
     fetch_failed: bool = False
 
-
 @dataclass
 class PageMeta:
     page_id: str
     title: str
     space_key: str
-    level: int  # ルート=1
-    body_bytes: int  # Storage Format 生サイズ（概算の素）
-    last_modified: Optional[str]  # ISO8601 文字列
-    ancestors_titles: list[str]  # パス算出用（ルート→自身の手前）
+    level: int                      # ルート=1
+    body_bytes: int                 # Storage Format 生サイズ（概算の素）
+    last_modified: Optional[str]    # ISO8601 文字列
+    ancestors_titles: list[str]     # パス算出用（ルート→自身の手前）
     attachments: list[AttachmentMeta]
     restriction: Optional[RestrictionMeta]
-
 
 @dataclass
 class RawInventory:
@@ -168,13 +165,12 @@ class RawInventory:
     skipped_page_ids: list[str]
     skipped_attachment_refs: list[str]
     restriction_failed_page_ids: list[str]
-    size_meta_missing_count: int  # fileSize 欠落の添付件数
-
+    size_meta_missing_count: int    # fileSize 欠落の添付件数
 
 @dataclass
 class AssessmentResult:
     # analyzers が算出する最終集計。report はこれだけを参照する。
-    ...  # 規模サマリ / 拡張子別 / リスク一覧 / 権限サマリ / 鮮度サマリ を保持
+    ... # 規模サマリ / 拡張子別 / リスク一覧 / 権限サマリ / 鮮度サマリ を保持
 ```
 
 ### 3. サイズ概算の方針（要件3.7 / 6）
@@ -254,16 +250,14 @@ class AssessmentResult:
 
 ```python
 def main():
-    logging.basicConfig(...)  # 既存同様の日本語フォーマット
-    config = AssessConfig()
-    config.load()
-    config.validate()
+    logging.basicConfig(...)                      # 既存同様の日本語フォーマット
+    config = AssessConfig(); config.load(); config.validate()
     client = ConfluenceClient(config.base_url, config.token, config.proxy)
-    roots = resolve_roots(client, config)  # root_page_ids / space_keys を解決
+    roots = resolve_roots(client, config)         # root_page_ids / space_keys を解決
     inventory = Collector(client, config).collect(roots)
-    result = analyze(inventory, config)  # analyzers + rules
-    write_reports(result, config)  # report.py（md/json）
-    log_summary(result)  # 総数・リスク件数・スキップ件数
+    result = analyze(inventory, config)           # analyzers + rules
+    write_reports(result, config)                 # report.py（md/json）
+    log_summary(result)                           # 総数・リスク件数・スキップ件数
 ```
 
 ## エラーハンドリング

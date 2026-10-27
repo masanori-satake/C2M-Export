@@ -81,21 +81,19 @@ class PagePermission:
     page_id: str
     title: str
     space_key: str
-    url: str  # Confluence オリジナル URL
-    rel_path: Optional[str]  # 0004 併用時のローカル相対パス（単独時は None）
-    has_explicit: bool  # 個別制限あり=True / 継承・制限なし=False
-    read_users: list[str]  # "displayName (username)" 等の表示用文字列
+    url: str                      # Confluence オリジナル URL
+    rel_path: Optional[str]       # 0004 併用時のローカル相対パス（単独時は None）
+    has_explicit: bool            # 個別制限あり=True / 継承・制限なし=False
+    read_users: list[str]         # "displayName (username)" 等の表示用文字列
     read_groups: list[str]
-    readwrite_users: list[str]  # update 操作キー = Read+Write
+    readwrite_users: list[str]    # update 操作キー = Read+Write
     readwrite_groups: list[str]
     fetch_failed: bool = False
     fail_reason: str = ""
 
-
 @dataclass
 class PermissionReport:
     pages: list[PagePermission]
-
 
 @dataclass
 class PermissionResult:
@@ -160,14 +158,12 @@ class PermissionResult:
 
 ```python
 def main():
-    config = PermissionExportConfig()
-    config.load()
-    config.validate()
+    config = PermissionExportConfig(); config.load(); config.validate()
     client = ConfluenceClient(config.base_url, config.token, config.proxy)
     roots = resolve_roots(client, config)
-    report = collect_permissions(client, config, roots)  # collector
-    write_permission_report(report, config)  # report（集約/分散 + 任意JSON）
-    write_summary(report, config)  # ログ + 日時サフィックスファイル
+    report = collect_permissions(client, config, roots)   # collector
+    write_permission_report(report, config)               # report（集約/分散 + 任意JSON）
+    write_summary(report, config)                         # ログ + 日時サフィックスファイル
 ```
 
 ## エラーハンドリング

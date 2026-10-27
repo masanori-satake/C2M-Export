@@ -245,16 +245,14 @@ exported_at: "2026-10-27T11:00:00+09:00"
 
 ```python
 def main():
-    logging.basicConfig(...)  # 既存同様の日本語フォーマット
-    config = FsExportConfig()
-    config.load()
-    config.validate()
+    logging.basicConfig(...)                 # 既存同様の日本語フォーマット
+    config = FsExportConfig(); config.load(); config.validate()
     client = ConfluenceClient(config.base_url, config.token, config.proxy)
     converter = MarkdownConverter(config.base_url)
-    roots = resolve_roots(client, config)  # root_page_ids / space_keys
-    fail_fast_check(config, roots)  # 書き込み可否・既存競合（既存方針踏襲）
+    roots = resolve_roots(client, config)    # root_page_ids / space_keys
+    fail_fast_check(config, roots)           # 書き込み可否・既存競合（既存方針踏襲）
     result = export_tree_fs(client, converter, config, roots)  # tree + writer
-    write_summary(result, config)  # ログ + 日時サフィックスファイル
+    write_summary(result, config)            # ログ + 日時サフィックスファイル
 ```
 
 ## エラーハンドリング
