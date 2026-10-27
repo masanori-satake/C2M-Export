@@ -1,0 +1,564 @@
+"""現在インベントリの軽量収集および同期・レジューム処理を行うモジュール.
+
+Confluence REST API からメタデータ（軽量インベントリ）を高速収集し、
+差分計画 (DiffPlan) に従って実出力の更新、移動・改名、削除退避、およびレジューム実行を行う。
+"""
+
+import logging
+import os
+import shutil
+from dataclasses import dataclass, field
+from datetime import datetime
+from typing import Dict, List, Optional, Set, Tuple
+
+from c2m_export.confluence import ConfluenceClient
+from c2m_export.converter import MarkdownConverter
+from c2m_export.fs_export.diff import ActionType, DiffPlan
+from c2m_export.fs_export.frontmatter import generate_frontmatter
+from c2m_export.fs_export.links import rewrite_attachment_links
+from c2m_export.fs_export.manifest import (
+    AttachmentManifestEntry,
+    Manifest,
+    PageManifestEntry,
+    save_manifest,
+)
+from c2m_export.fs_export.models import AttachmentRef, ExportResult, SkipRecord
+from c2m_export.fs_export.quarantine import quarantine_path
+from c2m_export.utils import generate_unique_name, mb_to_bytes, sanitize_filename
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class AttachmentInventoryEntry:
+    """軽量収集における添付ファイルのメタデータモデル."""
+
+    attachment_id: str
+    filename: str
+    version: int
+    size: int
+
+
+@dataclass
+class PageInventoryEntry:
+    """軽量収集におけるページのメタデータモデル."""
+
+    page_id: str
+    version: int
+    title: str
+    parent_id: Optional[str]
+    space_key: str
+    attachments: Dict[str, AttachmentInventoryEntry] = field(default_factory=dict)
+
+
+@dataclass
+class Inventory:
+    """収集された Confluence 側の現在状態（インベントリ）."""
+
+    pages: Dict[str, PageInventoryEntry] = field(default_factory=dict)
+    failed_page_ids: Set[str] = field(default_factory=set)
+
+
+def collect_inventory(
+    client: ConfluenceClient,
+    root_page_ids: List[str],
+    space_keys: List[str],
+) -> Inventory:
+    """Confluence サーバから本文・バイナリを取得せず、メタデータのみのインベントリを収集する.
+
+    Args:
+        client: ConfluenceClient インスタンス
+        root_page_ids: 探索起点とする root_page_id のリスト
+        space_keys: 探索起点とする space_key のリスト
+
+    Returns:
+        収集結果を保持する Inventory オブジェクト
+    """
+    inventory = Inventory()
+    visited_ids: Set[str] = set()
+
+    # 起点ページ ID の収集
+    start_page_ids: List[str] = list(root_page_ids) if root_page_ids else []
+
+    if space_keys:
+        for space_key in space_keys:
+            try:
+                roots = client.get_space_root_pages(space_key)
+                for r in roots:
+                    r_id = str(r.get("id"))
+                    if r_id and r_id not in start_page_ids:
+                        start_page_ids.append(r_id)
+            except Exception as e:
+                logger.error(
+                    f"現象: Space ({space_key}) のルートページ一覧取得に失敗しました。 原因: {e} 対処方法: Space キーおよびアクセス権限を確認してください。"
+                )
+
+    # DFS でページツリーの軽量メタデータを収集
+    # スタック要素: (page_id, parent_id)
+    stack: List[Tuple[str, Optional[str]]] = [(pid, None) for pid in reversed(start_page_ids)]
+
+    while stack:
+        current_id, parent_id = stack.pop()
+        if current_id in visited_ids:
+            continue
+        visited_ids.add(current_id)
+
+        try:
+            # 最小限の expand でページ情報を取得 (version, ancestors, space)
+            page_data = client.get_page(current_id, expand="version,ancestors,space")
+            version_num = int(page_data.get("version", {}).get("number", 1))
+            title = str(page_data.get("title", ""))
+            space_key = str(page_data.get("space", {}).get("key", ""))
+
+            ancestors = page_data.get("ancestors", [])
+            actual_parent_id = parent_id
+            if ancestors and isinstance(ancestors, list) and len(ancestors) > 0:
+                actual_parent_id = str(ancestors[-1].get("id"))
+
+            # 添付メタデータの取得
+            attachments_map: Dict[str, AttachmentInventoryEntry] = {}
+            try:
+                atts_data = client.get_attachments(current_id)
+                for att in atts_data:
+                    att_id = str(att.get("id", ""))
+                    filename = str(att.get("title", ""))
+                    att_version = int(att.get("version", {}).get("number", 1))
+                    extensions = att.get("extensions", {})
+                    size = int(extensions.get("fileSize", 0))
+
+                    key = att_id if att_id else filename
+                    attachments_map[key] = AttachmentInventoryEntry(
+                        attachment_id=att_id,
+                        filename=filename,
+                        version=att_version,
+                        size=size,
+                    )
+            except Exception as ae:
+                logger.warning(f"ページ (ID: {current_id}) の添付ファイル一覧取得に失敗しました: {ae}")
+
+            inventory.pages[current_id] = PageInventoryEntry(
+                page_id=current_id,
+                version=version_num,
+                title=title,
+                parent_id=actual_parent_id,
+                space_key=space_key,
+                attachments=attachments_map,
+            )
+
+            # 子ページの取得
+            try:
+                children = client.get_child_pages(current_id)
+                for child in reversed(children):
+                    child_id = str(child.get("id"))
+                    if child_id and child_id not in visited_ids:
+                        stack.append((child_id, current_id))
+            except Exception as ce:
+                logger.warning(f"ページ (ID: {current_id}) の子ページ一覧取得に失敗しました: {ce}")
+
+        except Exception as e:
+            logger.error(
+                f"現象: ページ (ID: {current_id}) のメタデータ取得に失敗しました。 原因: {e} 対処方法: ネットワーク状況およびアクセス権限を確認してください。"
+            )
+            inventory.failed_page_ids.add(current_id)
+
+    return inventory
+
+
+def compute_paths_for_inventory(inventory: Inventory, page_filename_mode: str = "title") -> Dict[str, Tuple[str, str]]:
+    """インベントリの全ページに対してローカルの (rel_path, body_file_name) を計算する.
+
+    Returns:
+        Dict[page_id, Tuple[relative_dir_path, body_file_name]]
+    """
+    paths_map: Dict[str, Tuple[str, str]] = {}
+    pages = inventory.pages
+
+    # 親子関係の構築
+    children_map: Dict[Optional[str], List[str]] = {}
+    for pid, p_entry in pages.items():
+        parent_id = p_entry.parent_id
+        if parent_id not in pages:
+            parent_id = None
+        children_map.setdefault(parent_id, []).append(pid)
+
+    # DFS でパスを決定
+    stack: List[Tuple[str, str, int]] = []
+    # ルートノードの追加
+    root_ids = children_map.get(None, [])
+    for rid in root_ids:
+        stack.append((rid, "", 1))
+
+    visited: Set[str] = set()
+
+    while stack:
+        pid, parent_rel_dir, level = stack.pop()
+        if pid in visited or pid not in pages:
+            continue
+        visited.add(pid)
+
+        p_entry = pages[pid]
+        title = p_entry.title or "untitled"
+        space_key = p_entry.space_key or "UNKNOWN"
+
+        if level == 1:
+            base_dir_name = f"【{space_key}】 {sanitize_filename(title)}"
+        else:
+            base_dir_name = sanitize_filename(title)
+
+        if not base_dir_name:
+            base_dir_name = "untitled"
+
+        if parent_rel_dir:
+            dir_path = f"{parent_rel_dir}/{base_dir_name}"
+        else:
+            dir_path = base_dir_name
+
+        if page_filename_mode == "index":
+            body_file_name = "index.md"
+        else:
+            body_file_name = f"{base_dir_name if level > 1 else sanitize_filename(title) or 'untitled'}.md"
+
+        paths_map[pid] = (dir_path, body_file_name)
+
+        # 子ノードの探索
+        child_ids = children_map.get(pid, [])
+        existing_child_names: List[str] = []
+        for cid in child_ids:
+            if cid in visited or cid not in pages:
+                continue
+            c_entry = pages[cid]
+            c_title = c_entry.title or "untitled"
+            c_base = sanitize_filename(c_title) or "untitled"
+            unique_c_name = generate_unique_name(c_base, existing_child_names)
+            existing_child_names.append(unique_c_name)
+
+            c_dir_path = f"{dir_path}/{unique_c_name}"
+            if page_filename_mode == "index":
+                c_body_file = "index.md"
+            else:
+                c_body_file = f"{unique_c_name}.md"
+
+            paths_map[cid] = (c_dir_path, c_body_file)
+            visited.add(cid)
+
+            # 孫ノードをスタックに追加
+            grand_child_ids = children_map.get(cid, [])
+            for gcid in reversed(grand_child_ids):
+                stack.append((gcid, c_dir_path, level + 2))
+
+    return paths_map
+
+
+def execute_sync(
+    client: ConfluenceClient,
+    converter: MarkdownConverter,
+    output_dir: str,
+    manifest: Manifest,
+    inventory: Inventory,
+    plan: DiffPlan,
+    attachment_dir_name: str = "_attachments",
+    attachment_link_mode: str = "relative",
+    single_file_max_mb: float = 250.0,
+    exclude_extensions: Optional[List[str]] = None,
+    frontmatter_fields: Optional[List[str]] = None,
+    base_url: str = "",
+    deletion_policy: str = "quarantine",
+    quarantine_dir_name: str = "_c2m_quarantine",
+    manifest_name: str = ".c2m_manifest.json",
+    page_filename_mode: str = "title",
+) -> ExportResult:
+    """算出された DiffPlan を適用し、実出力とマニフェストを更新する.
+
+    Returns:
+        ExportResult サマリ情報
+    """
+    result = ExportResult()
+    max_bytes = mb_to_bytes(single_file_max_mb)
+    exclude_ext_set: Set[str] = set()
+    if exclude_extensions:
+        exclude_ext_set = {ext.strip().lstrip(".").lower() for ext in exclude_extensions if ext.strip()}
+
+    computed_paths = compute_paths_for_inventory(inventory, page_filename_mode=page_filename_mode)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+    # 1. 削除アクション (DELETE) の処理
+    for page_act in plan.page_actions:
+        if page_act.action == ActionType.DELETE and page_act.old_entry:
+            old_rel = page_act.old_entry.rel_path
+            quarantine_path(
+                rel_path=old_rel,
+                output_dir=output_dir,
+                deletion_policy=deletion_policy,
+                quarantine_dir_name=quarantine_dir_name,
+                timestamp=timestamp,
+            )
+            manifest.pages.pop(page_act.page_id, None)
+            save_manifest(manifest, output_dir, manifest_name)
+
+    # 2. 移動・改名アクション (MOVE_RENAME) の処理
+    for page_act in plan.page_actions:
+        if page_act.action == ActionType.MOVE_RENAME and page_act.old_entry:
+            old_rel = page_act.old_entry.rel_path
+            new_rel, new_body_file = computed_paths.get(page_act.page_id, (old_rel, page_act.old_entry.body_file))
+
+            if old_rel != new_rel:
+                old_abs = os.path.join(output_dir, old_rel)
+                new_abs = os.path.join(output_dir, new_rel)
+
+                if os.path.exists(old_abs):
+                    os.makedirs(os.path.dirname(new_abs), exist_ok=True)
+                    try:
+                        shutil.move(old_abs, new_abs)
+                        logger.info(f"[移動/改名] ローカル配置を変更しました: {old_rel} -> {new_rel}")
+                    except Exception as e:
+                        logger.error(
+                            f"現象: ローカルパスの移動 ({old_rel} -> {new_rel}) に失敗しました。 原因: {e} 対処方法: ファイルのアクセス権限を確認してください。"
+                        )
+
+            # 古いファイル名と新しいファイル名が異なる場合の調整
+            if page_act.old_entry.body_file != new_body_file:
+                old_body_abs = os.path.join(output_dir, new_rel, page_act.old_entry.body_file)
+                new_body_abs = os.path.join(output_dir, new_rel, new_body_file)
+                if os.path.exists(old_body_abs) and old_body_abs != new_body_abs:
+                    try:
+                        os.replace(old_body_abs, new_body_abs)
+                    except OSError:
+                        pass
+
+            # マニフェスト情報を仮更新
+            page_act.old_entry.rel_path = new_rel
+            page_act.old_entry.body_file = new_body_file
+            page_act.old_entry.title = page_act.current_title
+            page_act.old_entry.parent_id = page_act.current_parent_id
+
+    # 3. 追加・変更・未変更（レジューム整合含む）の処理
+    for page_act in plan.page_actions:
+        pid = page_act.page_id
+        if page_act.action in (ActionType.ADD, ActionType.CHANGE, ActionType.MOVE_RENAME):
+            new_rel, new_body_file = computed_paths.get(pid, ("", f"{pid}.md"))
+            _process_single_page_sync(
+                client=client,
+                converter=converter,
+                output_dir=output_dir,
+                page_id=pid,
+                rel_path=new_rel,
+                body_file_name=new_body_file,
+                title=page_act.current_title,
+                parent_id=page_act.current_parent_id,
+                manifest=manifest,
+                manifest_name=manifest_name,
+                result=result,
+                attachment_dir_name=attachment_dir_name,
+                attachment_link_mode=attachment_link_mode,
+                max_bytes=max_bytes,
+                single_file_max_mb=single_file_max_mb,
+                exclude_ext_set=exclude_ext_set,
+                frontmatter_fields=frontmatter_fields,
+                base_url=base_url,
+            )
+        elif page_act.action == ActionType.UNCHANGED and page_act.old_entry:
+            # 要件 6.1: マニフェストに完了と記録されているがローカルに実ファイルが存在しない場合は未処理として再取得
+            old_rel = page_act.old_entry.rel_path
+            body_path = os.path.join(output_dir, old_rel, page_act.old_entry.body_file)
+
+            if not os.path.exists(body_path) or page_act.old_entry.state != "done":
+                logger.info(f"実ファイル欠落または未完了のため再取得します: {page_act.old_entry.title} ({pid})")
+                _process_single_page_sync(
+                    client=client,
+                    converter=converter,
+                    output_dir=output_dir,
+                    page_id=pid,
+                    rel_path=old_rel,
+                    body_file_name=page_act.old_entry.body_file,
+                    title=page_act.current_title,
+                    parent_id=page_act.current_parent_id,
+                    manifest=manifest,
+                    manifest_name=manifest_name,
+                    result=result,
+                    attachment_dir_name=attachment_dir_name,
+                    attachment_link_mode=attachment_link_mode,
+                    max_bytes=max_bytes,
+                    single_file_max_mb=single_file_max_mb,
+                    exclude_ext_set=exclude_ext_set,
+                    frontmatter_fields=frontmatter_fields,
+                    base_url=base_url,
+                )
+            else:
+                # 正常スキップ（再利用）
+                result.total_pages += 1
+
+    manifest.completed = True
+    manifest.finished_at = datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ")
+    save_manifest(manifest, output_dir, manifest_name)
+
+    return result
+
+
+def _process_single_page_sync(
+    client: ConfluenceClient,
+    converter: MarkdownConverter,
+    output_dir: str,
+    page_id: str,
+    rel_path: str,
+    body_file_name: str,
+    title: str,
+    parent_id: Optional[str],
+    manifest: Manifest,
+    manifest_name: str,
+    result: ExportResult,
+    attachment_dir_name: str,
+    attachment_link_mode: str,
+    max_bytes: int,
+    single_file_max_mb: float,
+    exclude_ext_set: Set[str],
+    frontmatter_fields: Optional[List[str]],
+    base_url: str,
+) -> None:
+    """単一ページの取得・変換・書き込みおよびマニフェスト原子的更新を行う."""
+    manifest.pages[page_id] = PageManifestEntry(
+        version=0,
+        title=title,
+        parent_id=parent_id,
+        rel_path=rel_path,
+        body_file=body_file_name,
+        state="pending",
+    )
+    save_manifest(manifest, output_dir, manifest_name)
+
+    # 1. Confluence ページ詳細の取得
+    try:
+        page_detail = client.get_page(
+            page_id,
+            expand="body.storage,space,version,ancestors,history.lastUpdated",
+        )
+    except Exception as e:
+        logger.warning(
+            f"現象: ページ {page_id} ({title}) の詳細取得に失敗しました。 原因: {e} 対処方法: 通信状態と権限を確認してください。"
+        )
+        manifest.pages[page_id].state = "failed"
+        save_manifest(manifest, output_dir, manifest_name)
+        result.skipped_pages.append(
+            SkipRecord(
+                target_id=page_id,
+                target_type="page",
+                title_or_name=title,
+                reason=f"詳細取得エラー ({e})",
+                path=rel_path,
+            )
+        )
+        return
+
+    version_num = int(page_detail.get("version", {}).get("number", 1))
+    manifest.pages[page_id].version = version_num
+
+    # 2. 添付ファイル処理
+    att_refs: List[AttachmentRef] = []
+    att_manifest_map: Dict[str, AttachmentManifestEntry] = {}
+    try:
+        raw_atts = client.get_attachments(page_id)
+        saved_names: List[str] = []
+
+        for att in raw_atts:
+            att_id = str(att.get("id", ""))
+            orig_title = str(att.get("title", "unnamed"))
+            file_size = int(att.get("extensions", {}).get("fileSize", 0))
+            att_ver = int(att.get("version", {}).get("number", 1))
+            dl_path = str(att.get("_links", {}).get("download", ""))
+            key = att_id if att_id else orig_title
+
+            ext = os.path.splitext(orig_title)[1].lstrip(".").lower()
+            if ext in exclude_ext_set:
+                att_manifest_map[key] = AttachmentManifestEntry(
+                    version=att_ver, size=file_size, saved_name=orig_title, state="skipped"
+                )
+                continue
+
+            if file_size > max_bytes:
+                att_manifest_map[key] = AttachmentManifestEntry(
+                    version=att_ver, size=file_size, saved_name=orig_title, state="skipped"
+                )
+                continue
+
+            safe_att_name = sanitize_filename(orig_title) or "unnamed"
+            unique_att_name = generate_unique_name(safe_att_name, saved_names)
+            saved_names.append(unique_att_name)
+
+            dest_att_path = os.path.join(output_dir, rel_path, attachment_dir_name, unique_att_name)
+
+            try:
+                written_b = client.download_attachment(
+                    download_path=dl_path, dest_file=dest_att_path, max_bytes=max_bytes
+                )
+                result.total_attachments += 1
+                result.total_bytes += written_b
+                att_refs.append(
+                    AttachmentRef(
+                        original_filename=orig_title,
+                        saved_filename=unique_att_name,
+                        saved=True,
+                        download_path=dl_path,
+                        size_bytes=written_b,
+                    )
+                )
+                att_manifest_map[key] = AttachmentManifestEntry(
+                    version=att_ver, size=written_b, saved_name=unique_att_name, state="done"
+                )
+            except Exception as de:
+                logger.warning(f"添付ファイル {orig_title} のダウンロードに失敗しました: {de}")
+                att_manifest_map[key] = AttachmentManifestEntry(
+                    version=att_ver, size=file_size, saved_name=unique_att_name, state="failed"
+                )
+
+    except Exception as ae:
+        logger.warning(f"ページ {page_id} の添付一覧取得に失敗しました: {ae}")
+
+    # 3. 本文書き込み
+    try:
+        storage_html = page_detail.get("body", {}).get("storage", {}).get("value", "")
+        raw_markdown = converter.convert(storage_html, level=1)
+
+        final_markdown, unresolved_cnt = rewrite_attachment_links(
+            content=raw_markdown,
+            attachments=att_refs,
+            attachment_dir_name=attachment_dir_name,
+            link_mode=attachment_link_mode,
+            base_url=base_url,
+        )
+        result.unresolved_links_count += unresolved_cnt
+
+        last_modified = page_detail.get("history", {}).get("lastUpdated", {}).get("when")
+        space_key = page_detail.get("space", {}).get("key", "")
+
+        frontmatter_str = generate_frontmatter(
+            page_id=page_id,
+            space_key=space_key,
+            base_url=base_url,
+            title=title,
+            version=version_num,
+            last_modified=last_modified,
+            fields=frontmatter_fields,
+        )
+
+        full_content = frontmatter_str + final_markdown
+
+        page_dir = os.path.join(output_dir, rel_path)
+        os.makedirs(page_dir, exist_ok=True)
+        body_filepath = os.path.join(page_dir, body_file_name)
+        tmp_filepath = body_filepath + ".tmp"
+
+        encoded_bytes = full_content.encode("utf-8")
+        with open(tmp_filepath, "wb") as f:
+            f.write(encoded_bytes)
+        os.replace(tmp_filepath, body_filepath)
+
+        result.total_pages += 1
+        result.total_bytes += len(encoded_bytes)
+
+        manifest.pages[page_id].state = "done"
+        manifest.pages[page_id].attachments = att_manifest_map
+        save_manifest(manifest, output_dir, manifest_name)
+
+    except Exception as pe:
+        logger.error(f"ページ {page_id} の書き込みに失敗しました: {pe}")
+        manifest.pages[page_id].state = "failed"
+        save_manifest(manifest, output_dir, manifest_name)

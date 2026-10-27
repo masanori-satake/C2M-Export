@@ -55,11 +55,15 @@ graph TD
 ```
 c2m_export/
 ├── confluence.py      # [拡張] get_attachments, download_attachment, get_restrictions, get_space_root_pages 等を追加
-├── config.py          # [拡張] AssessConfig, FsExportConfig を追加
+├── config.py          # [拡張] AssessConfig, FsExportConfig (sync/resume/full/deletion_policy 等) を追加
 ├── assess.py          # 分析モードのエントリーポイント（python -m c2m_export.assess）
-├── fsexport.py        # [新規] ファイルシステムモードのエントリーポイント（python -m c2m_export.fsexport）
-├── fs_export/         # [新規] ファイルシステム出力ロジック一式
+├── fsexport.py        # ファイルシステムモードのエントリーポイント（python -m c2m_export.fsexport / sync・resume分岐）
+├── fs_export/         # ファイルシステム出力ロジック一式
 │   ├── __init__.py
+│   ├── manifest.py    # [新規 0005] マニフェストモデル・原子的保存/読み込み・破損検出・スコープ検証
+│   ├── diff.py        # [新規 0005] 前回マニフェスト × 現在インベントリの差分判定純粋ロジック (DiffPlan)
+│   ├── sync.py        # [新規 0005] 軽量インベントリ収集・同期実行・レジューム処理・マニフェスト更新
+│   ├── quarantine.py  # [新規 0005] 削除・置換時の退避ディレクトリ操作 (_c2m_quarantine)
 │   ├── models.py      # PageNode / AttachmentRef / SkipRecord / ExportResult 等
 │   ├── tree.py        # DFS 巡回とローカルパス割当（命名・衝突回避・パス長警告）
 │   ├── writer.py      # 本文 + Frontmatter 書き込み、添付 DL 保存、単一ファイル上限判定
@@ -327,3 +331,10 @@ mypy
 - `tests/test_assessment_report.py`: Markdown / JSON レポート生成および上書き挙動のテスト。
 - `tests/test_assess_config.py`: AssessConfig の設定読み込み・優先順位のテスト。
 - `tests/test_assess_main.py`: assess.py メイン処理およびルート解決のテスト。
+- `tests/test_sync_manifest.py`: マニフェストのモデル、原子的保存/読み込み、破損検出、スコープ検証のテスト。
+- `tests/test_sync_inventory.py`: 軽量インベントリ収集と失敗 page_id の記録のテスト。
+- `tests/test_sync_diff.py`: 差分判定純粋ロジック (追加・変更・移動/改名・削除・未変更・削除誤認防止) のテスト。
+- `tests/test_sync_quarantine.py`: 削除同期時の退避 (quarantine / delete / report) のテスト。
+- `tests/test_sync_apply.py`: DiffPlan 適用、移動・改名追従、レジューム再帰のテスト。
+- `tests/test_fsexport_sync_config.py`: FsExportConfig の sync 関連キー解決・バリデーションのテスト。
+- `tests/test_fsexport_sync_main.py`: fsexport main 処理での sync 経路分岐のテスト。

@@ -15,12 +15,17 @@ from c2m_export.utils import bytes_to_gb, bytes_to_mb
 logger = logging.getLogger(__name__)
 
 
-def generate_summary_text(result: ExportResult, timestamp_str: str) -> str:
+def generate_summary_text(
+    result: ExportResult,
+    timestamp_str: str,
+    diff_counts: Optional[dict] = None,
+) -> str:
     """エクスポート実行結果から日本語サマリテキストを生成する.
 
     Args:
         result: エクスポート実行結果オブジェクト
         timestamp_str: 実行日時文字列 (YYYY-MM-DD HH:MM:SS)
+        diff_counts: 差分判定件数ディクショナリ (追加, 変更, 削除, 移動/改名, 未変更, 失敗)
 
     Returns:
         サマリ本文テキスト
@@ -33,15 +38,31 @@ def generate_summary_text(result: ExportResult, timestamp_str: str) -> str:
         " Confluence ファイルシステムエクスポート 実行サマリ",
         "==================================================",
         f"実行日時: {timestamp_str}",
-        f"出力成功ページ数: {result.total_pages}",
-        f"出力成功添付ファイル数: {result.total_attachments}",
-        f"総出力サイズ: {total_mb:.2f} MB ({total_gb:.2f} GB)",
-        f"スキップ・失敗ページ数: {len(result.skipped_pages)}",
-        f"スキップ・失敗添付ファイル数: {len(result.skipped_attachments)}",
-        f"相対リンク未解決件数: {result.unresolved_links_count}",
-        f"名称衝突等のリネームノード数: {len(result.renamed_nodes)}",
-        "",
     ]
+
+    if diff_counts:
+        lines.extend(
+            [
+                f"新規追加ページ数: {diff_counts.get('add', 0)}",
+                f"変更更新ページ数: {diff_counts.get('change', 0)}",
+                f"移動・改名ページ数: {diff_counts.get('move_rename', 0)}",
+                f"削除同期ページ数: {diff_counts.get('delete', 0)}",
+                f"再利用（未変更スキップ）ページ数: {diff_counts.get('unchanged', 0)}",
+            ]
+        )
+
+    lines.extend(
+        [
+            f"出力成功ページ数: {result.total_pages}",
+            f"出力成功添付ファイル数: {result.total_attachments}",
+            f"総出力サイズ: {total_mb:.2f} MB ({total_gb:.2f} GB)",
+            f"スキップ・失敗ページ数: {len(result.skipped_pages)}",
+            f"スキップ・失敗添付ファイル数: {len(result.skipped_attachments)}",
+            f"相対リンク未解決件数: {result.unresolved_links_count}",
+            f"名称衝突等のリネームノード数: {len(result.renamed_nodes)}",
+            "",
+        ]
+    )
 
     if result.renamed_nodes:
         lines.append("【名称衝突・リネーム一覧】")
@@ -66,7 +87,12 @@ def generate_summary_text(result: ExportResult, timestamp_str: str) -> str:
     return "\n".join(lines)
 
 
-def write_summary(result: ExportResult, output_dir: str, execution_dt: Optional[datetime] = None) -> Tuple[str, str]:
+def write_summary(
+    result: ExportResult,
+    output_dir: str,
+    execution_dt: Optional[datetime] = None,
+    diff_counts: Optional[dict] = None,
+) -> Tuple[str, str]:
     """サマリテキストを標準出力ログに出力し、実行日時サフィックス付きファイルとして書き出す.
 
     Args:
@@ -83,7 +109,7 @@ def write_summary(result: ExportResult, output_dir: str, execution_dt: Optional[
     formatted_time = execution_dt.strftime("%Y-%m-%d %H:%M:%S")
     suffix_time = execution_dt.strftime("%Y%m%d_%H%M%S")
 
-    summary_text = generate_summary_text(result, formatted_time)
+    summary_text = generate_summary_text(result, formatted_time, diff_counts=diff_counts)
 
     # ログ出力
     logger.info("\n" + summary_text)
