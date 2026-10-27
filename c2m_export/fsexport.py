@@ -10,6 +10,7 @@ import sys
 from c2m_export.config import FsExportConfig
 from c2m_export.confluence import ConfluenceClient
 from c2m_export.converter import MarkdownConverter
+from c2m_export.fs_export.models import ExportResult
 from c2m_export.fs_export.summary import write_summary
 from c2m_export.fs_export.tree import build_page_tree
 from c2m_export.fs_export.writer import export_tree_fs
@@ -65,15 +66,18 @@ def main():
     converter = MarkdownConverter(config.base_url)
 
     logger.info("Confluence からページツリー構造を取得しています...")
+    tree_result = ExportResult()
     root_nodes, renamed_map, visited_ids = build_page_tree(
         client=client,
         root_page_ids=config.root_page_ids,
         space_keys=config.space_keys,
         page_filename_mode=config.page_filename_mode,
         path_length_limit=config.path_length_limit,
+        skipped_pages=tree_result.skipped_pages,
     )
 
     if not root_nodes:
+        write_summary(tree_result, config.output_dir)
         logger.error(
             "現象: エクスポート対象の起点ページが1つも見つかりませんでした。 原因: 指定された root_page_id または space_key が存在しないか権限がありません。 対処方法: 対象 ID/Space キーおよびアクセストークンを確認してください。"
         )
@@ -95,6 +99,7 @@ def main():
         base_url=config.base_url,
         renamed_nodes_map=renamed_map,
     )
+    result.skipped_pages.extend(tree_result.skipped_pages)
 
     logger.info("サマリの出力と完了処理を実行しています...")
     write_summary(result, config.output_dir)

@@ -40,7 +40,7 @@ def rewrite_attachment_links(
 
     # Markdown 画像・リンク形式 ![alt](path) や [text](path) を対象とする正規表現
     # 例: ![image.png](image.png) や [doc.pdf](doc.pdf)
-    pattern = re.compile(r"(!?\[.*?\])\(([^)]+)\)")
+    pattern = re.compile(r"(!?\[.*?\])\((<[^>]+>|[^)]+)\)")
 
     def replacer(match: re.Match) -> str:
         nonlocal unresolved_count
@@ -70,11 +70,15 @@ def rewrite_attachment_links(
                 if not dl_path.startswith("/"):
                     dl_path = "/" + dl_path
                 new_url = f"{clean_base}{dl_path}"
+                if any(char in new_url for char in " ()"):
+                    new_url = f"<{new_url}>"
                 return f"{prefix}({new_url})"
             return match.group(0)
         else:  # relative モード
             if att.saved:
                 new_rel_path = f"{attachment_dir_name}/{att.saved_filename}"
+                if any(char in new_rel_path for char in " ()"):
+                    new_rel_path = f"<{new_rel_path}>"
                 return f"{prefix}({new_rel_path})"
             else:
                 # ローカル保存に失敗/未保存の場合、元の参照のまま残し未解決としてカウント

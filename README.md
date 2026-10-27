@@ -106,7 +106,8 @@ python -m c2m_export.fsexport
 - `--exclude-ext`: 保存から除外する添付ファイルの拡張子リスト
 - `--overwrite`: 既存の出力先を上書き許可する
 
-エクスポート完了後、`output_dir` 配下にディレクトリ/ファイル構造、Markdown ファイル、添付バイナリ、および実行結果サマリファイル `fsexport_summary_<YYMMDD_HHMMSS>.txt` が出力されます。
+エクスポート完了後、`output_dir` 配下にディレクトリ/ファイル構造、Markdown ファイル、添付バイナリ、および実行結果サマリファイル `fsexport_summary_<YYYYMMDD_HHMMSS>.txt` が出力されます。
+ルートページ・子ページ・Space のルート一覧の取得失敗も、対象と理由をサマリに記録します。全起点の取得に失敗した場合は、失敗サマリを出力して終了コード 1 で終了します。
 
 ---
 

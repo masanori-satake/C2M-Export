@@ -4,10 +4,10 @@ Confluence REST API を用いて DFS でページツリーを探索し、各ノ�
 """
 
 import logging
-from typing import Dict, List, Set, Tuple
+from typing import Dict, List, Optional, Set, Tuple
 
 from c2m_export.confluence import ConfluenceClient
-from c2m_export.fs_export.models import PageNode
+from c2m_export.fs_export.models import PageNode, SkipRecord
 from c2m_export.utils import generate_unique_name, sanitize_filename
 
 logger = logging.getLogger(__name__)
@@ -19,6 +19,7 @@ def build_page_tree(
     space_keys: List[str],
     page_filename_mode: str = "title",
     path_length_limit: int = 400,
+    skipped_pages: Optional[List[SkipRecord]] = None,
 ) -> Tuple[List[PageNode], Dict[str, str], Set[str]]:
     """指定された起点から DFS でページツリーを探索・構築する.
 
@@ -28,6 +29,7 @@ def build_page_tree(
         space_keys: 起点となる Space キーのリスト
         page_filename_mode: 本文ファイル命名方式 ("title" または "index")
         path_length_limit: パス長警告しきい値
+        skipped_pages: 探索中の取得失敗を追記するリスト（指定時は呼び出し元で集計可能）
 
     Returns:
         Tuple[
@@ -39,6 +41,8 @@ def build_page_tree(
     visited_ids: Set[str] = set()
     root_nodes: List[PageNode] = []
     renamed_nodes: Dict[str, str] = {}
+    if skipped_pages is None:
+        skipped_pages = []
 
     # 起点ターゲットのリスト (type, key_or_id)
     targets: List[Tuple[str, str]] = []
@@ -64,10 +68,19 @@ def build_page_tree(
                     renamed_nodes=renamed_nodes,
                     page_filename_mode=page_filename_mode,
                     path_length_limit=path_length_limit,
+                    skipped_pages=skipped_pages,
                 )
                 if node:
                     root_nodes.append(node)
             except Exception as e:
+                skipped_pages.append(
+                    SkipRecord(
+                        target_id=target_val,
+                        target_type="page",
+                        title_or_name=target_val,
+                        reason=f"ルートページ取得失敗 ({e})",
+                    )
+                )
                 logger.warning(
                     f"現象: ルートページ {target_val} の取得に失敗しました。 原因: {e} 対処方法: ページIDまたは権限を確認してください。"
                 )
@@ -86,10 +99,19 @@ def build_page_tree(
                             renamed_nodes=renamed_nodes,
                             page_filename_mode=page_filename_mode,
                             path_length_limit=path_length_limit,
+                            skipped_pages=skipped_pages,
                         )
                         if node:
                             root_nodes.append(node)
             except Exception as e:
+                skipped_pages.append(
+                    SkipRecord(
+                        target_id=target_val,
+                        target_type="space",
+                        title_or_name=f"Space {target_val}",
+                        reason=f"Space ルートページ一覧取得失敗 ({e})",
+                    )
+                )
                 logger.warning(
                     f"現象: Space {target_val} のルートページ一覧取得に失敗しました。 原因: {e} 対処方法: Space キーまたは権限を確認してください。"
                 )
@@ -106,6 +128,7 @@ def _traverse_dfs(
     renamed_nodes: Dict[str, str],
     page_filename_mode: str,
     path_length_limit: int,
+    skipped_pages: List[SkipRecord],
 ) -> PageNode:
 
     page_id = page_data["id"]
@@ -182,10 +205,20 @@ def _traverse_dfs(
                 renamed_nodes=renamed_nodes,
                 page_filename_mode=page_filename_mode,
                 path_length_limit=path_length_limit,
+                skipped_pages=skipped_pages,
             )
             if c_node:
                 node.children.append(c_node)
     except Exception as e:
+        skipped_pages.append(
+            SkipRecord(
+                target_id=page_id,
+                target_type="page",
+                title_or_name=title,
+                reason=f"子ページ取得失敗 ({e})",
+                path=dir_path,
+            )
+        )
         logger.warning(
             f"現象: ページ {page_id} ({title}) の子ページ取得に失敗しました。 原因: {e} 対処方法: ネットワーク状態を確認してください。"
         )
@@ -203,6 +236,7 @@ def _traverse_dfs_child(
     renamed_nodes: Dict[str, str],
     page_filename_mode: str,
     path_length_limit: int,
+    skipped_pages: List[SkipRecord],
 ) -> PageNode:
     page_id = page_data["id"]
     visited_ids.add(page_id)
@@ -256,10 +290,20 @@ def _traverse_dfs_child(
                 renamed_nodes=renamed_nodes,
                 page_filename_mode=page_filename_mode,
                 path_length_limit=path_length_limit,
+                skipped_pages=skipped_pages,
             )
             if c_node:
                 node.children.append(c_node)
     except Exception as e:
+        skipped_pages.append(
+            SkipRecord(
+                target_id=page_id,
+                target_type="page",
+                title_or_name=title,
+                reason=f"子ページ取得失敗 ({e})",
+                path=dir_path,
+            )
+        )
         logger.warning(
             f"現象: ページ {page_id} ({title}) の子ページ取得に失敗しました。 原因: {e} 対処方法: ネットワーク状態を確認してください。"
         )

@@ -56,9 +56,9 @@ class SkipRecord:
     """スキップまたは失敗した処理単位の記録モデル.
 
     Attributes:
-        target_id: 対象識別子 (ページ ID やファイル名)
-        target_type: 対象種別 ("page" または "attachment")
-        title_or_name: ページタイトルまたは添付ファイル名
+        target_id: 対象識別子 (ページ ID・Space キー・ファイル名)
+        target_type: 対象種別 ("page"・"space"・"attachment")
+        title_or_name: ページタイトル・Space 名・添付ファイル名
         reason: スキップ・失敗の理由 (例: "単一ファイルサイズ上限超過", "除外拡張子", "DLエラー")
         size_bytes: 関連するバイトサイズ (判明している場合)
         path: 関連する相対パス
@@ -80,7 +80,7 @@ class ExportResult:
         total_pages: 成功したページ数
         total_attachments: 成功した添付ファイル数
         total_bytes: 出力された総バイトサイズ
-        skipped_pages: 失敗・スキップしたページの記録一覧
+        skipped_pages: 失敗・スキップしたページおよび Space の探索失敗の記録一覧
         skipped_attachments: 失敗・スキップした添付ファイルの記録一覧
         unresolved_links_count: 相対リンク書き換えで解決できなかった参照の件数
         renamed_nodes: 衝突回避等で名称変更されたノード情報 (page_id -> 元タイトル vs 保存名)
