@@ -248,14 +248,14 @@ flowchart TD
 ```python
 Collector(
     client,
-    analyze_restrictions=True,   # 既存
-    collect_macros=False,        # 0007 追加済み
+    analyze_restrictions=True,  # 既存
+    collect_macros=False,  # 0007 追加済み
     # 0008 追加（すべて既定 False = 既存挙動不変）
     # per-page 収集フラグ
     collect_history=False,
     collect_labels=False,
     collect_comments=False,
-    collect_watchers=False,            # コンテンツ単位・スペース単位の両ウォッチャーを有効化
+    collect_watchers=False,  # コンテンツ単位・スペース単位の両ウォッチャーを有効化
     collect_effective_restrictions=False,
     collect_extracted_text=False,
     # per-space 収集フラグ
