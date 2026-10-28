@@ -31,14 +31,19 @@ Confluence Data Center 9.2 のページツリーを REST API で取得し、AI�
   - ブラウザから GUI で操作したい場合は [Web UI での実行](#web-ui-での実行) を参照してください。
 - **大規模移行・構造分析・アクセス権限・フォルダ階層出力を行いたい（応用）**
   - [応用機能（アセスメント・ファイルシステム・権限・差分同期）](#応用機能アセスメントファイルシステム権限差分同期) を参照してください。推奨する作業手順は [推奨ワークフロー](#推奨ワークフロー) を確認できます。
+- **AI エージェント（Copilot / Kiro / Agent Skills / MCP）から分析を行いたい**
+  - [分析 CLI と Agent Skill / MCP サーバ](#分析-cli-と-agent-skill--mcp-サーバ) を参照してください。
 
 ## 主な機能（モード）
 
 1. **統合エクスポート（結合モード / `cli`）**:
    - ページツリーを再帰的に取得し、全ページを 1 つの Markdown ファイルに結合して出力します（サイズ制限・Zip 圧縮対応）。
-2. **コンテンツ分析（アセスメントモード / `assess`）**:
+2. **分析 CLI（`analyze`）および Agent Skill / MCP サーバ**:
+   - ワークスペースの状況分析（移設リスク、古いページ、個別アクセス制限、圧縮ファイル、添付あり空ページ、マクロ使用統計）を標準出力 (stdout) へ機械可読な構造化 JSON として単独出力します。
+   - エージェント（GitHub Copilot / Kiro / 汎用 Agent Skills）向けの `SKILL.md` や MCP サーバとして利用可能です。
+3. **コンテンツ分析（アセスメントモード / `assess`）**:
    - 添付バイナリをダウンロードせずに高速にメタデータを収集し、規模・構造・移設リスク（SharePoint/OneDrive 向け制約など）・権限・鮮度のレポート（Markdown & JSON）を出力します。
-3. **ファイルシステムエクスポート（ファイルシステムモード / `fsexport`）**:
+4. **ファイルシステムエクスポート（ファイルシステムモード / `fsexport`）**:
    - Confluence のページツリーを OS のディレクトリ/ファイル構造に再現し、ページ本文（YAML Frontmatter 付き Markdown）と添付バイナリを保存します。
 4. **権限エクスポート（権限モード / `permexport`）**:
    - Confluence のページに設定されたコンテンツ制限 (Read / Read+Write) を収集し、管理者向けの参照用権限レポート（Markdown & JSON）を出力します。
@@ -134,6 +139,62 @@ Web UIでは、複数のRoot Page IDの動的な追加、進捗のリアルタ�
 ## ファイル名規則
 出力ファイル名は以下の形式になります：
 `【<spaceKey>】 <トップページタイトル>.md`
+
+## 分析 CLI と Agent Skill / MCP サーバ
+
+AI エージェント（GitHub Copilot, Kiro, 汎用 Agent Skills, MCP クライアント）から Confluence ワークスペースの分析結果を機械可読 JSON としてパース・利用できます。
+
+### 1. 分析 CLI (`python -m c2m_export.analyze`)
+
+標準出力 (stdout) に純粋な JSON のみを出力し、人間向けの進捗ログ・エラーメッセージは標準エラー出力 (stderr) に分離されます。
+
+```bash
+# 環境変数でトークンを設定（推奨）
+export C2M_CONFLUENCE_TOKEN="your-confluence-pat"
+
+# 分析 CLI の実行
+python -m c2m_export.analyze \
+  --base-url "https://confluence.example.com" \
+  --space-key "DEV" \
+  --usecase "stale" "restricted" "macros" \
+  --mode "detail" \
+  --limit 50
+```
+
+主要なオプション：
+- `--base-url`: Confluence ベース URL
+- `--space-key` / `--root-page-id`: 分析対象の Space キーまたはルートページ ID (複数可)
+- `--usecase`: 実行する分析ユースケース (`risk`, `stale`, `restricted`, `archives`, `empty_with_attachments`, `macros` / 既定: 全6種)
+- `--mode`: 出力モード (`summary`: 集計値のみ, `detail`: 条件合致ページ/添付の個別一覧含む)
+- `--limit`: `detail` モード時の項目抽出上限件数 (既定: 1000)
+- `--stale-days` / `--stale-years`: 長期未更新ページの判定基準（日数または年数）
+
+終了コード規約: `0` (成功), `2` (パラメータ不正), `3` (認証失敗), `4` (対象未存在), `5` (APIエラー), `10` (内部エラー)。
+
+### 2. Agent Skill (`SKILL.md`)
+
+GitHub Copilot、Kiro、および汎用 Agent Skills で共通して利用可能な `SKILL.md` が提供されています。
+
+- **正本ファイル**: `skills/confluence-analysis/SKILL.md`（および補助スクリプト `skills/confluence-analysis/scripts/run_analysis.py`）
+- **複製配置先**:
+  - GitHub Copilot 用: `.github/skills/confluence-analysis/SKILL.md`
+  - Kiro 用: `.kiro/skills/confluence-analysis/SKILL.md`
+
+※ SKILL.md を編集・更新する場合は、必ず正本 `skills/confluence-analysis/SKILL.md` を変更した上で他配置先へ同期（上書きコピー）を行ってください。
+
+### 3. MCP サーバ (`c2m_export/mcp_server.py`)
+
+Model Context Protocol (MCP) を経由して分析機能をツール (`analyze_confluence`) として公開できます。
+
+```bash
+# MCP 追加依存のインストール
+pip install -r requirements-mcp.txt
+
+# stdio トランスポートで MCP サーバを起動
+python -m c2m_export.mcp_server
+```
+
+---
 
 ## 応用機能（アセスメント・ファイルシステム・権限・差分同期）
 

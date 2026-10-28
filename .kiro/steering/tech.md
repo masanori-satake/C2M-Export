@@ -4,14 +4,15 @@
 
 - Python 3.8 以上
 
-## 依存ライブラリ（requirements.txt）
+## 依存ライブラリ（requirements.txt / requirements-mcp.txt）
 
-| ライブラリ | 用途 |
-|---|---|
-| requests | Confluence REST API 呼び出し |
-| beautifulsoup4 | Storage Format (XHTML) → Markdown 変換 |
-| PyYAML | YAML 設定ファイルの読み書き |
-| streamlit | Web UI |
+| ライブラリ | 用途 | 依存種別 |
+|---|---|---|
+| requests | Confluence REST API 呼び出し | 必須 (requirements.txt) |
+| beautifulsoup4 | Storage Format (XHTML) → Markdown 変換 | 必須 (requirements.txt) |
+| PyYAML | YAML 設定ファイルの読み書き | 必須 (requirements.txt) |
+| streamlit | Web UI | 必須 (requirements.txt) |
+| mcp | FastMCP による MCP サーバ機能 | 任意 (requirements-mcp.txt) |
 
 ## 開発ツール
 
@@ -32,6 +33,16 @@ pip install -r requirements.txt
 結合モード:
 ```powershell
 python -m c2m_export.cli
+```
+
+分析 CLI モード:
+```powershell
+python -m c2m_export.analyze --base-url https://confluence.example.com --space-key DEV --usecase stale --mode summary
+```
+
+MCP サーバ起動:
+```powershell
+python -m c2m_export.mcp_server
 ```
 
 アセスメントモード:
@@ -74,3 +85,4 @@ CLI 引数 > 環境変数 > YAML 設定ファイル（`c2m_config.yaml`）> デ�
 ## 認証方式
 
 Bearer トークン（`Authorization: Bearer <token>`）
+環境変数 `C2M_CONFLUENCE_TOKEN`（推奨）または `CONFLUENCE_TOKEN` によるトークン設定をサポート。

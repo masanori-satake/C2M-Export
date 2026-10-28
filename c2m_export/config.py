@@ -372,6 +372,10 @@ class PermissionExportConfig:
                     f"設定ファイル {config_path} の読み込みに失敗しました（現象）。詳細: {e}（原因）。ファイル形式を確認してください（対処方法）"
                 )
 
+        env_token = os.environ.get("C2M_CONFLUENCE_TOKEN") or os.environ.get("CONFLUENCE_TOKEN")
+        if env_token:
+            self.token = env_token
+
         env_https_proxy = os.environ.get("HTTPS_PROXY")
         env_http_proxy = os.environ.get("HTTP_PROXY")
         if env_https_proxy:
@@ -559,6 +563,10 @@ class FsExportConfig:
                 print(
                     f"設定ファイル {config_path} の読み込みに失敗しました（現象）。詳細: {e}（原因）。ファイル形式を確認してください（対処方法）"
                 )
+
+        env_token = os.environ.get("C2M_CONFLUENCE_TOKEN") or os.environ.get("CONFLUENCE_TOKEN")
+        if env_token:
+            self.token = env_token
 
         env_https_proxy = os.environ.get("HTTPS_PROXY")
         env_http_proxy = os.environ.get("HTTP_PROXY")
@@ -753,6 +761,10 @@ class AssessConfig:
                 print(
                     f"設定ファイル {config_path} の読み込みに失敗しました（現象）。詳細: {e}（原因）。ファイル形式を確認してください（対処方法）"
                 )
+
+        env_token = os.environ.get("C2M_CONFLUENCE_TOKEN") or os.environ.get("CONFLUENCE_TOKEN")
+        if env_token:
+            self.token = env_token
 
         env_https_proxy = os.environ.get("HTTPS_PROXY")
         env_http_proxy = os.environ.get("HTTP_PROXY")
