@@ -25,6 +25,9 @@ def sanitize_text(text: str, secrets: Optional[Iterable[Optional[str]]] = None) 
 
     # 2. Authorization ヘッダおよび Bearer トークンのマスク
     # "Authorization": "Bearer xxx" or Authorization: Bearer xxx or Authorization: Basic xxx
+    # JSON の引用符・エスケープ文字やログの区切りをトークンに含めない
+    token_pattern = r"""[^\s"'\\,;{}\[\]]+"""
+
     def _mask_bearer(m: re.Match) -> str:
         prefix = m.group(1)
         token = m.group(2)
@@ -32,19 +35,18 @@ def sanitize_text(text: str, secrets: Optional[Iterable[Optional[str]]] = None) 
             return m.group(0)
         return f"{prefix}***REDACTED***"
 
-    sanitized = re.sub(r"(Bearer\s+)(\S+)", _mask_bearer, sanitized, flags=re.IGNORECASE)
+    sanitized = re.sub(rf"(Bearer\s+)({token_pattern})", _mask_bearer, sanitized, flags=re.IGNORECASE)
 
-    # 独自ヘッダ形式 Authorization: <non-bearer-single-word>
+    # Basic の方式名と認証情報、または独自ヘッダの単一トークンをまとめてマスクする
     def _mask_auth_header(m: re.Match) -> str:
         prefix = m.group(1)
         val = m.group(2)
-        quote = m.group(3) or ""
-        if "Bearer" in val or "***REDACTED***" in val:
+        if val.lower() == "bearer" or val == "***REDACTED***":
             return m.group(0)
-        return f"{prefix}***REDACTED***{quote}"
+        return f"{prefix}***REDACTED***"
 
     sanitized = re.sub(
-        r"(Authorization[\"\']?\s*[:=]\s*[\"\']?)([^\"\'\s,]+)([\"\']?)",
+        rf"(Authorization[\"\']?\s*[:=]\s*[\"\']?)((?:Basic[ \t]+)?{token_pattern})",
         _mask_auth_header,
         sanitized,
         flags=re.IGNORECASE,

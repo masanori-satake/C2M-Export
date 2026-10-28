@@ -104,6 +104,12 @@ MOVE_RENAME は `computed_paths` で再計算した新しい親と、移動先�
 添付の DELETE と改名前の旧保存名は、ページ移動後の相対パスと `attachment_dir_name` を用いて `deletion_policy` に従い処理します。
 フル出力の writer は任意の `manifest_pages` 辞書へ本文出力に成功したページの取得済みメタデータ・実際の保存先・添付状態を追記し、`fsexport.py` はそれを含むマニフェストを保存します。
 
+### 共通分析 API の設定・失敗処理・マスキング
+
+`analysis/api.py` は、設定オブジェクトに存在する `single_file_max_mb`・`path_length_limit`・`blocked_extensions`・`attachment_dir_name` だけを `analyze_inventory` に渡します。未定義の属性は集計関数の既定値に委ね、明示された空の拡張子集合も保持します。
+`count_macros` の解析・集計例外は Collector が捕捉し、警告ログと `macro_parse_failed_count` に反映します。失敗ページの部分集計は採用せず、ほかのページの収集を継続します。
+`sanitize_text` は引用符・バックスラッシュ・区切りでトークンを止め、Basic の方式名と認証情報をまとめてマスクします。出力する JSON の構造は保持します。
+
 ### 本文サイズ概算の偏りについての設計背景
 
 アセスメント機能では、大量ページの巡回および API 負荷の抑制・処理時間短縮を目的として、**添付バイナリのダウンロードや Markdown 変換処理を行いません**。

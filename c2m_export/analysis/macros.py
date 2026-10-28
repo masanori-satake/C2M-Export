@@ -116,25 +116,21 @@ def count_macros(body_storage: str) -> Dict[str, int]:
         return {}
 
     counts: Dict[str, int] = {}
-    try:
-        soup = BeautifulSoup(body_storage, "html.parser")
+    soup = BeautifulSoup(body_storage, "html.parser")
 
-        # 1. ac:structured-macro
-        for macro in soup.find_all("ac:structured-macro"):
-            name = macro.get("ac:name")
-            if name:
-                name_str = str(name).strip().lower()
-                counts[name_str] = counts.get(name_str, 0) + 1
+    # 1. ac:structured-macro
+    for macro in soup.find_all("ac:structured-macro"):
+        name = macro.get("ac:name")
+        if name:
+            name_str = str(name).strip().lower()
+            counts[name_str] = counts.get(name_str, 0) + 1
 
-        # 2. conf-macro (旧互換要素)
-        for macro in soup.find_all(class_=lambda c: c and "conf-macro" in c.split()):
-            name = macro.get("data-macro-name")
-            if name:
-                name_str = str(name).strip().lower()
-                counts[name_str] = counts.get(name_str, 0) + 1
-    except Exception:
-        # 例外発生時は破綻させず集計途中または空のdictを返す
-        pass
+    # 2. conf-macro (旧互換要素)
+    for macro in soup.find_all(class_=lambda c: c and "conf-macro" in c.split()):
+        name = macro.get("data-macro-name")
+        if name:
+            name_str = str(name).strip().lower()
+            counts[name_str] = counts.get(name_str, 0) + 1
 
     return counts
 

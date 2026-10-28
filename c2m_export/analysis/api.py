@@ -182,15 +182,17 @@ def run_analysis(
         inventory = collector.collect(resolved_root_ids)
 
         # 3. アセスメント集計
+        assessment_options = {
+            name: getattr(config, name)
+            for name in ("single_file_max_mb", "path_length_limit", "blocked_extensions", "attachment_dir_name")
+            if hasattr(config, name)
+        }
         assess_res = analyze_inventory(
             inventory=inventory,
-            single_file_max_mb=getattr(config, "single_file_max_mb", 100),
-            path_length_limit=getattr(config, "path_length_limit", 250),
-            blocked_extensions=getattr(config, "blocked_extensions", set()),
-            attachment_dir_name=getattr(config, "attachment_dir_name", "_attachments"),
             stale_days=params.stale_days,
             min_body_bytes=params.min_body_bytes,
             reference_time=ref_time,
+            **assessment_options,
         )
 
         # Base URL 取得
