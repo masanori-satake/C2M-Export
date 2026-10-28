@@ -1,5 +1,7 @@
 import os
+
 import pytest
+
 from c2m_export.analysis.sanitize import sanitize_text
 
 
@@ -22,7 +24,7 @@ def test_sanitize_json_authorization_header():
     text = '{"headers": {"Authorization": "Bearer secret-token-abc"}}'
     result = sanitize_text(text, secrets=[])
     assert "secret-token-abc" not in result
-    assert '***REDACTED***' in result
+    assert "***REDACTED***" in result
 
 
 def test_sanitize_empty_secrets_noop():

@@ -1,7 +1,7 @@
 """共通 1 層 Analysis API 実装モジュール (run_analysis)."""
 
-from datetime import datetime, timezone
 import logging
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 import requests
@@ -84,9 +84,9 @@ def _resolve_roots(
                     )
                 elif status_code in (401, 403):
                     raise AuthFailedError(
-                        f"現象: Confluence API の認証に失敗しました。"
-                        f"原因: トークンが無効か権限が不足しています。"
-                        f"対処方法: 正しいアクセストークンを指定してください。"
+                        "現象: Confluence API の認証に失敗しました。"
+                        "原因: トークンが無効か権限が不足しています。"
+                        "対処方法: 正しいアクセストークンを指定してください。"
                     )
                 else:
                     raise ApiError(f"API Error ({status_code}): {e}")
@@ -111,9 +111,9 @@ def _resolve_roots(
                     )
                 elif status_code in (401, 403):
                     raise AuthFailedError(
-                        f"現象: Confluence API の認証に失敗しました。"
-                        f"原因: トークンが無効か権限が不足しています。"
-                        f"対処方法: 正しいアクセストークンを指定してください。"
+                        "現象: Confluence API の認証に失敗しました。"
+                        "原因: トークンが無効か権限が不足しています。"
+                        "対処方法: 正しいアクセストークンを指定してください。"
                     )
                 else:
                     raise ApiError(f"API Error ({status_code}): {e}")
@@ -166,9 +166,7 @@ def run_analysis(
             client = ConfluenceClient(base_url=config.base_url, token=config.token, proxy=config.proxy)
 
         # 1. 起点解決
-        resolved_root_ids, empty_space_keys = _resolve_roots(
-            client, config.root_page_ids, config.space_keys
-        )
+        resolved_root_ids, empty_space_keys = _resolve_roots(client, config.root_page_ids, config.space_keys)
 
         # 2. 収集
         macros_requested = "macros" in params.usecases

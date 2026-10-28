@@ -1,5 +1,7 @@
 from unittest.mock import MagicMock
+
 import pytest
+
 from c2m_export.analysis.api import run_analysis
 from c2m_export.analysis.params import AnalysisParams
 from c2m_export.config import AnalysisConfig

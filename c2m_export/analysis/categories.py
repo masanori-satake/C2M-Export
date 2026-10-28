@@ -1,6 +1,7 @@
 """圧縮形式カテゴリ集約の純粋関数 (UC4)."""
 
 from typing import Any, Dict, Set
+
 from c2m_export.assessment.models import RawInventory
 
 DEFAULT_ARCHIVE_EXTENSIONS: Set[str] = {

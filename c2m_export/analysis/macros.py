@@ -5,6 +5,7 @@ converter (c2m_export/converter.py) の Markdown 変換方針と密接に対応�
 """
 
 from typing import Any, Dict, List
+
 from bs4 import BeautifulSoup
 
 # converter の変換方針に基づく修復区分・定型理由のマッピングテーブル
