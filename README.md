@@ -172,6 +172,8 @@ python -m c2m_export.assess --space-key SPACE_A SPACE_B
 
 アセスメント完了後、`confluence_assessment_<YYYYMMDD_HHMMSS>.md` および `.json` が `output_dir` 配下に出力されます。
 
+共通分析 API（`run_analysis`）も、設定に明示値がない場合は同じリスク判定の既定値を使います。マクロ解析失敗は警告と `macro_parse_failed_count` に記録し、そのページの部分集計は含めません。分析 CLI の認証情報マスキングは Bearer・Basic に対応し、JSON の引用符や区切りを保持します。
+
 ---
 
 ### 2. ファイルシステムモードの実行

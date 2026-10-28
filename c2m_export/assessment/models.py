@@ -71,6 +71,7 @@ class PageMeta:
     ancestors_titles: List[str]
     attachments: List[AttachmentMeta] = field(default_factory=list)
     restriction: Optional[RestrictionMeta] = None
+    macro_counts: Dict[str, int] = field(default_factory=dict)
 
 
 @dataclass
@@ -90,6 +91,7 @@ class RawInventory:
     skipped_attachment_refs: List[str] = field(default_factory=list)
     restriction_failed_page_ids: List[str] = field(default_factory=list)
     size_meta_missing_count: int = 0
+    macro_parse_failed_count: int = 0
 
 
 @dataclass

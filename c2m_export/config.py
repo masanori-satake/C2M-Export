@@ -68,7 +68,11 @@ class Config:
                     f"設定ファイル {config_path} の読み込みに失敗しました（現象）。詳細: {e}（原因）。ファイル形式や権限を確認してください（対処方法）"
                 )
 
-        # 2. 環境変数からの読み込み（Proxyなど環境依存性の高いもの）
+        # 2. 環境変数からの読み込み（Proxyおよび認証トークン）
+        env_token = os.environ.get("C2M_CONFLUENCE_TOKEN") or os.environ.get("CONFLUENCE_TOKEN")
+        if env_token:
+            self.token = env_token
+
         env_https_proxy = os.environ.get("HTTPS_PROXY")
         env_http_proxy = os.environ.get("HTTP_PROXY")
         if env_https_proxy:
@@ -130,6 +134,176 @@ class Config:
             raise ValueError("token is required (use --token or config file)")
 
         # 後続のパス結合時に重複を防ぐための正規化
+        self.base_url = self.base_url.rstrip("/")
+
+
+class AnalysisConfig:
+    """分析（analyze）モードの設定を管理するクラス.
+
+    CLI引数、環境変数、設定ファイル (YAML) の順で優先順位を制御し、
+    分析モード用の設定パラメーターを保持・検証する。
+    """
+
+    def __init__(self):
+        self.base_url: Optional[str] = None
+        self.root_page_ids: List[str] = []
+        self.space_keys: List[str] = []
+        self.output_dir: str = "."
+        self.proxy: Optional[str] = None
+        self.token: Optional[str] = None
+
+        # 分析固有設定
+        self.usecases: Optional[List[str]] = None
+        self.mode: str = "summary"
+        self.limit: int = 1000
+        self.stale_days: int = 365
+        self.min_body_bytes: int = 200
+        self.archive_extensions: Optional[Set[str]] = None
+        self.analyze_restrictions: Optional[bool] = None
+
+    def load(self):
+        """設定を読み込む。優先順位は CLI > 環境変数 > 設定ファイル > デフォルト."""
+        pre_parser = argparse.ArgumentParser(add_help=False)
+        pre_parser.add_argument("--config", type=str, default=str(DEFAULT_CONFIG_PATH))
+        pre_args, _ = pre_parser.parse_known_args()
+
+        config_path = Path(pre_args.config) if pre_args.config else DEFAULT_CONFIG_PATH
+
+        if config_path.exists():
+            try:
+                with open(config_path, encoding="utf-8") as f:
+                    file_config = yaml.safe_load(f)
+                    if file_config:
+                        self.base_url = file_config.get("base_url", self.base_url)
+                        root_ids = file_config.get("root_page_ids")
+                        if root_ids:
+                            if isinstance(root_ids, list):
+                                self.root_page_ids = [str(i) for i in root_ids]
+                            else:
+                                self.root_page_ids = [str(root_ids)]
+                        s_keys = file_config.get("space_keys")
+                        if s_keys:
+                            if isinstance(s_keys, list):
+                                self.space_keys = [str(k) for k in s_keys]
+                            else:
+                                self.space_keys = [str(s_keys)]
+
+                        self.output_dir = file_config.get("output_dir", self.output_dir)
+                        self.proxy = file_config.get("proxy", self.proxy)
+                        self.token = file_config.get("token", self.token)
+
+                        # analysis セクション
+                        analysis_sec = file_config.get("analysis", {})
+                        if isinstance(analysis_sec, dict):
+                            u_cases = analysis_sec.get("usecases")
+                            if u_cases and isinstance(u_cases, list):
+                                self.usecases = [str(u) for u in u_cases]
+                            self.mode = analysis_sec.get("mode", self.mode)
+                            self.limit = analysis_sec.get("limit", self.limit)
+                            self.stale_days = analysis_sec.get("stale_days", self.stale_days)
+                            self.min_body_bytes = analysis_sec.get("min_body_bytes", self.min_body_bytes)
+                            a_exts = analysis_sec.get("archive_extensions")
+                            if a_exts and isinstance(a_exts, list):
+                                self.archive_extensions = {str(e).lower().lstrip(".") for e in a_exts}
+                            if "analyze_restrictions" in analysis_sec:
+                                self.analyze_restrictions = bool(analysis_sec["analyze_restrictions"])
+            except Exception as e:
+                print(
+                    f"設定ファイル {config_path} の読み込みに失敗しました（現象）。詳細: {e}（原因）。ファイル形式を確認してください（対処方法）"
+                )
+
+        env_token = os.environ.get("C2M_CONFLUENCE_TOKEN") or os.environ.get("CONFLUENCE_TOKEN")
+        if env_token:
+            self.token = env_token
+
+        env_https_proxy = os.environ.get("HTTPS_PROXY")
+        env_http_proxy = os.environ.get("HTTP_PROXY")
+        if env_https_proxy:
+            self.proxy = env_https_proxy
+        elif env_http_proxy:
+            self.proxy = env_http_proxy
+
+        parser = argparse.ArgumentParser(description="Confluenceのワークスペース状況を分析するツール")
+        parser.add_argument("--base-url", type=str, help="ConfluenceのベースURL (例: https://host/wiki)")
+        parser.add_argument(
+            "--root-page-id", type=str, nargs="+", help="分析を開始するルートページのID（複数指定可能）"
+        )
+        parser.add_argument("--space-key", type=str, nargs="+", help="分析を開始するSpaceキー（複数指定可能）")
+        parser.add_argument("--proxy", type=str, help="HTTP/HTTPS プロキシURL")
+        parser.add_argument("--config", type=str, help="設定ファイルのパス (既定: c2m_config.yaml)")
+        parser.add_argument("--token", type=str, help="ConfluenceのBearerトークン")
+
+        parser.add_argument("--usecase", type=str, nargs="+", help="分析ユースケース名（複数指定可能）")
+        parser.add_argument("--mode", type=str, choices=["summary", "detail"], help="出力モード (summary | detail)")
+        parser.add_argument("--limit", type=int, help="個別一覧取得の上限件数")
+        parser.add_argument("--stale-days", type=int, help="長期未更新判定の経過日数")
+        parser.add_argument("--stale-years", type=float, help="長期未更新判定の経過年数（×365日で日数換算）")
+        parser.add_argument("--min-body-bytes", type=int, help="空/極小ページ判定のバイト数上限")
+        parser.add_argument("--archive-ext", type=str, nargs="+", help="圧縮形式カテゴリとして扱う拡張子リスト")
+        parser.add_argument("--restrictions", action="store_true", default=None, help="権限分析を有効化する")
+        parser.add_argument("--no-restrictions", action="store_false", dest="restrictions", help="権限分析を無効化する")
+
+        cli_args = parser.parse_args()
+
+        if cli_args.base_url:
+            self.base_url = cli_args.base_url
+        if cli_args.root_page_id:
+            self.root_page_ids = cli_args.root_page_id
+        if cli_args.space_key:
+            self.space_keys = cli_args.space_key
+
+        if self.root_page_ids:
+            seen = set()
+            self.root_page_ids = [x for x in self.root_page_ids if not (x in seen or seen.add(x))]
+        if self.space_keys:
+            seen_s = set()
+            self.space_keys = [x for x in self.space_keys if not (x in seen_s or seen_s.add(x))]
+
+        if cli_args.proxy:
+            self.proxy = cli_args.proxy
+        if cli_args.token:
+            self.token = cli_args.token
+
+        if cli_args.usecase:
+            self.usecases = cli_args.usecase
+        if cli_args.mode:
+            self.mode = cli_args.mode
+        if cli_args.limit is not None:
+            self.limit = cli_args.limit
+
+        if cli_args.stale_days is not None:
+            self.stale_days = cli_args.stale_days
+        elif cli_args.stale_years is not None:
+            self.stale_days = int(cli_args.stale_years * 365)
+
+        if cli_args.min_body_bytes is not None:
+            self.min_body_bytes = cli_args.min_body_bytes
+        if cli_args.archive_ext:
+            self.archive_extensions = {str(e).lower().lstrip(".") for e in cli_args.archive_ext}
+        if cli_args.restrictions is not None:
+            self.analyze_restrictions = cli_args.restrictions
+
+    def validate(self):
+        """必須設定の有無を確認し、URLの正規化および矛盾チェックを行う."""
+        if not self.base_url:
+            raise ValueError(
+                "現象: base_url が未指定です。原因: --base-url または設定ファイルに base_url が存在しません。対処方法: --base-url オプションまたは設定ファイルで base_url を指定してください。"
+            )
+        if not self.root_page_ids and not self.space_keys:
+            raise ValueError(
+                "現象: ルート指定が存在しません。原因: root_page_id および space_key が指定されていません。対処方法: --root-page-id または --space-key を指定してください。"
+            )
+        if not self.token:
+            raise ValueError(
+                "現象: token が未指定です。原因: 認証トークンが指定されていません。対処方法: C2M_CONFLUENCE_TOKEN 環境変数または --token オプションでトークンを指定してください。"
+            )
+
+        # 矛盾チェック (restricted ユースケースと --no-restrictions の競合)
+        if self.usecases and "restricted" in self.usecases and self.analyze_restrictions is False:
+            raise ValueError(
+                "現象: restricted の分析を実行できません。原因: restricted ユースケースが要求されているにもかかわらず --no-restrictions が指定されています。対処方法: --no-restrictions を外すか --usecase から restricted を除外してください。"
+            )
+
         self.base_url = self.base_url.rstrip("/")
 
 

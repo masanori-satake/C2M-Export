@@ -3,6 +3,7 @@
 import logging
 from typing import List, Set, Tuple, Union
 
+from c2m_export.analysis.macros import count_macros
 from c2m_export.assessment.models import (
     AttachmentMeta,
     PageMeta,
@@ -17,9 +18,15 @@ logger = logging.getLogger(__name__)
 class Collector:
     """DFS巡回によりページ・添付・権限・更新情報のメタデータを収集するクラス."""
 
-    def __init__(self, client: ConfluenceClient, analyze_restrictions: bool = True):
+    def __init__(
+        self,
+        client: ConfluenceClient,
+        analyze_restrictions: bool = True,
+        collect_macros: bool = False,
+    ):
         self.client = client
         self.analyze_restrictions = analyze_restrictions
+        self.collect_macros = collect_macros
 
     def collect(self, root_ids: List[str]) -> RawInventory:
         """指定されたルートページIDリストからDFS巡回し RawInventory を構築する."""
@@ -56,6 +63,15 @@ class Collector:
             # Storage Format 生サイズ
             body_storage = page_data.get("body", {}).get("storage", {}).get("value", "")
             body_bytes = len(body_storage.encode("utf-8")) if body_storage else 0
+
+            # マクロ収集（有効時）
+            macro_counts_dict = {}
+            if self.collect_macros and body_storage:
+                try:
+                    macro_counts_dict = count_macros(body_storage)
+                except Exception as e:
+                    logger.warning(f"ページ (ID: {page_id}) のマクロ解析に失敗しました: {e}")
+                    inventory.macro_parse_failed_count += 1
 
             # 最終更新日時 (version.when や history.lastUpdated.when)
             last_modified = page_data.get("version", {}).get("when") or page_data.get("history", {}).get(
@@ -156,6 +172,7 @@ class Collector:
                 ancestors_titles=ancestors_titles,
                 attachments=attachments_meta,
                 restriction=restriction_meta,
+                macro_counts=macro_counts_dict,
             )
             inventory.pages.append(page_meta)
 
