@@ -2,7 +2,7 @@
 
 import json
 import traceback
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, call
 
 import pytest
 import requests
@@ -23,20 +23,23 @@ def operation(request, tmp_path, monkeypatch):
     if request.param == "request":
         monkeypatch.setattr(client.session, "request", transport)
 
-        def invoke():
-            return client._request("GET", "/rest/api/content/1")
+        def invoke(retries=3):
+            return client._request("GET", "/rest/api/content/1", retries=retries)
     else:
         monkeypatch.setattr(client.session, "get", transport)
 
-        def invoke():
-            return client.download_attachment(SIGNED_URL, str(tmp_path / "file"))
+        def invoke(retries=3):
+            return client.download_attachment(SIGNED_URL, str(tmp_path / "file"), retries=retries)
 
     return invoke, transport
 
 
-@pytest.mark.parametrize("status", [401, 403, 404, 429])
-def test_http_failure_keeps_only_status(operation, status, caplog):
+@pytest.mark.parametrize("retries", [1, 3])
+@pytest.mark.parametrize("status", [401, 403, 404, 429, 500, 503, 599])
+def test_http_failure_keeps_only_status(operation, status, retries, monkeypatch, caplog):
     invoke, transport = operation
+    sleep = MagicMock()
+    monkeypatch.setattr("c2m_export.confluence.time.sleep", sleep)
     response = requests.Response()
     response.status_code = status
     response.url = SIGNED_URL
@@ -47,10 +50,11 @@ def test_http_failure_keeps_only_status(operation, status, caplog):
     transport.return_value = response
 
     with pytest.raises(requests.exceptions.HTTPError) as caught:
-        invoke()
+        invoke(retries=retries)
 
     error = caught.value
-    assert transport.call_count == 3
+    assert transport.call_count == retries
+    assert sleep.call_args_list == [call(2.0 * (2**i)) for i in range(retries - 1)]
     assert str(status) in str(error)
     assert SIGNED_URL not in str(error)
     assert (
@@ -125,7 +129,15 @@ def test_stream_failure_is_sanitized_and_removes_partial_file(tmp_path, monkeypa
 @pytest.mark.parametrize("scope", ["root_page_ids", "space_keys"])
 @pytest.mark.parametrize(
     ("status", "expected_code"),
-    [(401, "AUTH_FAILED"), (403, "AUTH_FAILED"), (404, "TARGET_NOT_FOUND"), (429, "API_ERROR")],
+    [
+        (401, "AUTH_FAILED"),
+        (403, "AUTH_FAILED"),
+        (404, "TARGET_NOT_FOUND"),
+        (429, "API_ERROR"),
+        (500, "API_ERROR"),
+        (503, "API_ERROR"),
+        (599, "API_ERROR"),
+    ],
 )
 def test_analysis_preserves_http_error_classification(scope, status, expected_code, monkeypatch, caplog):
     client = ConfluenceClient("https://confluence.example.com", "test_token")

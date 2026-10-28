@@ -51,7 +51,7 @@ class ConfluenceClient:
                 response = self.session.request(method, url, params=params, timeout=30)
                 if response.status_code == 200:
                     return response.json()
-                elif 500 <= response.status_code < 600:
+                elif 500 <= response.status_code < 600 and i < retries - 1:
                     logger.warning(
                         f"サーバーエラー {response.status_code} が発生しました。再試行中 ({i + 1}/{retries})..."
                     )
@@ -197,7 +197,7 @@ class ConfluenceClient:
                         if os.path.exists(dest_file):
                             os.remove(dest_file)
                         raise
-                elif 500 <= response.status_code < 600:
+                elif 500 <= response.status_code < 600 and i < retries - 1:
                     logger.warning(
                         f"サーバーエラー {response.status_code} が発生しました。再試行中 ({i + 1}/{retries})..."
                     )
