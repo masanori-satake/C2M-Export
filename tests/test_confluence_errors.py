@@ -53,8 +53,9 @@ def test_http_failure_keeps_only_status(operation, status, retries, monkeypatch,
         invoke(retries=retries)
 
     error = caught.value
-    assert transport.call_count == retries
-    assert sleep.call_args_list == [call(2.0 * (2**i)) for i in range(retries - 1)]
+    expected_attempts = 1 if status in (401, 403, 404) else retries
+    assert transport.call_count == expected_attempts
+    assert sleep.call_args_list == [call(2.0 * (2**i)) for i in range(expected_attempts - 1)]
     assert str(status) in str(error)
     assert SIGNED_URL not in str(error)
     assert (
@@ -80,8 +81,10 @@ def test_http_failure_keeps_only_status(operation, status, retries, monkeypatch,
         requests.exceptions.RequestException,
     ],
 )
-def test_network_failure_hides_original_message(operation, error_type, caplog):
+def test_network_failure_hides_original_message(operation, error_type, monkeypatch, caplog):
     invoke, transport = operation
+    sleep = MagicMock()
+    monkeypatch.setattr("c2m_export.confluence.time.sleep", sleep)
     original = error_type(SIGNED_URL, request=requests.Request("GET", SIGNED_URL).prepare())
     transport.side_effect = original
 
@@ -91,6 +94,7 @@ def test_network_failure_hides_original_message(operation, error_type, caplog):
     error = caught.value
     assert error is not original
     assert transport.call_count == 3
+    assert sleep.call_args_list == [call(2.0), call(4.0)]
     assert SIGNED_URL not in str(error)
     assert (
         "PRIVATE_SIGNATURE"

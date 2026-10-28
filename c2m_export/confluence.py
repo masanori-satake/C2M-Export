@@ -43,7 +43,7 @@ class ConfluenceClient:
     ) -> Dict:
         """共通のリクエスト処理.
 
-        5xxエラーやネットワークエラーに対して指数バックオフを伴うリトライを行う。
+        429・5xxエラーやネットワークエラーは指数バックオフで再試行し、401・403・404は即時失敗する。
         """
         url = f"{self.base_url}{path}"
         for i in range(retries):
@@ -60,7 +60,11 @@ class ConfluenceClient:
                 else:
                     response.raise_for_status()
             except requests.exceptions.RequestException as error:
-                if i == retries - 1:
+                if i == retries - 1 or (
+                    isinstance(error, requests.exceptions.HTTPError)
+                    and error.response is not None
+                    and error.response.status_code in (401, 403, 404)
+                ):
                     raise _safe_request_exception(error, "Confluence API リクエストに失敗しました") from None
                 logger.warning(f"リクエストが失敗しました。再試行中 ({i + 1}/{retries})...")
                 time.sleep(backoff * (2**i))
@@ -208,7 +212,11 @@ class ConfluenceClient:
             except ValueError:
                 raise
             except requests.exceptions.RequestException as error:
-                if i == retries - 1:
+                if i == retries - 1 or (
+                    isinstance(error, requests.exceptions.HTTPError)
+                    and error.response is not None
+                    and error.response.status_code in (401, 403, 404)
+                ):
                     raise _safe_request_exception(error, "添付ファイルのダウンロードに失敗しました") from None
                 logger.warning(f"添付ダウンロードリクエストが失敗しました。再試行中 ({i + 1}/{retries})...")
                 time.sleep(backoff * (2**i))
