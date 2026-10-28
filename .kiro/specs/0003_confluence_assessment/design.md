@@ -2,7 +2,7 @@
 
 ## 概要
 
-本設計は、Confluence のコンテンツ（特定ページ配下 / Space / Workspace 全体）を実エクスポート前に分析し、規模・構造・移設リスク・権限サマリ・鮮度を把握するための **アセスメント機能** を C2M-Export に追加するものである。
+本設計は、Confluence のコンテンツ（特定ページ配下 / Space / Workspace 全体）を実エクスポート前に分析し、規模・構造・配置リスク・権限サマリ・鮮度を把握するための **アセスメント機能** を C2M-Export に追加するものである。
 
 分析は Confluence REST API のメタデータのみを用い、**添付バイナリのダウンロードや Markdown 本文のファイル書き込みは行わない**（分析レポートの書き込みを除く）。成果物として、人間可読な Markdown レポートと機械可読な JSON を出力する。
 
@@ -32,7 +32,7 @@ c2m_export/
 │   ├── collector.py   # DFS巡回でページ/添付/権限/更新情報のメタデータを収集
 │   ├── models.py      # 収集結果・集計結果のデータモデル（dataclass）
 │   ├── analyzers.py   # 収集結果から各種集計・リスク検出を行う純粋関数群
-│   ├── rules.py       # 移設先（SharePoint/OneDrive）制約の既定値と判定ロジック
+│   ├── rules.py       # 配置先（SharePoint/OneDrive等）制約の既定値と判定ロジック
 │   └── report.py      # Markdown / JSON レポート生成
 └── (既存ファイル)
 ```
@@ -47,7 +47,7 @@ c2m_export/
 | `assessment/collector.py` | DFS巡回しながら API を呼び、ページ/添付/権限/更新情報の **生メタデータ** を `RawInventory` に収集。I/O（API）を担う層。 |
 | `assessment/models.py` | `PageMeta` / `AttachmentMeta` / `RestrictionMeta` / `RawInventory` / `AssessmentResult` 等の型定義。 |
 | `assessment/analyzers.py` | `RawInventory` を入力に、集計・分布・リスク検出を行う **純粋関数**（API非依存＝テスト容易）。 |
-| `assessment/rules.py` | SharePoint/OneDrive の既定制約値（パス長・禁止文字・ブロック拡張子・予約語）と判定関数。設定で上書き可能。 |
+| `assessment/rules.py` | 配置先制約の既定制約値（SharePoint/OneDrive等を参考にしたパス長・禁止文字・ブロック拡張子・予約語）と判定関数。設定で上書き可能。 |
 | `assessment/report.py` | `AssessmentResult` から Markdown と JSON を生成。 |
 
 I/O（collector）と純粋ロジック（analyzers）を分離することで、analyzers と rules は API モック不要で単体テストできる。
@@ -195,15 +195,15 @@ class AssessmentResult:
 
 重複排除: 同一ページが複数起点から到達しうるため、Collector は訪問済み `page_id` 集合で二重集計を防ぐ。
 
-### 5. 移設リスク検出（assessment/rules.py, analyzers.py / 要件5）
+### 5. 配置先リスク検出（assessment/rules.py, analyzers.py / 要件5）
 
-`rules.py` に SharePoint/OneDrive の既定制約を定数で持ち、`AssessConfig` で上書き可能にする。
+`rules.py` に SharePoint/OneDrive 等の配置先制約の既定値を定数で持ち、`AssessConfig` で上書き可能にする。
 
 | 判定 | 既定値 | 根拠/備考 |
 |---|---|---|
-| パス長上限 | 400 文字（相対パス換算） | SharePoint のデコード済み URL パス長の実務上の目安。設計時点の既定であり設定で変更可。 |
-| 禁止文字 | `" * : < > ? / \ |` および制御文字 | OneDrive/SharePoint のファイル・フォルダ名禁止文字。 |
-| 予約語/末尾ドット・スペース | 既存 `sanitize_filename` の予約語集合を流用 + 末尾 `. ` | Windows/SharePoint 共通。 |
+| パス長上限 | 400 文字（相対パス換算） | 配置先（SharePoint 等）のデコード済み URL パス長の実務上の目安。設計時点の既定であり設定で変更可。 |
+| 禁止文字 | `" * : < > ? / \ |` および制御文字 | 配置先（OneDrive/SharePoint 等）のファイル・フォルダ名禁止文字。 |
+| 予約語/末尾ドット・スペース | 既存 `sanitize_filename` の予約語集合を流用 + 末尾 `. ` | Windows/SharePoint 等に共通。 |
 | ブロック拡張子 | 既定リスト（例: `exe` 等）を定数化 | 設定で追加・変更可能。 |
 | 単一ファイル巨大閾値 | `single_file_max_mb`（設定・既定 250MB） | 後続の実エクスポート時スキップ閾値と整合させる想定。 |
 
@@ -222,7 +222,7 @@ class AssessmentResult:
 
 `AssessmentResult` のみを入力とする（API 非依存・テスト容易）。
 
-- **Markdown**: 冒頭に概算である旨の注記。セクション: 規模サマリ / Space別内訳 / 階層分布 / 添付拡張子別（サイズ降順）/ 移設リスク一覧 / 権限サマリ / 鮮度サマリ / スキップ・不確実性サマリ。サイズは MB/GB で表示（`bytes_to_mb` を流用、GB は追加関数）。
+- **Markdown**: 冒頭に概算である旨の注記。セクション: 規模サマリ / Space別内訳 / 階層分布 / 添付拡張子別（サイズ降順）/ 配置リスク一覧 / 権限サマリ / 鮮度サマリ / スキップ・不確実性サマリ。サイズは MB/GB で表示（`bytes_to_mb` を流用、GB は追加関数）。
 - **JSON**: キーが安定した構造化データ。集計値 + 個別リスク項目（対象 page_id / 名前 / パス / 理由）を配列で含む。スキーマは `report.py` 冒頭に定義コメントとして記載。
 - 出力先: `AssessConfig.output_dir` 配下に既定命名（例: `confluence_assessment_<yyyymmdd_HHMMSS>.md` / `.json`）。`overwrite` 未指定で既存があれば既存方針に従いエラー（フェイルファスト）。
 
@@ -236,7 +236,7 @@ class AssessmentResult:
 |---|---|---|---|
 | `space_keys` | `--space-key`（複数可） | なし | Space 起点の分析対象 |
 | `analyze_restrictions` | `--restrictions / --no-restrictions` | true | 権限分析の有効/無効 |
-| `single_file_max_mb` | `--single-file-max-mb` | 250 | 巨大添付検出の閾値（SharePoint 既定アップロード上限の目安） |
+| `single_file_max_mb` | `--single-file-max-mb` | 250 | 巨大添付検出の閾値（SharePoint 等の配置先アップロード上限の目安） |
 | `path_length_limit` | `--path-length-limit` | 400 | パス長リスク閾値 |
 | `blocked_extensions` | `--blocked-ext`（複数可） | 既定リスト | ブロック拡張子 |
 | `attachment_dir_name` | `--attachment-dir` | `_attachments` | パス長計算用の添付サブディレクトリ名 |
