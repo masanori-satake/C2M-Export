@@ -29,8 +29,24 @@ pip install -r requirements.txt
 
 ### CLI 実行
 
+結合モード:
 ```powershell
 python -m c2m_export.cli
+```
+
+アセスメントモード:
+```powershell
+python -m c2m_export.assess
+```
+
+ファイルシステムエクスポートモード:
+```powershell
+python -m c2m_export.fsexport
+```
+
+権限エクスポートモード:
+```powershell
+python -m c2m_export.permexport
 ```
 
 ### Web UI 起動
