@@ -59,6 +59,7 @@ def main():
             output_dir=config.output_dir,
             report_layout=config.report_layout,
             report_formats=config.report_formats,
+            overwrite=config.overwrite,
         )
 
         for report_file in saved_reports:

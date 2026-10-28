@@ -129,6 +129,7 @@ def write_permission_report(
     report_layout: str = "aggregate",
     report_formats: str = "md",
     filename_prefix: str = "_permissions",
+    overwrite: bool = False,
 ) -> List[str]:
     """設定に従い権限レポート (Markdown / JSON) をファイル出力する.
 
@@ -138,13 +139,11 @@ def write_permission_report(
         report_layout: `aggregate` (集約) または `per_page` (分散)
         report_formats: `md`, `json`, または `both`
         filename_prefix: 集約ファイル名・分散ファイル名のプレフィックス (既定 `_permissions`)
+        overwrite: 既存ファイルが存在する場合に上書きするかどうか (既定 `False`)
 
     Returns:
         生成・保存されたファイルパスのリスト
     """
-    output_files: List[str] = []
-    os.makedirs(output_dir, exist_ok=True)
-
     fmt = report_formats.lower()
     include_md = fmt in ("md", "markdown", "both")
     include_json = fmt in ("json", "both")
@@ -160,6 +159,33 @@ def write_permission_report(
                 "対処方法: 必要に応じて `--report-layout aggregate` を使用してください。"
             )
             effective_layout = "aggregate"
+
+    # 全出力先パスを算出して事前競合チェック
+    target_paths: List[str] = []
+    if effective_layout == "aggregate":
+        if include_md:
+            target_paths.append(os.path.join(output_dir, f"{filename_prefix}.md"))
+        if include_json:
+            target_paths.append(os.path.join(output_dir, f"{filename_prefix}.json"))
+    elif effective_layout == "per_page":
+        for page in report.pages:
+            page_dir = os.path.join(output_dir, page.rel_path) if page.rel_path else output_dir
+            if include_md:
+                target_paths.append(os.path.join(page_dir, f"{filename_prefix}.md"))
+            if include_json:
+                target_paths.append(os.path.join(page_dir, f"{filename_prefix}.json"))
+
+    if not overwrite:
+        for path in target_paths:
+            if os.path.exists(path):
+                raise FileExistsError(
+                    f"現象: 出力先に既存の権限レポートが存在します ({path})。 "
+                    f"原因: overwrite が未指定です。 "
+                    f"対処方法: --overwrite を指定するか、既存ファイルを退避してください。"
+                )
+
+    output_files: List[str] = []
+    os.makedirs(output_dir, exist_ok=True)
 
     if effective_layout == "aggregate":
         if include_md:
@@ -179,11 +205,7 @@ def write_permission_report(
     elif effective_layout == "per_page":
         for page in report.pages:
             # 相対パスが存在する場合はその配下、無ければ output_dir 直下
-            if page.rel_path:
-                page_dir = os.path.join(output_dir, page.rel_path)
-            else:
-                page_dir = output_dir
-
+            page_dir = os.path.join(output_dir, page.rel_path) if page.rel_path else output_dir
             os.makedirs(page_dir, exist_ok=True)
 
             if include_md:

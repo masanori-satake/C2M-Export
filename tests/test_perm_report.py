@@ -107,3 +107,53 @@ def test_write_permission_report_fallback_when_no_rel_path(tmp_path):
     expected_file = tmp_path / "_permissions.md"
     assert expected_file.exists()
     assert len(files) == 1
+
+
+def test_write_permission_report_overwrite_control(tmp_path):
+    import pytest
+
+    p1 = PagePermission(
+        page_id="30",
+        title="テスト 30",
+        space_key="TEST",
+        url="https://example.com/30",
+        rel_path="TEST_30",
+        has_explicit=False,
+    )
+    report = PermissionReport(pages=[p1])
+
+    # 1. 最初の保存
+    write_permission_report(
+        report=report,
+        output_dir=str(tmp_path),
+        report_layout="aggregate",
+        report_formats="both",
+        overwrite=False,
+    )
+
+    md_file = tmp_path / "_permissions.md"
+    assert md_file.exists()
+
+    # 2. overwrite=False で既存ファイルがある場合は FileExistsError が送出されること
+    with pytest.raises(FileExistsError) as exc_info:
+        write_permission_report(
+            report=report,
+            output_dir=str(tmp_path),
+            report_layout="aggregate",
+            report_formats="both",
+            overwrite=False,
+        )
+    err_msg = str(exc_info.value)
+    assert "現象: 出力先に既存の権限レポートが存在します" in err_msg
+    assert "原因: overwrite が未指定です" in err_msg
+    assert "対処方法: --overwrite を指定するか、既存ファイルを退避してください" in err_msg
+
+    # 3. overwrite=True であれば上書き成功すること
+    files = write_permission_report(
+        report=report,
+        output_dir=str(tmp_path),
+        report_layout="aggregate",
+        report_formats="both",
+        overwrite=True,
+    )
+    assert len(files) == 2
