@@ -136,8 +136,9 @@ SKILL.md やスクリプトに対する修正・機能拡張を行う際は、**
 ### MCP サーバのアーキテクチャ
 
 FastMCP（`mcp` SDK）を用いて分析ツール `analyze_confluence` を公開します。
-- `mcp` SDK は optional 依存であり、`requirements-mcp.txt` に分離されています。
+- `mcp` SDK は optional 依存であり、FastMCP を提供する `>=1.2.0,<2.0.0` を `requirements-mcp.txt` に分離しています。
 - `AnalysisConfig.load_file_and_env()` で YAML・環境変数の読み込みを CLI と共有し、MCP 引数は明示された値を優先します。`stale_days` が省略された場合のみ `stale_years × 365` を使い、両方省略時は設定値を使います。設定読み込みの診断は stderr に出力します。
+- 設定読み込み失敗の診断にはファイルパスと取得可能な行・列番号（1 始まり）だけを含め、PyYAML の例外本文や設定内容は出力しません。
 - `c2m_export/mcp_server.py` 内で `mcp` を遅延 import することにより、SDK 未導入環境でもメイン CLI やライブラリとしての利用に影響を及ぼしません。
 
 ### 本文サイズ概算の偏りについての設計背景

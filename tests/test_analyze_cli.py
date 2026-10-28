@@ -78,7 +78,7 @@ def test_analyze_cli_invalid_yaml_keeps_stdout_json(monkeypatch, capsys, tmp_pat
     from c2m_export.analysis.response import AnalysisResponse
 
     config_path = tmp_path / "invalid.yaml"
-    config_path.write_text("analysis: [unterminated\n", encoding="utf-8")
+    config_path.write_text("token: [yaml-secret-token\n", encoding="utf-8")
     args = ["analyze", "--config", str(config_path), "--root-page-id", "100", "--token", "test-token"]
     if valid_args:
         args.extend(["--base-url", "https://example.com"])
@@ -94,3 +94,6 @@ def test_analyze_cli_invalid_yaml_keeps_stdout_json(monkeypatch, capsys, tmp_pat
     if not valid_args:
         assert result["error"]["code"] == "INVALID_PARAM"
     assert "読み込みに失敗" in captured.err
+    assert str(config_path) in captured.err
+    assert "2 行、1 列" in captured.err
+    assert "yaml-secret-token" not in captured.out + captured.err

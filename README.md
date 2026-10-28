@@ -147,6 +147,7 @@ AI エージェント（GitHub Copilot, Kiro, 汎用 Agent Skills, MCP クライ
 ### 1. 分析 CLI (`python -m c2m_export.analyze`)
 
 標準出力 (stdout) に純粋な JSON のみを出力し、人間向けの進捗ログ・エラーメッセージは標準エラー出力 (stderr) に分離されます。
+分析設定ファイルの読み込み失敗時は、設定内容や例外本文を出力せず、ファイルパスと取得可能な行・列番号を表示します。
 
 ```bash
 # 環境変数でトークンを設定（推奨）
@@ -185,7 +186,7 @@ GitHub Copilot、Kiro、および汎用 Agent Skills で共通して利用可能
 ### 3. MCP サーバ (`c2m_export/mcp_server.py`)
 
 Model Context Protocol (MCP) を経由して分析機能をツール (`analyze_confluence`) として公開できます。
-MCP サーバの利用には **Python 3.10 以上**が必要です（分析 CLI と通常機能の要件は Python 3.8 以上）。
+MCP サーバの利用には **Python 3.10 以上**と **MCP SDK 1.2.0 以上、2.0.0 未満**が必要です（分析 CLI と通常機能の要件は Python 3.8 以上）。
 
 ```bash
 # MCP 追加依存のインストール

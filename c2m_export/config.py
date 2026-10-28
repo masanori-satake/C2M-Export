@@ -206,8 +206,11 @@ class AnalysisConfig:
                             if "analyze_restrictions" in analysis_sec:
                                 self.analyze_restrictions = bool(analysis_sec["analyze_restrictions"])
             except Exception as e:
+                position = ""
+                if isinstance(e, yaml.MarkedYAMLError) and e.problem_mark is not None:
+                    position = f"（{e.problem_mark.line + 1} 行、{e.problem_mark.column + 1} 列）"
                 print(
-                    f"設定ファイル {config_path} の読み込みに失敗しました（現象）。詳細: {e}（原因）。ファイル形式を確認してください（対処方法）",
+                    f"設定ファイル {config_path}{position} の読み込みに失敗しました（現象）。ファイル形式を確認してください（対処方法）",
                     file=sys.stderr,
                 )
 

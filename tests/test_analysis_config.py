@@ -6,6 +6,33 @@ import pytest
 from c2m_export.config import AnalysisConfig, Config
 
 
+@pytest.mark.parametrize(
+    "contents, position",
+    [
+        (b"token: 'yaml-secret-token\n", "2 行、1 列"),
+        (b"token: yaml-secret-token\x00\n", None),
+        (b"\xfftoken: yaml-secret-token\n", None),
+    ],
+)
+def test_analysis_config_load_failure_keeps_contents_private(monkeypatch, capsys, tmp_path, contents, position):
+    """構文・文字コードエラー時も設定内容を出さず、環境変数の読み込みを継続します。"""
+    config_path = tmp_path / "invalid.yaml"
+    config_path.write_bytes(contents)
+    monkeypatch.setenv("C2M_CONFLUENCE_TOKEN", "env-token")
+
+    config = AnalysisConfig()
+    config.load_file_and_env(config_path)
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert str(config_path) in captured.err
+    assert "読み込みに失敗" in captured.err
+    assert "yaml-secret-token" not in captured.err
+    if position is not None:
+        assert position in captured.err
+    assert config.token == "env-token"
+
+
 def test_analysis_config_token_env_priority(monkeypatch, tmp_path):
     monkeypatch.setenv("C2M_CONFLUENCE_TOKEN", "c2m_env_token")
     monkeypatch.setenv("CONFLUENCE_TOKEN", "legacy_env_token")

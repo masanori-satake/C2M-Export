@@ -61,7 +61,6 @@ python skills/confluence-analysis/scripts/run_analysis.py \
 | `--usecase` | 文字列リスト | 分析ユースケース (`risk`, `stale`, `restricted`, `archives`, `empty_with_attachments`, `macros`) | 全 6 種 |
 | `--mode` | 文字列 | 出力モード (`summary`: 集計サマリのみ, `detail`: 個別一覧含む) | `summary` |
 | `--limit` | 整数 | `detail` モード時の個別項目抽出上限件数 | `1000` |
-| `--sort` | 文字列 | `detail` モード時のソート順 (`risk_count`, `days_since_modified`, `page_id`, `attachment_count` 等) | ユースケース別既定 |
 | `--stale-days` | 整数 | 古いページの判定基準日数 | `365` |
 | `--stale-years` | 浮動小数点/整数 | 古いページの判定基準年数 (`--stale-days` と両方指定時は `--stale-days` 優先) | なし |
 | `--min-body-bytes` | 整数 | 添付あり空ページの判定基準バイト数 | `200` |
