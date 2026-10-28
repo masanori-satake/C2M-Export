@@ -90,7 +90,6 @@ python skills/confluence-analysis/scripts/run_analysis.py \
   "generated_at": "2026-03-31T00:00:00Z",
   "mode": "detail",
   "scope": {
-    "base_url": "https://confluence.example.com",
     "space_keys": ["DEV"],
     "root_page_ids": [],
     "resolved_root_count": 10
@@ -104,7 +103,9 @@ python skills/confluence-analysis/scripts/run_analysis.py \
     "stale": {
       "counts": {
         "stale_page_count": 15,
-        "stale_threshold_days": 365
+        "stale_threshold_days": 365,
+        "truncated": false,
+        "total_count": 15
       },
       "items": [
         {
@@ -113,9 +114,7 @@ python skills/confluence-analysis/scripts/run_analysis.py \
           "last_modified": "2023-01-01T00:00:00Z",
           "days_since_modified": 1185
         }
-      ],
-      "truncated": false,
-      "total_count": 15
+      ]
     }
   },
   "uncertainties": {

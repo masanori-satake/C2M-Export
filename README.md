@@ -185,6 +185,7 @@ GitHub Copilot、Kiro、および汎用 Agent Skills で共通して利用可能
 ### 3. MCP サーバ (`c2m_export/mcp_server.py`)
 
 Model Context Protocol (MCP) を経由して分析機能をツール (`analyze_confluence`) として公開できます。
+MCP サーバの利用には **Python 3.10 以上**が必要です（分析 CLI と通常機能の要件は Python 3.8 以上）。
 
 ```bash
 # MCP 追加依存のインストール

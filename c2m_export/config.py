@@ -1,5 +1,6 @@
 import argparse
 import os
+import sys
 from pathlib import Path
 from typing import List, Optional, Set
 
@@ -161,13 +162,10 @@ class AnalysisConfig:
         self.archive_extensions: Optional[Set[str]] = None
         self.analyze_restrictions: Optional[bool] = None
 
-    def load(self):
-        """設定を読み込む。優先順位は CLI > 環境変数 > 設定ファイル > デフォルト."""
-        pre_parser = argparse.ArgumentParser(add_help=False)
-        pre_parser.add_argument("--config", type=str, default=str(DEFAULT_CONFIG_PATH))
-        pre_args, _ = pre_parser.parse_known_args()
-
-        config_path = Path(pre_args.config) if pre_args.config else DEFAULT_CONFIG_PATH
+    def load_file_and_env(self, config_path: Optional[Path] = None):
+        """CLI 引数を参照せず、設定ファイルと環境変数を共通の優先順位で読み込む。"""
+        if config_path is None:
+            config_path = DEFAULT_CONFIG_PATH
 
         if config_path.exists():
             try:
@@ -209,7 +207,8 @@ class AnalysisConfig:
                                 self.analyze_restrictions = bool(analysis_sec["analyze_restrictions"])
             except Exception as e:
                 print(
-                    f"設定ファイル {config_path} の読み込みに失敗しました（現象）。詳細: {e}（原因）。ファイル形式を確認してください（対処方法）"
+                    f"設定ファイル {config_path} の読み込みに失敗しました（現象）。詳細: {e}（原因）。ファイル形式を確認してください（対処方法）",
+                    file=sys.stderr,
                 )
 
         env_token = os.environ.get("C2M_CONFLUENCE_TOKEN") or os.environ.get("CONFLUENCE_TOKEN")
@@ -222,6 +221,15 @@ class AnalysisConfig:
             self.proxy = env_https_proxy
         elif env_http_proxy:
             self.proxy = env_http_proxy
+
+    def load(self):
+        """設定を読み込む。優先順位は CLI > 環境変数 > 設定ファイル > デフォルト."""
+        pre_parser = argparse.ArgumentParser(add_help=False)
+        pre_parser.add_argument("--config", type=str, default=str(DEFAULT_CONFIG_PATH))
+        pre_args, _ = pre_parser.parse_known_args()
+
+        config_path = Path(pre_args.config) if pre_args.config else DEFAULT_CONFIG_PATH
+        self.load_file_and_env(config_path)
 
         parser = argparse.ArgumentParser(description="Confluenceのワークスペース状況を分析するツール")
         parser.add_argument("--base-url", type=str, help="ConfluenceのベースURL (例: https://host/wiki)")

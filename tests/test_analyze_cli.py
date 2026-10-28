@@ -70,3 +70,27 @@ def test_analyze_cli_invalid_param(monkeypatch, capsys, tmp_path):
     assert out_json["error"]["code"] == "INVALID_PARAM"
     assert "secret_token_123" not in captured.out
     assert "secret_token_123" not in captured.err
+
+
+@pytest.mark.parametrize("valid_args, expected_exit", [(True, 0), (False, 2)])
+def test_analyze_cli_invalid_yaml_keeps_stdout_json(monkeypatch, capsys, tmp_path, valid_args, expected_exit):
+    """YAML 読み込み失敗の警告が成功・エラー JSON の標準出力を汚さないことを検証します。"""
+    from c2m_export.analysis.response import AnalysisResponse
+
+    config_path = tmp_path / "invalid.yaml"
+    config_path.write_text("analysis: [unterminated\n", encoding="utf-8")
+    args = ["analyze", "--config", str(config_path), "--root-page-id", "100", "--token", "test-token"]
+    if valid_args:
+        args.extend(["--base-url", "https://example.com"])
+    monkeypatch.setattr(sys, "argv", args)
+    with patch("c2m_export.analyze.run_analysis", return_value=AnalysisResponse()) as mock_run:
+        with pytest.raises(SystemExit) as excinfo:
+            main()
+        assert excinfo.value.code == expected_exit
+        assert mock_run.call_count == int(valid_args)
+    captured = capsys.readouterr()
+    result = json.loads(captured.out)
+    assert result["status"] == ("ok" if valid_args else "error")
+    if not valid_args:
+        assert result["error"]["code"] == "INVALID_PARAM"
+    assert "読み込みに失敗" in captured.err
