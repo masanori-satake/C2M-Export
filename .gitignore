@@ -50,7 +50,6 @@ c2m_config.yaml
 !README.md
 !README_DEV.md
 !AGENTS.md
-!skills/confluence-analysis/SKILL.md
 !.kiro/**/*.md
 !.github/**/*.md
 *.zip

@@ -1,6 +1,5 @@
 import argparse
 import os
-import sys
 from pathlib import Path
 from typing import List, Optional, Set
 
@@ -162,10 +161,13 @@ class AnalysisConfig:
         self.archive_extensions: Optional[Set[str]] = None
         self.analyze_restrictions: Optional[bool] = None
 
-    def load_file_and_env(self, config_path: Optional[Path] = None):
-        """CLI 引数を参照せず、設定ファイルと環境変数を共通の優先順位で読み込む。"""
-        if config_path is None:
-            config_path = DEFAULT_CONFIG_PATH
+    def load(self):
+        """設定を読み込む。優先順位は CLI > 環境変数 > 設定ファイル > デフォルト."""
+        pre_parser = argparse.ArgumentParser(add_help=False)
+        pre_parser.add_argument("--config", type=str, default=str(DEFAULT_CONFIG_PATH))
+        pre_args, _ = pre_parser.parse_known_args()
+
+        config_path = Path(pre_args.config) if pre_args.config else DEFAULT_CONFIG_PATH
 
         if config_path.exists():
             try:
@@ -206,12 +208,8 @@ class AnalysisConfig:
                             if "analyze_restrictions" in analysis_sec:
                                 self.analyze_restrictions = bool(analysis_sec["analyze_restrictions"])
             except Exception as e:
-                position = ""
-                if isinstance(e, yaml.MarkedYAMLError) and e.problem_mark is not None:
-                    position = f"（{e.problem_mark.line + 1} 行、{e.problem_mark.column + 1} 列）"
                 print(
-                    f"設定ファイル {config_path}{position} の読み込みに失敗しました（現象）。ファイル形式を確認してください（対処方法）",
-                    file=sys.stderr,
+                    f"設定ファイル {config_path} の読み込みに失敗しました（現象）。詳細: {e}（原因）。ファイル形式を確認してください（対処方法）"
                 )
 
         env_token = os.environ.get("C2M_CONFLUENCE_TOKEN") or os.environ.get("CONFLUENCE_TOKEN")
@@ -224,15 +222,6 @@ class AnalysisConfig:
             self.proxy = env_https_proxy
         elif env_http_proxy:
             self.proxy = env_http_proxy
-
-    def load(self):
-        """設定を読み込む。優先順位は CLI > 環境変数 > 設定ファイル > デフォルト."""
-        pre_parser = argparse.ArgumentParser(add_help=False)
-        pre_parser.add_argument("--config", type=str, default=str(DEFAULT_CONFIG_PATH))
-        pre_args, _ = pre_parser.parse_known_args()
-
-        config_path = Path(pre_args.config) if pre_args.config else DEFAULT_CONFIG_PATH
-        self.load_file_and_env(config_path)
 
         parser = argparse.ArgumentParser(description="Confluenceのワークスペース状況を分析するツール")
         parser.add_argument("--base-url", type=str, help="ConfluenceのベースURL (例: https://host/wiki)")
@@ -254,7 +243,14 @@ class AnalysisConfig:
         parser.add_argument("--restrictions", action="store_true", default=None, help="権限分析を有効化する")
         parser.add_argument("--no-restrictions", action="store_false", dest="restrictions", help="権限分析を無効化する")
 
-        cli_args = parser.parse_args()
+        try:
+            cli_args = parser.parse_args()
+        except SystemExit as e:
+            if e.code == 0:
+                raise e
+            raise ValueError(
+                "現象: 無効なコマンドライン引数が指定されました。原因: コマンドライン引数の解析に失敗しました。対処方法: 引数の指定内容および構文を確認してください。"
+            ) from e
 
         if cli_args.base_url:
             self.base_url = cli_args.base_url

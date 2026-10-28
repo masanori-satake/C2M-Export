@@ -39,19 +39,19 @@ class ConfluenceClient:
                     return response.json()
                 elif 500 <= response.status_code < 600:
                     logger.warning(
-                        f"サーバーエラー {response.status_code} が発生しました ({url})。再試行中 ({i + 1}/{retries})..."
+                        f"サーバーエラー {response.status_code} が発生しました。再試行中 ({i + 1}/{retries})..."
                     )
                     time.sleep(backoff * (2**i))
                     continue
                 else:
                     response.raise_for_status()
-            except requests.exceptions.RequestException as e:
+            except requests.exceptions.RequestException:
                 if i == retries - 1:
                     raise
-                logger.warning(f"リクエストが失敗しました: {e}。再試行中 ({i + 1}/{retries})...")
+                logger.warning(f"リクエストが失敗しました。再試行中 ({i + 1}/{retries})...")
                 time.sleep(backoff * (2**i))
 
-        raise Exception(f"{retries} 回の試行後も {url} の取得に失敗しました")
+        raise Exception("Confluence API リクエストに失敗しました")
 
     def get_page(self, page_id: str, expand: str = "body.storage,space") -> Dict:
         """指定されたページIDの情報を取得する.
@@ -185,7 +185,7 @@ class ConfluenceClient:
                         raise
                 elif 500 <= response.status_code < 600:
                     logger.warning(
-                        f"サーバーエラー {response.status_code} が発生しました ({url})。再試行中 ({i + 1}/{retries})..."
+                        f"サーバーエラー {response.status_code} が発生しました。再試行中 ({i + 1}/{retries})..."
                     )
                     time.sleep(backoff * (2**i))
                     continue
@@ -193,10 +193,10 @@ class ConfluenceClient:
                     response.raise_for_status()
             except ValueError:
                 raise
-            except requests.exceptions.RequestException as e:
+            except requests.exceptions.RequestException:
                 if i == retries - 1:
                     raise
-                logger.warning(f"添付ダウンロードリクエストが失敗しました: {e}。再試行中 ({i + 1}/{retries})...")
+                logger.warning(f"添付ダウンロードリクエストが失敗しました。再試行中 ({i + 1}/{retries})...")
                 time.sleep(backoff * (2**i))
 
-        raise requests.exceptions.RequestException(f"{retries} 回の試行後も {url} のダウンロードに失敗しました")
+        raise requests.exceptions.RequestException("添付ファイルのダウンロードに失敗しました")
