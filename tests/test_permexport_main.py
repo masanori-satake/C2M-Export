@@ -18,6 +18,8 @@ def test_permexport_main(tmp_path):
         "100",
         "--output-dir",
         str(tmp_path),
+        "--config",
+        str(tmp_path / "nonexistent.yaml"),
     ]
 
     mock_client_cls = MagicMock()
@@ -58,6 +60,8 @@ def test_permexport_main_overwrite_conflict(tmp_path):
         "100",
         "--output-dir",
         str(tmp_path),
+        "--config",
+        str(tmp_path / "nonexistent.yaml"),
     ]
 
     # 既存の _permissions.md を作成

@@ -63,9 +63,17 @@ permission_export:
     assert config.page_filename_mode == "index"
 
 
-def test_permission_export_config_validation_errors():
+def test_permission_export_config_validation_errors(tmp_path):
     config = PermissionExportConfig()
-    test_args = ["permexport", "--base-url", "https://example.com", "--token", "tok"]
+    test_args = [
+        "permexport",
+        "--base-url",
+        "https://example.com",
+        "--token",
+        "tok",
+        "--config",
+        str(tmp_path / "nonexistent.yaml"),
+    ]
     with patch.object(sys, "argv", test_args):
         config.load()
         with pytest.raises(ValueError, match="At least one root_page_id or space_key is required"):

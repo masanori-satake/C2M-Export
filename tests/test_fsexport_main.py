@@ -22,6 +22,8 @@ def test_main_overwrite_conflict(tmp_path):
         "100",
         "--output-dir",
         str(tmp_path),
+        "--config",
+        str(tmp_path / "nonexistent.yaml"),
     ]
 
     with patch("sys.argv", test_args):
@@ -43,6 +45,8 @@ def test_main_success(tmp_path):
         "100",
         "--output-dir",
         str(output_dir),
+        "--config",
+        str(tmp_path / "nonexistent.yaml"),
     ]
 
     dummy_node = MagicMock()
@@ -90,6 +94,8 @@ def test_main_summary_includes_tree_and_writer_failures(tmp_path):
         "PRIVATE",
         "--output-dir",
         str(tmp_path),
+        "--config",
+        str(tmp_path / "nonexistent.yaml"),
     ]
 
     with patch("sys.argv", test_args):
@@ -124,6 +130,8 @@ def test_main_all_roots_failed_writes_summary_and_exits(tmp_path, target_option)
         "100",
         "--output-dir",
         str(tmp_path),
+        "--config",
+        str(tmp_path / "nonexistent.yaml"),
     ]
 
     with patch("sys.argv", test_args):

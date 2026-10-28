@@ -108,6 +108,8 @@ def test_full_export_manifest_is_reused_by_next_sync(tmp_path, mode):
         str(tmp_path),
         "--page-filename-mode",
         mode,
+        "--config",
+        str(tmp_path / "nonexistent.yaml"),
     ]
     with patch("sys.argv", args), patch("c2m_export.fsexport.ConfluenceClient", return_value=client):
         main()
