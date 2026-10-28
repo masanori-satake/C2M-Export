@@ -50,9 +50,7 @@ def main() -> None:
             "status": "error",
             "error": {
                 "code": CODE_INVALID_PARAM,
-                "message": msg
-                if "現象:" in msg
-                else f"現象: 設定エラー。原因: {msg}。対処方法: 引数または設定ファイルを確認してください。",
+                "message": msg if "現象:" in msg else f"現象: 設定エラー。原因: {msg}。対処方法: 引数または設定ファイルを確認してください。",
             },
         }
         json_out = json.dumps(err_res, ensure_ascii=False, indent=2)

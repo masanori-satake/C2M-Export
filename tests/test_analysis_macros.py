@@ -19,7 +19,7 @@ def test_count_macros():
 
 def test_summarize_macros():
     p1 = PageMeta("100", "Page A", "SPACE", 1, 100, None, [])
-    p1.macro_counts = {"toc": 2, "jira": 1, "custom_macro": 3}  # type: ignore[attr-defined]
+    p1.macro_counts = {"toc": 2, "jira": 1, "custom_macro": 3}
 
     results = summarize_macros([p1])
     res_dict = {r["name"]: r for r in results}

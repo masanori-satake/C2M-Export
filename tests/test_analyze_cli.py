@@ -1,9 +1,7 @@
 import json
 import sys
 from unittest.mock import MagicMock, patch
-
 import pytest
-
 from c2m_export.analyze import main
 
 

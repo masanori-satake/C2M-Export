@@ -286,17 +286,13 @@ class AnalysisConfig:
     def validate(self):
         """必須設定の有無を確認し、URLの正規化および矛盾チェックを行う."""
         if not self.base_url:
-            raise ValueError(
-                "現象: base_url が未指定です。原因: --base-url または設定ファイルに base_url が存在しません。対処方法: --base-url オプションまたは設定ファイルで base_url を指定してください。"
-            )
+            raise ValueError("現象: base_url が未指定です。原因: --base-url または設定ファイルに base_url が存在しません。対処方法: --base-url オプションまたは設定ファイルで base_url を指定してください。")
         if not self.root_page_ids and not self.space_keys:
             raise ValueError(
                 "現象: ルート指定が存在しません。原因: root_page_id および space_key が指定されていません。対処方法: --root-page-id または --space-key を指定してください。"
             )
         if not self.token:
-            raise ValueError(
-                "現象: token が未指定です。原因: 認証トークンが指定されていません。対処方法: C2M_CONFLUENCE_TOKEN 環境変数または --token オプションでトークンを指定してください。"
-            )
+            raise ValueError("現象: token が未指定です。原因: 認証トークンが指定されていません。対処方法: C2M_CONFLUENCE_TOKEN 環境変数または --token オプションでトークンを指定してください。")
 
         # 矛盾チェック (restricted ユースケースと --no-restrictions の競合)
         if self.usecases and "restricted" in self.usecases and self.analyze_restrictions is False:

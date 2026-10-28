@@ -5,8 +5,7 @@
 """
 
 from datetime import datetime, timezone
-from typing import Any, Dict, List
-
+from typing import Any, Dict, List, Optional
 from c2m_export.assessment.analyzers import parse_iso_datetime
 from c2m_export.assessment.models import AssessmentResult, RawInventory
 
@@ -43,7 +42,9 @@ def extract_risk_pages(result: AssessmentResult, base_url: str) -> List[Dict[str
     return records
 
 
-def extract_stale_pages(inventory: RawInventory, stale_days: int, reference_time: datetime) -> List[Dict[str, Any]]:
+def extract_stale_pages(
+    inventory: RawInventory, stale_days: int, reference_time: datetime
+) -> List[Dict[str, Any]]:
     """UC2: 直近 N 日（または年）以上更新されていないページを抽出する."""
     stale_records: List[Dict[str, Any]] = []
 

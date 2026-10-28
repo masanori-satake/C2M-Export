@@ -1,8 +1,6 @@
 import os
 import sys
-
 import pytest
-
 from c2m_export.config import AnalysisConfig, Config
 
 
@@ -12,15 +10,7 @@ def test_analysis_config_token_env_priority(monkeypatch, tmp_path):
     nonexistent_config = str(tmp_path / "nonexistent.yaml")
 
     # CLI args without --token
-    test_args = [
-        "analyze",
-        "--base-url",
-        "https://example.com/",
-        "--space-key",
-        "SPACE",
-        "--config",
-        nonexistent_config,
-    ]
+    test_args = ["analyze", "--base-url", "https://example.com/", "--space-key", "SPACE", "--config", nonexistent_config]
     monkeypatch.setattr(sys, "argv", test_args)
 
     cfg = AnalysisConfig()

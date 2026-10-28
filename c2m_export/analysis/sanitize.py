@@ -44,7 +44,7 @@ def sanitize_text(text: str, secrets: Optional[Iterable[Optional[str]]] = None) 
         return f"{prefix}***REDACTED***{quote}"
 
     sanitized = re.sub(
-        r"(Authorization[\"\']?\s*[:=]\s*[\"\']?)([^\"\'\s,]+)([\"\']?)",
+        r'(Authorization[\"\']?\s*[:=]\s*[\"\']?)([^\"\'\s,]+)([\"\']?)',
         _mask_auth_header,
         sanitized,
         flags=re.IGNORECASE,

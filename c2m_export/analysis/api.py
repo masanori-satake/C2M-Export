@@ -1,7 +1,7 @@
 """共通 1 層 Analysis API 実装モジュール (run_analysis)."""
 
-import logging
 from datetime import datetime, timezone
+import logging
 from typing import Any, Dict, List, Optional, Tuple
 
 import requests
@@ -66,12 +66,12 @@ def _resolve_roots(
     if space_keys:
         for skey in space_keys:
             try:
-                sp_pages = client.get_space_homepage_id(skey)
+                sp_pages = client.get_space_root_pages(skey)
                 if sp_pages:
-                    if isinstance(sp_pages, list):
-                        resolved_ids.extend([str(p) for p in sp_pages])
-                    else:
-                        resolved_ids.append(str(sp_pages))
+                    for page_obj in sp_pages:
+                        pid = str(page_obj.get("id", ""))
+                        if pid:
+                            resolved_ids.append(pid)
                 else:
                     empty_space_keys.append(skey)
             except requests.exceptions.HTTPError as e:
@@ -84,9 +84,9 @@ def _resolve_roots(
                     )
                 elif status_code in (401, 403):
                     raise AuthFailedError(
-                        "現象: Confluence API の認証に失敗しました。"
-                        "原因: トークンが無効か権限が不足しています。"
-                        "対処方法: 正しいアクセストークンを指定してください。"
+                        f"現象: Confluence API の認証に失敗しました。"
+                        f"原因: トークンが無効か権限が不足しています。"
+                        f"対処方法: 正しいアクセストークンを指定してください。"
                     )
                 else:
                     raise ApiError(f"API Error ({status_code}): {e}")
@@ -111,9 +111,9 @@ def _resolve_roots(
                     )
                 elif status_code in (401, 403):
                     raise AuthFailedError(
-                        "現象: Confluence API の認証に失敗しました。"
-                        "原因: トークンが無効か権限が不足しています。"
-                        "対処方法: 正しいアクセストークンを指定してください。"
+                        f"現象: Confluence API の認証に失敗しました。"
+                        f"原因: トークンが無効か権限が不足しています。"
+                        f"対処方法: 正しいアクセストークンを指定してください。"
                     )
                 else:
                     raise ApiError(f"API Error ({status_code}): {e}")
@@ -121,8 +121,12 @@ def _resolve_roots(
                 raise ApiError(f"通信エラーが発生しました: {e}")
 
     # 重複除去
-    seen = set()
-    final_root_ids = [x for x in resolved_ids if not (x in seen or seen.add(x))]
+    seen: set = set()
+    final_root_ids = []
+    for x in resolved_ids:
+        if x not in seen:
+            seen.add(x)
+            final_root_ids.append(x)
 
     if not final_root_ids and not empty_space_keys:
         raise TargetNotFoundError(
@@ -166,7 +170,9 @@ def run_analysis(
             client = ConfluenceClient(base_url=config.base_url, token=config.token, proxy=config.proxy)
 
         # 1. 起点解決
-        resolved_root_ids, empty_space_keys = _resolve_roots(client, config.root_page_ids, config.space_keys)
+        resolved_root_ids, empty_space_keys = _resolve_roots(
+            client, config.root_page_ids, config.space_keys
+        )
 
         # 2. 収集
         macros_requested = "macros" in params.usecases

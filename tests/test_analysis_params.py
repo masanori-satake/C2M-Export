@@ -1,5 +1,4 @@
 import pytest
-
 from c2m_export.analysis.params import ALL_USECASES, AnalysisParams
 
 

@@ -1,5 +1,4 @@
 from unittest.mock import MagicMock
-
 from c2m_export.assessment.collector import Collector
 
 
