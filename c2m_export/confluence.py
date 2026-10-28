@@ -7,6 +7,20 @@ import requests
 logger = logging.getLogger(__name__)
 
 
+def _safe_request_exception(
+    error: requests.exceptions.RequestException, message: str
+) -> requests.exceptions.RequestException:
+    """URLや応答本文を引き継がず、例外分類に必要なステータスだけを保持する."""
+    response = None
+    if error.response is not None:
+        response = requests.Response()
+        response.status_code = error.response.status_code
+        message += f" (HTTP {response.status_code})"
+    if isinstance(error, requests.exceptions.HTTPError):
+        return requests.exceptions.HTTPError(message, response=response)
+    return requests.exceptions.RequestException(message, response=response)
+
+
 class ConfluenceClient:
     """Confluence Data Center REST APIとの通信を担当するクライアントクラス.
 
@@ -45,9 +59,9 @@ class ConfluenceClient:
                     continue
                 else:
                     response.raise_for_status()
-            except requests.exceptions.RequestException:
+            except requests.exceptions.RequestException as error:
                 if i == retries - 1:
-                    raise
+                    raise _safe_request_exception(error, "Confluence API リクエストに失敗しました") from None
                 logger.warning(f"リクエストが失敗しました。再試行中 ({i + 1}/{retries})...")
                 time.sleep(backoff * (2**i))
 
@@ -193,9 +207,9 @@ class ConfluenceClient:
                     response.raise_for_status()
             except ValueError:
                 raise
-            except requests.exceptions.RequestException:
+            except requests.exceptions.RequestException as error:
                 if i == retries - 1:
-                    raise
+                    raise _safe_request_exception(error, "添付ファイルのダウンロードに失敗しました") from None
                 logger.warning(f"添付ダウンロードリクエストが失敗しました。再試行中 ({i + 1}/{retries})...")
                 time.sleep(backoff * (2**i))
 
