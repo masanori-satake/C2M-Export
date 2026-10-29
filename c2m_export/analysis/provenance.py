@@ -39,9 +39,9 @@ def enrich_restricted(restricted_records: List[Dict], inventory: RawInventory) -
             r["effective_read_groups"] = eff.read_groups
             r["effective_restriction_present"] = bool(eff.read_users or eff.read_groups)
         else:
-            r["effective_read_users"] = None
-            r["effective_read_groups"] = None
-            r["effective_restriction_present"] = None
+            r["effective_read_users"] = []
+            r["effective_read_groups"] = []
+            r["effective_restriction_present"] = False
         enriched.append(r)
     return enriched
 

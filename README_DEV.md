@@ -121,9 +121,6 @@ MOVE_RENAME は `computed_paths` で再計算した新しい親と、移動先�
 `count_macros` の解析・集計例外は Collector が捕捉し、警告ログと `macro_parse_failed_count` に反映します。失敗ページの部分集計は採用せず、ほかのページの収集を継続します。
 `sanitize_text` は引用符・バックスラッシュ・区切りでトークンを止め、Basic の方式名と認証情報をまとめてマスクします。出力する JSON の構造は保持します。
 
-Space 概要・詳細収集には、明示された Space キーと解決済み起点ページから得た Space キーを重複排除して使い、`all_spaces=True` の場合だけ共有 Space 一覧全体を対象にします。`Collector.collect` は `self.raw_inventory` に DFS 結果を追加し、前後に収集した Space・可視範囲・環境情報と失敗キーを同じ戻り値に保持します。
-`AttachmentMeta.attachment_id` は添付一覧の `id` を保持する末尾の既定値付きフィールド（既定は空文字）で、抽出テキスト照会と失敗参照に使用します。実効閲覧制限が未取得の場合、`provenance.enrich_restricted` は実効制限の3項目を `None` に設定します。
-
 `ConfluenceClient._request` と `download_attachment` は、最終試行の通信例外を URL・元メッセージを含まない `RequestException` に変換し、元例外のトレースバック表示を抑制します。HTTP エラーは `HTTPError` と `response.status_code` を保持するため、401/403・404 の分析エラー分類は維持します。応答オブジェクトにはステータスコードだけを引き継ぎ、URL・ヘッダ・本文・元リクエストを含めません。
 401・403・404 の `HTTPError` は初回で同じサニタイズ処理を適用して送出し、再試行・待機は行いません。429・5xx・通信エラーの指数バックオフによる再試行は維持します。
 5xx の指数バックオフは次の試行がある場合だけ行い、最終試行では `raise_for_status()` を経由して同じサニタイズ処理を適用します。分析 API では `root_page_ids`・`space_keys` の両経路で `API_ERROR` として扱います。

@@ -222,26 +222,13 @@ def run_analysis(
                 return c_val
             return deep
 
-        collect_history = _resolve_flag(
-            getattr(params, "collect_history", None), getattr(config, "collect_history", None)
-        )
+        collect_history = _resolve_flag(getattr(params, "collect_history", None), getattr(config, "collect_history", None))
         collect_labels = _resolve_flag(getattr(params, "collect_labels", None), getattr(config, "collect_labels", None))
-        collect_comments = _resolve_flag(
-            getattr(params, "collect_comments", None), getattr(config, "collect_comments", None)
-        )
-        collect_watchers = _resolve_flag(
-            getattr(params, "collect_watchers", None), getattr(config, "collect_watchers", None)
-        )
-        collect_effective_restrictions = _resolve_flag(
-            getattr(params, "collect_effective_restrictions", None),
-            getattr(config, "collect_effective_restrictions", None),
-        )
-        collect_extracted_text = _resolve_flag(
-            getattr(params, "collect_extracted_text", None), getattr(config, "collect_extracted_text", None)
-        )
-        collect_space_permissions = _resolve_flag(
-            getattr(params, "collect_space_permissions", None), getattr(config, "collect_space_permissions", None)
-        )
+        collect_comments = _resolve_flag(getattr(params, "collect_comments", None), getattr(config, "collect_comments", None))
+        collect_watchers = _resolve_flag(getattr(params, "collect_watchers", None), getattr(config, "collect_watchers", None))
+        collect_effective_restrictions = _resolve_flag(getattr(params, "collect_effective_restrictions", None), getattr(config, "collect_effective_restrictions", None))
+        collect_extracted_text = _resolve_flag(getattr(params, "collect_extracted_text", None), getattr(config, "collect_extracted_text", None))
+        collect_space_permissions = _resolve_flag(getattr(params, "collect_space_permissions", None), getattr(config, "collect_space_permissions", None))
 
         # 1. 起点解決
         resolved_root_ids, empty_space_keys, cql_failed = _resolve_roots(
@@ -263,32 +250,19 @@ def run_analysis(
             collect_space_permissions=collect_space_permissions,
         )
 
-        # 解決済み起点の Space に収集範囲を限定する。
-        target_skeys = list(dict.fromkeys(config.space_keys or []))
-        if all_spaces:
-            for sp in shared_spaces:
-                k = sp.get("key")
-                if k and k not in target_skeys:
-                    target_skeys.append(k)
-        else:
-            for rid in resolved_root_ids:
-                try:
-                    root_page = client.get_page(rid, expand="space")
-                    k = root_page.get("space", {}).get("key")
-                    if k and k not in target_skeys:
-                        target_skeys.append(k)
-                except Exception as e:
-                    logger.warning(f"起点ページ {rid} の Space 解決に失敗しました: {e}")
-
-        target_spaces = shared_spaces if all_spaces else [sp for sp in shared_spaces if sp.get("key") in target_skeys]
-
         # 全体把握収集
-        collector.collect_workspace_overview(target_spaces, resolved_root_ids)
+        collector.collect_workspace_overview(shared_spaces, resolved_root_ids)
 
         # DFS 走査
         inventory = collector.collect(resolved_root_ids)
 
         # per-space 詳細調査
+        target_skeys = list(config.space_keys or [])
+        if shared_spaces:
+            for sp in shared_spaces:
+                k = sp.get("key")
+                if k and k not in target_skeys:
+                    target_skeys.append(k)
         collector.collect_space_details(target_skeys)
 
         # 3. アセスメント集計

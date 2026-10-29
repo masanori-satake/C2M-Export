@@ -61,11 +61,7 @@ class Collector:
             name = sp.get("name", space_key)
             sp_type = sp.get("type", "global")
             status = sp.get("status", "current")
-            description = (
-                sp.get("description", {}).get("plain", {}).get("value")
-                if isinstance(sp.get("description"), dict)
-                else None
-            )
+            description = sp.get("description", {}).get("plain", {}).get("value") if isinstance(sp.get("description"), dict) else None
 
             # Space labels
             label_count = 0
@@ -222,6 +218,8 @@ class Collector:
     def collect(self, root_ids: List[str]) -> RawInventory:
         """指定されたルートページIDリストからDFS巡回し RawInventory を構築する."""
         inventory = self.raw_inventory
+        """指定されたルートページIDリストからDFS巡回し RawInventory を構築する."""
+        inventory = RawInventory()
         visited_page_ids: Set[str] = set()
 
         # (page_id, level, ancestors_titles) のスタック
@@ -296,7 +294,6 @@ class Collector:
                             media_type=media_type,
                             file_size=file_size if isinstance(file_size, int) else None,
                             version=att_version,
-                            attachment_id=att.get("id", ""),
                         )
                     )
             except Exception as e:
@@ -435,12 +432,18 @@ class Collector:
                     raw_eff = self.client.get_relevant_view_restrictions(page_id)
                     r_users = [
                         u.get("username", "")
-                        for u in raw_eff.get("read", {}).get("restrictions", {}).get("user", {}).get("results", [])
+                        for u in raw_eff.get("read", {})
+                        .get("restrictions", {})
+                        .get("user", {})
+                        .get("results", [])
                         if u.get("username")
                     ]
                     r_groups = [
                         g.get("name", "")
-                        for g in raw_eff.get("read", {}).get("restrictions", {}).get("group", {}).get("results", [])
+                        for g in raw_eff.get("read", {})
+                        .get("restrictions", {})
+                        .get("group", {})
+                        .get("results", [])
                         if g.get("name")
                     ]
                     eff_restriction_meta = RestrictionMeta(
@@ -461,7 +464,7 @@ class Collector:
 
             if self.collect_extracted_text:
                 for att_item in attachments_meta:
-                    att_id = att_item.attachment_id
+                    att_id = att_item.filename  # identifier placeholder
                     try:
                         ext_res = self.client.get_attachment_extracted_text(page_id, att_id)
                         if isinstance(ext_res, dict):

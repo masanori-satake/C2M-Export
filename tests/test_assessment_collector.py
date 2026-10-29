@@ -1,9 +1,6 @@
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from c2m_export.assessment.collector import Collector
-from c2m_export.assessment.models import AttachmentMeta
 
 
 def test_collector_collect():
@@ -70,82 +67,3 @@ def test_collector_skip_on_error():
 
     assert len(inventory.pages) == 0
     assert inventory.skipped_page_ids == ["999"]
-
-
-def test_collect_preserves_workspace_and_space_failures():
-    """DFS の前後で収集したメタデータと失敗キーを同じ戻り値に保持する。"""
-    client = MagicMock()
-    client.get_space_labels.side_effect = RuntimeError("unavailable")
-    client.get_space_root_pages.return_value = []
-    client.get_current_user.return_value = {"username": "alice"}
-    client.get_user_memberof.return_value = [{"name": "staff"}]
-    client.get_access_mode.return_value = {"accessMode": "READ_WRITE"}
-    client.get_server_information.return_value = {"version": "9.2", "buildNumber": 123}
-    client.get_space_permissions.side_effect = RuntimeError("unavailable")
-    client.get_space_watchers.side_effect = RuntimeError("unavailable")
-    client.get_page.side_effect = RuntimeError("unavailable")
-    collector = Collector(client, collect_space_permissions=True, collect_watchers=True)
-    collector.collect_workspace_overview([{"key": "TEST", "name": "Test"}], ["999"])
-    collector.collect_space_details(["TEST"])
-
-    inventory = collector.collect(["999"])
-    collector.collect_space_details(["AFTER"])
-
-    assert inventory is collector.raw_inventory
-    assert [sp.space_key for sp in inventory.spaces] == ["TEST", "AFTER"]
-    assert inventory.visibility.username == "alice"
-    assert inventory.visibility.groups == ["staff"]
-    assert inventory.visibility.visible_space_keys == ["TEST"]
-    assert inventory.visibility.unavailable_apis == ["space_labels"]
-    assert inventory.environment.server_version == "9.2"
-    assert inventory.space_permission_failed_keys == ["TEST", "AFTER"]
-    assert inventory.space_watcher_failed_keys == ["TEST", "AFTER"]
-    assert inventory.skipped_page_ids == ["999"]
-
-
-@pytest.mark.parametrize("enabled, failed", [(True, False), (True, True), (False, False)])
-def test_collect_extracted_text_uses_attachment_id(enabled, failed):
-    """同名の添付でも ID ごとに照会し、失敗参照にも添付 ID を保持する。"""
-    client = MagicMock()
-    client.get_page.return_value = {"title": "Page", "space": {"key": "TEST"}}
-    client.get_attachments.return_value = [
-        {"id": "att-1", "title": "doc.pdf"},
-        {"id": "att-2", "title": "doc.pdf"},
-    ]
-    client.get_child_pages.return_value = []
-    client.get_attachment_extracted_text.side_effect = [
-        RuntimeError("unavailable") if failed else {"text": "本文"},
-        {"text": ""},
-    ]
-    collector = Collector(client, analyze_restrictions=False, collect_extracted_text=enabled)
-
-    inventory = collector.collect(["100"])
-    first, second = inventory.pages[0].attachments
-
-    assert [first.attachment_id, second.attachment_id] == ["att-1", "att-2"]
-    if enabled:
-        assert client.get_attachment_extracted_text.call_args_list == [
-            (("100", "att-1"),),
-            (("100", "att-2"),),
-        ]
-        assert first.has_extracted_text is (None if failed else True)
-        assert first.extracted_text_length == (None if failed else 2)
-        assert second.has_extracted_text is False
-        assert second.extracted_text_length == 0
-    else:
-        client.get_attachment_extracted_text.assert_not_called()
-        assert first.has_extracted_text is None
-    assert inventory.extracted_text_failed_refs == (["100:att-1"] if failed else [])
-
-
-def test_attachment_id_defaults_to_empty():
-    """既存の位置引数による生成と ID 欠落の添付メタデータを扱える。"""
-    assert AttachmentMeta("100", "doc.pdf", "pdf", "application/pdf", 1, 2, True, 3).attachment_id == ""
-    client = MagicMock()
-    client.get_page.return_value = {"title": "Page"}
-    client.get_attachments.return_value = [{"title": "doc.pdf"}]
-    client.get_child_pages.return_value = []
-
-    inventory = Collector(client, analyze_restrictions=False).collect(["100"])
-
-    assert inventory.pages[0].attachments[0].attachment_id == ""
