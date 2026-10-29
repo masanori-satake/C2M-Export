@@ -465,9 +465,22 @@ class ConfluenceClient:
             requests.exceptions.RequestException: ダウンロード失敗時
         """
         import os
+        from urllib.parse import urlparse
 
-        if download_path.startswith("http://") or download_path.startswith("https://"):
-            url = download_path
+        parsed_base = urlparse(self.base_url)
+        if (
+            download_path.startswith("http://")
+            or download_path.startswith("https://")
+            or download_path.startswith("//")
+        ):
+            parsed_download = urlparse(download_path)
+            if parsed_download.netloc and parsed_download.netloc != parsed_base.netloc:
+                raise ValueError(
+                    f"現象: 許可されていない外部ホスト ({parsed_download.netloc}) へのリクエストを遮断しました。 "
+                    f"原因: base_url ({parsed_base.netloc}) と異なるホストへのアクセスが検出されました。 "
+                    "対処方法: Confluence サーバー内の正当な URL を指定してください。"
+                )
+            url = download_path if not download_path.startswith("//") else f"{parsed_base.scheme}:{download_path}"
         else:
             url = f"{self.base_url}{download_path}"
 
