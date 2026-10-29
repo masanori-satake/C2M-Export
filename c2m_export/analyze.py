@@ -13,6 +13,8 @@ from c2m_export.analysis.response import (
     CODE_INTERNAL_ERROR,
     CODE_INVALID_PARAM,
     CODE_TARGET_NOT_FOUND,
+    AnalysisResponse,
+    ErrorObject,
 )
 from c2m_export.analysis.sanitize import sanitize_text
 from c2m_export.config import AnalysisConfig
@@ -45,17 +47,16 @@ def main() -> None:
     except Exception as e:
         # 設定ロード・検証エラー時
         msg = str(e)
-        err_res = {
-            "schema_version": "1.0",
-            "status": "error",
-            "error": {
-                "code": CODE_INVALID_PARAM,
-                "message": msg
-                if "現象:" in msg
-                else f"現象: 設定エラー。原因: {msg}。対処方法: 引数または設定ファイルを確認してください。",
-            },
-        }
-        json_out = json.dumps(err_res, ensure_ascii=False, indent=2)
+        err_msg = (
+            msg
+            if "現象:" in msg
+            else f"現象: 設定エラー。原因: {msg}。対処方法: 引数または設定ファイルを確認してください。"
+        )
+        err_resp = AnalysisResponse(
+            status="error",
+            error=ErrorObject(code=CODE_INVALID_PARAM, message=err_msg),
+        )
+        json_out = json.dumps(err_resp.to_dict(), ensure_ascii=False, indent=2)
         sanitized_json = sanitize_text(json_out, secrets=[config.token])
         sys.stdout.write(sanitized_json + "\n")
 
