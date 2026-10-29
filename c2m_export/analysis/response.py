@@ -2,7 +2,7 @@
 
 JSON スキーマ概要:
 {
-  "schema_version": "1.0",
+  "schema_version": "1.1",
   "status": "ok" | "error",
   "generated_at": "YYYY-MM-DDTHH:MM:SSZ",
   "mode": "summary" | "detail",
@@ -11,6 +11,9 @@ JSON スキーマ概要:
     "space_keys": ["..."],
     "resolved_root_count": int
   },
+  "workspace": { ... },  # ワークスペース概要（total_spaces, spaces 等）
+  "visibility": { ... }, # アクセス可否・匿名アクセス概要（anonymous_access, unavailable_apis 等）
+  "environment": { ... },# Confluence 環境情報（confluence_version 等）
   "summary": { ... },  # 既存 assessment summary と同一構造
   "usecases": { ... }, # UC1〜UC6 の結果ブロック
   "uncertainties": {
@@ -20,7 +23,17 @@ JSON スキーマ概要:
     "size_meta_missing_count": int,
     "macro_parse_failed_count": int,
     "empty_space_keys": ["..."],
-    "restrictions_disabled": bool
+    "restrictions_disabled": bool,
+    "history_failed_count": int,
+    "label_failed_count": int,
+    "comment_failed_count": int,
+    "effective_restriction_failed_count": int,
+    "extracted_text_failed_count": int,
+    "content_watcher_failed_count": int,
+    "space_watcher_failed_count": int,
+    "space_permission_failed_count": int,
+    "cql_failed": bool,
+    "unavailable_apis": ["..."]
   },
   "error": null | { "code": "...", "message": "...", "detail": "..." }
 }
