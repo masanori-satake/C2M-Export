@@ -2,7 +2,7 @@
 
 import logging
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Protocol, Tuple
 
 import requests
 
@@ -42,6 +42,33 @@ from c2m_export.assessment.report import generate_json_report
 from c2m_export.confluence import ConfluenceClient
 
 logger = logging.getLogger(__name__)
+
+
+class AnalysisConfigProtocol(Protocol):
+    """run_analysis が参照する config オブジェクトの要求属性仕様 Protocol.
+
+    主に AnalysisConfig (c2m_export.config) から供給されますが、
+    汎用的な Config インスタンスや外部設定オブジェクトも受容します。
+    """
+
+    # 共通接続・対象設定 (全 Config クラス共通)
+    base_url: Optional[str]
+    token: Optional[str]
+    proxy: Optional[str]
+    root_page_ids: List[str]
+    space_keys: List[str]
+
+    # 分析・オプション設定 (AnalysisConfig に定義)
+    all_spaces: bool
+    cql: Optional[str]
+    deep: bool
+    collect_history: Optional[bool]
+    collect_labels: Optional[bool]
+    collect_comments: Optional[bool]
+    collect_watchers: Optional[bool]
+    collect_effective_restrictions: Optional[bool]
+    collect_extracted_text: Optional[bool]
+    collect_space_permissions: Optional[bool]
 
 
 class AuthFailedError(Exception):
@@ -190,7 +217,22 @@ def run_analysis(
     config: Any,
     client: Optional[ConfluenceClient] = None,
 ) -> AnalysisResponse:
-    """共通 1 層 Analysis API メイン関数."""
+    """共通 1 層 Analysis API メイン関数.
+
+    Args:
+        params: 分析実行パラメータ (AnalysisParams)
+        config: 分析設定オブジェクト (AnalysisConfig または互換 Config インスタンス)
+            参照される属性一覧と出所:
+            - base_url, token, proxy, root_page_ids, space_keys: 全 Config クラス共通
+            - all_spaces, cql, deep, collect_*: AnalysisConfig
+            - single_file_max_mb, path_length_limit, blocked_extensions, attachment_dir_name:
+              AssessConfig / FsExportConfig 等から hasattr で選択的に参照。
+              AnalysisConfig に属性がない場合は analyze_inventory 内の既定値に委譲。
+        client: ConfluenceClient インスタンス (省略時は config から生成)
+
+    Returns:
+        AnalysisResponse: 分析結果オブジェクト
+    """
     try:
         # パラメータ検証
         params.validate()
@@ -287,6 +329,10 @@ def run_analysis(
         collector.collect_space_details(target_skeys)
 
         # 3. アセスメント集計
+        # 将来リスク閾値を AnalysisConfig に持たせる場合の方針:
+        # hasattr(config, name) により選択的に属性を抽出しているため、将来 AnalysisConfig 等に
+        # リスク閾値属性を追加した場合も既存ロジックを変更することなく自動的に拾われる設計となっている。
+        # 属性が存在しない場合は analyze_inventory のデフォルト引数に委ねられる。
         assessment_options = {
             name: getattr(config, name)
             for name in ("single_file_max_mb", "path_length_limit", "blocked_extensions", "attachment_dir_name")

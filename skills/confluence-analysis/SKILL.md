@@ -20,7 +20,7 @@ SKILL.md や scripts を修正・更新する場合は、必ず正本を編集�
   ```bash
   pip install -r requirements.txt
   ```
-- **認証情報**: Confluence 個人用アクセスアクセストークン（PAT）を環境変数 `C2M_CONFLUENCE_TOKEN`（推奨）または `CONFLUENCE_TOKEN` に設定していること。
+- **認証情報**: Confluence 個人用アクセストークン（PAT）を環境変数 `C2M_CONFLUENCE_TOKEN`（推奨）または `CONFLUENCE_TOKEN` に設定していること。
   ```bash
   export C2M_CONFLUENCE_TOKEN="your-confluence-pat"
   ```
