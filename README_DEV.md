@@ -127,7 +127,7 @@ MOVE_RENAME は `computed_paths` で再計算した新しい親と、移動先�
 
 ### Agent Skill (`SKILL.md`) の管理・同期運用方針
 
-C2M-Export の分析 Skill 定義 (`SKILL.md`) は、GitHub Copilot、Kiro、および汎用 Agent Skills の 3 形態で同一の標準フォーマットを採用しています。
+C2M-Export の分析 Skill 定義 (`SKILL.md`) は、GitHub Copilot、Kiro、および汎用 Agent Skills の 3 形態で同一の標準フォーマットを採用しています。各ツールの自動検出・発火条件（`.kiro/skills/`: Kiro、`.github/skills/`: GitHub Copilot、`skills/`: 汎用 Agent Skills）に合わせて 3 箇所に配置しています。
 
 - **正本位置**: `skills/confluence-analysis/SKILL.md` (および `skills/confluence-analysis/scripts/`)
 - **複製配置先**:

@@ -52,4 +52,5 @@ c2m_config.yaml
 !AGENTS.md
 !.kiro/**/*.md
 !.github/**/*.md
+!skills/**/*.md
 *.zip

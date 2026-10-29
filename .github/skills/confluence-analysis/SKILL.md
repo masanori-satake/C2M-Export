@@ -5,7 +5,7 @@ description: Confluence のワークスペース状況（古いページ、個�
 
 <!--
 NOTE: 正本は skills/confluence-analysis/SKILL.md です。
-.github/skills/confluence-analysis/SKILL.md および .kiro/skills/confluence-analysis/SKILL.md に複製配置されています。
+各ツールの検出・発火条件（.kiro/skills/: Kiro、.github/skills/: GitHub Copilot、skills/: 汎用 Agent Skills）に合わせて 3 箇所に複製配置されています。
 SKILL.md や scripts を修正・更新する場合は、必ず正本を編集し、複製先へ同期（上書きコピー）を行ってください。
 -->
 
