@@ -61,7 +61,11 @@ class Collector:
             name = sp.get("name", space_key)
             sp_type = sp.get("type", "global")
             status = sp.get("status", "current")
-            description = sp.get("description", {}).get("plain", {}).get("value") if isinstance(sp.get("description"), dict) else None
+            description = (
+                sp.get("description", {}).get("plain", {}).get("value")
+                if isinstance(sp.get("description"), dict)
+                else None
+            )
 
             # Space labels
             label_count = 0
@@ -432,18 +436,12 @@ class Collector:
                     raw_eff = self.client.get_relevant_view_restrictions(page_id)
                     r_users = [
                         u.get("username", "")
-                        for u in raw_eff.get("read", {})
-                        .get("restrictions", {})
-                        .get("user", {})
-                        .get("results", [])
+                        for u in raw_eff.get("read", {}).get("restrictions", {}).get("user", {}).get("results", [])
                         if u.get("username")
                     ]
                     r_groups = [
                         g.get("name", "")
-                        for g in raw_eff.get("read", {})
-                        .get("restrictions", {})
-                        .get("group", {})
-                        .get("results", [])
+                        for g in raw_eff.get("read", {}).get("restrictions", {}).get("group", {}).get("results", [])
                         if g.get("name")
                     ]
                     eff_restriction_meta = RestrictionMeta(
