@@ -186,7 +186,7 @@ python -m c2m_export.analyze \
 
 ### 2. Agent Skill (`SKILL.md`)
 
-GitHub Copilot、Kiro、および汎用 Agent Skills で共通して利用可能な `SKILL.md` が提供されています。
+GitHub Copilot、Kiro、および汎用 Agent Skills で共通して利用可能な `SKILL.md` が提供されています。各ツールの自動検出・発火条件（`.kiro/skills/`: Kiro、`.github/skills/`: GitHub Copilot、`skills/`: 汎用 Agent Skills）に合わせて 3 箇所に配置しています。
 
 - **正本ファイル**: `skills/confluence-analysis/SKILL.md`（および補助スクリプト `skills/confluence-analysis/scripts/run_analysis.py`）
 - **複製配置先**:
