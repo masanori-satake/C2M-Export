@@ -243,7 +243,14 @@ class AnalysisConfig:
         parser.add_argument("--restrictions", action="store_true", default=None, help="権限分析を有効化する")
         parser.add_argument("--no-restrictions", action="store_false", dest="restrictions", help="権限分析を無効化する")
 
-        cli_args = parser.parse_args()
+        try:
+            cli_args = parser.parse_args()
+        except SystemExit as e:
+            if e.code == 0:
+                raise e
+            raise ValueError(
+                "現象: 無効なコマンドライン引数が指定されました。原因: コマンドライン引数の解析に失敗しました。対処方法: 引数の指定内容および構文を確認してください。"
+            ) from e
 
         if cli_args.base_url:
             self.base_url = cli_args.base_url
@@ -371,6 +378,10 @@ class PermissionExportConfig:
                 print(
                     f"設定ファイル {config_path} の読み込みに失敗しました（現象）。詳細: {e}（原因）。ファイル形式を確認してください（対処方法）"
                 )
+
+        env_token = os.environ.get("C2M_CONFLUENCE_TOKEN") or os.environ.get("CONFLUENCE_TOKEN")
+        if env_token:
+            self.token = env_token
 
         env_https_proxy = os.environ.get("HTTPS_PROXY")
         env_http_proxy = os.environ.get("HTTP_PROXY")
@@ -559,6 +570,10 @@ class FsExportConfig:
                 print(
                     f"設定ファイル {config_path} の読み込みに失敗しました（現象）。詳細: {e}（原因）。ファイル形式を確認してください（対処方法）"
                 )
+
+        env_token = os.environ.get("C2M_CONFLUENCE_TOKEN") or os.environ.get("CONFLUENCE_TOKEN")
+        if env_token:
+            self.token = env_token
 
         env_https_proxy = os.environ.get("HTTPS_PROXY")
         env_http_proxy = os.environ.get("HTTP_PROXY")
@@ -753,6 +768,10 @@ class AssessConfig:
                 print(
                     f"設定ファイル {config_path} の読み込みに失敗しました（現象）。詳細: {e}（原因）。ファイル形式を確認してください（対処方法）"
                 )
+
+        env_token = os.environ.get("C2M_CONFLUENCE_TOKEN") or os.environ.get("CONFLUENCE_TOKEN")
+        if env_token:
+            self.token = env_token
 
         env_https_proxy = os.environ.get("HTTPS_PROXY")
         env_http_proxy = os.environ.get("HTTP_PROXY")

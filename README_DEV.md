@@ -55,7 +55,18 @@ graph TD
 ```
 c2m_export/
 ├── confluence.py      # [拡張] get_attachments, download_attachment, get_restrictions, get_space_root_pages 等を追加
-├── config.py          # [拡張] AssessConfig, FsExportConfig, PermissionExportConfig を追加
+├── config.py          # [拡張] AssessConfig, FsExportConfig, PermissionExportConfig, AnalysisConfig を追加
+├── analyze.py         # [新規 0007] 分析 CLI エントリーポイント（python -m c2m_export.analyze）
+├── mcp_server.py      # [新規 0007] MCP サーバエントリーポイント（FastMCP, stdio トランスポート）
+├── analysis/          # [新規 0007] 分析純粋ロジック・共通 API 層一式
+│   ├── __init__.py
+│   ├── api.py         # 共通 1 層 (run_analysis) と独自例外・エラーコード分類
+│   ├── params.py      # AnalysisParams dataclass と境界検証
+│   ├── response.py    # AnalysisResponse / ErrorObject とスキーマモデル
+│   ├── sanitize.py    # トークン実値・Authorization/Bearer ヘッダの多層防御マスク
+│   ├── extractors.py  # ユースケース別個別一覧抽出（API 非依存）
+│   ├── categories.py # 圧縮形式カテゴリ集約純粋ロジック
+│   └─ macros.py      # マクロ解析・集計・修復区分判定（converter 方針写像）
 ├── assess.py          # 分析モードのエントリーポイント（python -m c2m_export.assess）
 ├── fsexport.py        # ファイルシステムモードのエントリーポイント（python -m c2m_export.fsexport / sync・resume分岐）
 ├── permexport.py      # [新規 0006] 権限エクスポートのエントリーポイント（python -m c2m_export.permexport）
@@ -109,6 +120,28 @@ MOVE_RENAME は `computed_paths` で再計算した新しい親と、移動先�
 `analysis/api.py` は、設定オブジェクトに存在する `single_file_max_mb`・`path_length_limit`・`blocked_extensions`・`attachment_dir_name` だけを `analyze_inventory` に渡します。未定義の属性は集計関数の既定値に委ね、明示された空の拡張子集合も保持します。
 `count_macros` の解析・集計例外は Collector が捕捉し、警告ログと `macro_parse_failed_count` に反映します。失敗ページの部分集計は採用せず、ほかのページの収集を継続します。
 `sanitize_text` は引用符・バックスラッシュ・区切りでトークンを止め、Basic の方式名と認証情報をまとめてマスクします。出力する JSON の構造は保持します。
+
+`ConfluenceClient._request` と `download_attachment` は、最終試行の通信例外を URL・元メッセージを含まない `RequestException` に変換し、元例外のトレースバック表示を抑制します。HTTP エラーは `HTTPError` と `response.status_code` を保持するため、401/403・404 の分析エラー分類は維持します。応答オブジェクトにはステータスコードだけを引き継ぎ、URL・ヘッダ・本文・元リクエストを含めません。
+401・403・404 の `HTTPError` は初回で同じサニタイズ処理を適用して送出し、再試行・待機は行いません。429・5xx・通信エラーの指数バックオフによる再試行は維持します。
+5xx の指数バックオフは次の試行がある場合だけ行い、最終試行では `raise_for_status()` を経由して同じサニタイズ処理を適用します。分析 API では `root_page_ids`・`space_keys` の両経路で `API_ERROR` として扱います。
+
+### Agent Skill (`SKILL.md`) の管理・同期運用方針
+
+C2M-Export の分析 Skill 定義 (`SKILL.md`) は、GitHub Copilot、Kiro、および汎用 Agent Skills の 3 形態で同一の標準フォーマットを採用しています。
+
+- **正本位置**: `skills/confluence-analysis/SKILL.md` (および `skills/confluence-analysis/scripts/`)
+- **複製配置先**:
+  - GitHub Copilot プロジェクトスキル: `.github/skills/confluence-analysis/SKILL.md`
+  - Kiro スキル: `.kiro/skills/confluence-analysis/SKILL.md`
+
+**運用原則**:
+SKILL.md やスクリプトに対する修正・機能拡張を行う際は、**必ず正本 `skills/confluence-analysis/` 配下のファイルを直接編集**し、編集完了後に複製配置先（`.github/skills/` および `.kiro/skills/`）へ同一ファイルを同期（上書きコピー）してください。正本と複製先の不一致を防ぐため、直接複製先ファイルを編集することは禁止されています。
+
+### MCP サーバのアーキテクチャ
+
+FastMCP（`mcp` SDK）を用いて分析ツール `analyze_confluence` を公開します。
+- `mcp` SDK は optional 依存であり、`requirements-mcp.txt` に分離されています。
+- `c2m_export/mcp_server.py` 内で `mcp` を遅延 import することにより、SDK 未導入環境でもメイン CLI やライブラリとしての利用に影響を及ぼしません。
 
 ### 本文サイズ概算の偏りについての設計背景
 

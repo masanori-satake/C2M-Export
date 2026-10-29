@@ -3,6 +3,15 @@
 ```
 C2M-Export/
 ├── c2m_export/            # メインパッケージ
+│   ├── analysis/          # 分析純粋ロジック・共通 API 層パッケージ
+│   │   ├── __init__.py
+│   │   ├── api.py         # 共通 1 層 (run_analysis) と例外・エラーコード分類
+│   │   ├── categories.py # 圧縮形式カテゴリ集約純粋ロジック
+│   │   ├── extractors.py  # ユースケース別個別一覧抽出 (API 非依存)
+│   │   ├── macros.py      # マクロ解析・集計・修復区分判定
+│   │   ├── params.py      # 分析パラメータモデル・境界検証
+│   │   ├── response.py    # レスポンス・ErrorObject スキーマモデル
+│   │   └── sanitize.py    # 秘匿情報サニタイズ（多層防御マスク）
 │   ├── assessment/        # アセスメント（分析）パッケージ
 │   │   ├── __init__.py
 │   │   ├── analyzers.py   # 分析純粋ロジック (規模・構造・リスク等)
@@ -29,15 +38,23 @@ C2M-Export/
 │   │   ├── report.py      # 権限レポート生成
 │   │   └── summary.py     # 実行結果サマリ生成
 │   ├── __init__.py        # パッケージ初期化
+│   ├── analyze.py         # 分析 CLI エントリーポイント (python -m c2m_export.analyze)
 │   ├── assess.py          # アセスメント CLI エントリーポイント (python -m c2m_export.assess)
 │   ├── cli.py             # 結合エクスポート CLI エントリーポイント (python -m c2m_export.cli)
 │   ├── config.py          # 設定管理 (CLI引数 / YAML / 環境変数)
 │   ├── confluence.py      # Confluence REST API クライアント (リトライ・Proxy対応)
 │   ├── converter.py       # Storage Format → Markdown 変換 (マクロ処理含む)
 │   ├── fsexport.py        # ファイルシステムエクスポート CLI エントリーポイント (python -m c2m_export.fsexport)
+│   ├── mcp_server.py      # MCP サーバエントリーポイント (python -m c2m_export.mcp_server)
 │   ├── permexport.py      # 権限エクスポート CLI エントリーポイント (python -m c2m_export.permexport)
 │   ├── utils.py           # ユーティリティ (ファイル名サニタイズ, サイズ計算, Zip生成)
 │   └── web.py             # Streamlit Web UI (python -m c2m_export.web)
+├── skills/                # Agent Skill 正本ディレクトリ
+│   └── confluence-analysis/ # 分析 Skill 正本 (SKILL.md + scripts/)
+├── .github/skills/        # GitHub Copilot 用 Agent Skill 複製ディレクトリ
+│   └── confluence-analysis/ # SKILL.md 複製
+├── .kiro/skills/          # Kiro 用 Agent Skill 複製ディレクトリ
+│   └── confluence-analysis/ # SKILL.md 複製
 ├── tests/                 # テストディレクトリ
 │   ├── conftest.py                   # Pytest 共通フィクスチャ
 │   ├── test_assess_config.py         # アセスメント設定テスト
@@ -80,6 +97,7 @@ C2M-Export/
 ├── c2m_config.yaml        # 実行用設定ファイル（gitignore対象）
 ├── c2m_config_sample.yaml # 設定ファイルのサンプル
 ├── requirements.txt       # 実行時依存
+├── requirements-mcp.txt   # MCP 追加依存 (mcp)
 ├── .pre-commit-config.yaml # pre-commit フック設定
 ├── AGENTS.md              # AI エージェント向け指示書
 ├── README.md              # ユーザー向けドキュメント
@@ -97,6 +115,10 @@ C2M-Export/
 | `assess.py` / `assessment/` | アセスメントエントリーポイント、メタデータ収集、規模/リスク/権限/鮮度分析、レポート出力 |
 | `fsexport.py` / `fs_export/` | FS エクスポートエントリーポイント、ディレクトリ/ファイル構造化、Frontmatter、添付保存、差分同期・レジューム処理 |
 | `permexport.py` / `permission/` | 権限エクスポートエントリーポイント、アクセス制限（Read/Read+Write）収集、レポート出力 |
+| `analyze.py` / `analysis/` | 分析 CLI エントリーポイント、抽出・集約・マクロ統計純粋ロジック、共通 1 層 `run_analysis` |
+| `mcp_server.py` | MCP サーバエントリーポイント (FastMCP) |
+| `skills/confluence-analysis/` | Agent Skill 定義の正本 (`SKILL.md` + `scripts/run_analysis.py`) |
+| `.github/skills/` / `.kiro/skills/` | Agent Skill 定義の Copilot / Kiro 用複製先 (正本 `skills/` からのコピーを厳守) |
 | `utils.py` | ファイル名生成・サニタイズ、サイズユーティリティ、Zip圧縮 |
 | `web.py` | Streamlit UI、排他制御、進捗表示 |
 

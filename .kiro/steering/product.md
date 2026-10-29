@@ -12,6 +12,8 @@ C2M-Export は、Confluence Data Center のページツリーを REST API で再
 - 複数ルートページ ID の一括処理
 - エクスポート結果の Zip 圧縮オプション
 - Streamlit による Web UI（排他制御付き）
+- 分析 CLI (`analyze`): ワークスペース状況（移設リスク、古いページ、アクセス制限、圧縮ファイル、添付あり空ページ、マクロ統計）を標準出力 (stdout) へ機械可読な構造化 JSON として出力
+- Agent Skill / MCP サーバ: GitHub Copilot / Kiro / 汎用 Agent Skills (`SKILL.md`) および Model Context Protocol (MCP) からの分析機能呼び出し対応
 - コンテンツ分析（アセスメント）: メタデータベースで規模・構造・移設リスク・権限・鮮度を Markdown/JSON 出力
 - ファイルシステムエクスポート: ページ階層をディレクトリ/ファイル化、添付バイナリ保存、Frontmatter、添付リンク書き換え（relative/original）
 - 差分同期・レジューム: マニフェストによる追加/変更/削除/移動・改名の追従と中断再開

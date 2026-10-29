@@ -7,6 +7,20 @@ import requests
 logger = logging.getLogger(__name__)
 
 
+def _safe_request_exception(
+    error: requests.exceptions.RequestException, message: str
+) -> requests.exceptions.RequestException:
+    """URLや応答本文を引き継がず、例外分類に必要なステータスだけを保持する."""
+    response = None
+    if error.response is not None:
+        response = requests.Response()
+        response.status_code = error.response.status_code
+        message += f" (HTTP {response.status_code})"
+    if isinstance(error, requests.exceptions.HTTPError):
+        return requests.exceptions.HTTPError(message, response=response)
+    return requests.exceptions.RequestException(message, response=response)
+
+
 class ConfluenceClient:
     """Confluence Data Center REST APIとの通信を担当するクライアントクラス.
 
@@ -29,7 +43,7 @@ class ConfluenceClient:
     ) -> Dict:
         """共通のリクエスト処理.
 
-        5xxエラーやネットワークエラーに対して指数バックオフを伴うリトライを行う。
+        429・5xxエラーやネットワークエラーは指数バックオフで再試行し、401・403・404は即時失敗する。
         """
         url = f"{self.base_url}{path}"
         for i in range(retries):
@@ -37,21 +51,25 @@ class ConfluenceClient:
                 response = self.session.request(method, url, params=params, timeout=30)
                 if response.status_code == 200:
                     return response.json()
-                elif 500 <= response.status_code < 600:
+                elif 500 <= response.status_code < 600 and i < retries - 1:
                     logger.warning(
-                        f"サーバーエラー {response.status_code} が発生しました ({url})。再試行中 ({i + 1}/{retries})..."
+                        f"サーバーエラー {response.status_code} が発生しました。再試行中 ({i + 1}/{retries})..."
                     )
                     time.sleep(backoff * (2**i))
                     continue
                 else:
                     response.raise_for_status()
-            except requests.exceptions.RequestException as e:
-                if i == retries - 1:
-                    raise
-                logger.warning(f"リクエストが失敗しました: {e}。再試行中 ({i + 1}/{retries})...")
+            except requests.exceptions.RequestException as error:
+                if i == retries - 1 or (
+                    isinstance(error, requests.exceptions.HTTPError)
+                    and error.response is not None
+                    and error.response.status_code in (401, 403, 404)
+                ):
+                    raise _safe_request_exception(error, "Confluence API リクエストに失敗しました") from None
+                logger.warning(f"リクエストが失敗しました。再試行中 ({i + 1}/{retries})...")
                 time.sleep(backoff * (2**i))
 
-        raise Exception(f"{retries} 回の試行後も {url} の取得に失敗しました")
+        raise Exception("Confluence API リクエストに失敗しました")
 
     def get_page(self, page_id: str, expand: str = "body.storage,space") -> Dict:
         """指定されたページIDの情報を取得する.
@@ -183,9 +201,9 @@ class ConfluenceClient:
                         if os.path.exists(dest_file):
                             os.remove(dest_file)
                         raise
-                elif 500 <= response.status_code < 600:
+                elif 500 <= response.status_code < 600 and i < retries - 1:
                     logger.warning(
-                        f"サーバーエラー {response.status_code} が発生しました ({url})。再試行中 ({i + 1}/{retries})..."
+                        f"サーバーエラー {response.status_code} が発生しました。再試行中 ({i + 1}/{retries})..."
                     )
                     time.sleep(backoff * (2**i))
                     continue
@@ -193,10 +211,14 @@ class ConfluenceClient:
                     response.raise_for_status()
             except ValueError:
                 raise
-            except requests.exceptions.RequestException as e:
-                if i == retries - 1:
-                    raise
-                logger.warning(f"添付ダウンロードリクエストが失敗しました: {e}。再試行中 ({i + 1}/{retries})...")
+            except requests.exceptions.RequestException as error:
+                if i == retries - 1 or (
+                    isinstance(error, requests.exceptions.HTTPError)
+                    and error.response is not None
+                    and error.response.status_code in (401, 403, 404)
+                ):
+                    raise _safe_request_exception(error, "添付ファイルのダウンロードに失敗しました") from None
+                logger.warning(f"添付ダウンロードリクエストが失敗しました。再試行中 ({i + 1}/{retries})...")
                 time.sleep(backoff * (2**i))
 
-        raise requests.exceptions.RequestException(f"{retries} 回の試行後も {url} のダウンロードに失敗しました")
+        raise requests.exceptions.RequestException("添付ファイルのダウンロードに失敗しました")
