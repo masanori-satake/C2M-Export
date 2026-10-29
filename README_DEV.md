@@ -121,7 +121,7 @@ MOVE_RENAME は `computed_paths` で再計算した新しい親と、移動先�
 
 `analysis/api.py` は、設定オブジェクトに存在する `single_file_max_mb`・`path_length_limit`・`blocked_extensions`・`attachment_dir_name` だけを `analyze_inventory` に渡します。未定義の属性は集計関数の既定値に委ね、明示された空の拡張子集合も保持します。
 `count_macros` の解析・集計例外は Collector が捕捉し、警告ログと `macro_parse_failed_count` に反映します。失敗ページの部分集計は採用せず、ほかのページの収集を継続します。
-`sanitize_text` は引用符・バックスラッシュ・区切りでトークンを止め、Basic の方式名と認証情報をまとめてマスクします。出力する JSON の構造は保持します。
+`sanitize_text` は引用符・バックスラッシュ・区切りでトークンを止め、Basic の方式名と認証情報をまとめてマスクします。また、URL クエリパラメータに含まれる機密キー (`token`, `access_token`, `api_key`, `secret`, `password` 等) の値も非表示化 (`***REDACTED***`) し、ハッシュフラグメント (`#`) を維持します。このサニタイズ処理は CLI 出力だけでなく MCP サーバの応答オブジェクト (`response.to_dict()`) にも一貫して適用されます。
 
 `ConfluenceClient._request` と `download_attachment` は、最終試行の通信例外を URL・元メッセージを含まない `RequestException` に変換し、元例外のトレースバック表示を抑制します。HTTP エラーは `HTTPError` と `response.status_code` を保持するため、401/403・404 の分析エラー分類は維持します。応答オブジェクトにはステータスコードだけを引き継ぎ、URL・ヘッダ・本文・元リクエストを含めません。
 401・403・404 の `HTTPError` は初回で同じサニタイズ処理を適用して送出し、再試行・待機は行いません。429・5xx・通信エラーの指数バックオフによる再試行は維持します。

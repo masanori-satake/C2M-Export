@@ -4,11 +4,13 @@ Confluence Workspace Analysis MCP サーバ
 Model Context Protocol (MCP) に準拠し、Confluence ワークスペース分析機能を FastMCP ツールとして公開します。
 """
 
+import json
 import os
 from typing import Any, Dict, List, Optional
 
 from c2m_export.analysis.api import run_analysis
 from c2m_export.analysis.params import AnalysisParams
+from c2m_export.analysis.sanitize import sanitize_text
 from c2m_export.config import AnalysisConfig
 
 
@@ -143,7 +145,9 @@ def create_mcp_server() -> Any:
         params = AnalysisParams(**params_kwargs)
 
         response = run_analysis(params=params, config=config)
-        return response.to_dict()
+        raw_dict = response.to_dict()
+        sanitized_json = sanitize_text(json.dumps(raw_dict, ensure_ascii=False), secrets=[token])
+        return json.loads(sanitized_json)
 
     return mcp
 
