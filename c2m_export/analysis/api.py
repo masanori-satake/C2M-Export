@@ -15,6 +15,11 @@ from c2m_export.analysis.extractors import (
 )
 from c2m_export.analysis.macros import summarize_macros
 from c2m_export.analysis.params import DEFAULT_SORTS, AnalysisParams
+from c2m_export.analysis.provenance import (
+    enrich_empty_with_attachments,
+    enrich_restricted,
+    enrich_stale,
+)
 from c2m_export.analysis.response import (
     CODE_API_ERROR,
     CODE_AUTH_FAILED,
@@ -25,6 +30,11 @@ from c2m_export.analysis.response import (
     AnalysisScope,
     ErrorObject,
     Uncertainties,
+)
+from c2m_export.analysis.workspace import (
+    build_environment,
+    build_visibility,
+    summarize_spaces,
 )
 from c2m_export.assessment.analyzers import analyze_inventory
 from c2m_export.assessment.collector import Collector
@@ -53,18 +63,31 @@ class ApiError(Exception):
 
 
 def _resolve_roots(
-    client: ConfluenceClient, root_page_ids: List[str], space_keys: List[str]
-) -> Tuple[List[str], List[str]]:
-    """起点 (root_page_ids / space_keys) のページIDを解決する.
+    client: ConfluenceClient,
+    root_page_ids: List[str],
+    space_keys: List[str],
+    all_spaces: bool = False,
+    cql: Optional[str] = None,
+    shared_spaces: Optional[List[Dict]] = None,
+) -> Tuple[List[str], List[str], bool]:
+    """起点 (root_page_ids / space_keys / all_spaces / cql) のページIDを解決する.
 
     Returns:
-        (resolved_root_ids, empty_space_keys)
+        (resolved_root_ids, empty_space_keys, cql_failed)
     """
     resolved_ids: List[str] = list(root_page_ids) if root_page_ids else []
     empty_space_keys: List[str] = []
+    cql_failed = False
 
-    if space_keys:
-        for skey in space_keys:
+    target_space_keys = list(space_keys) if space_keys else []
+    if all_spaces and shared_spaces:
+        for sp in shared_spaces:
+            k = sp.get("key")
+            if k and k not in target_space_keys:
+                target_space_keys.append(k)
+
+    if target_space_keys:
+        for skey in target_space_keys:
             try:
                 sp_pages = client.get_space_root_pages(skey)
                 if sp_pages:
@@ -94,6 +117,17 @@ def _resolve_roots(
                 raise ApiError(f"通信エラーが発生しました: {e}")
             except Exception as e:
                 raise ApiError(f"起点 Space キーの解決中にエラーが発生しました: {e}")
+
+    if cql:
+        try:
+            cql_items = client.search_cql(cql)
+            for item in cql_items:
+                cid = str(item.get("id", ""))
+                if cid:
+                    resolved_ids.append(cid)
+        except Exception as e:
+            logger.warning(f"CQL 検索に失敗しました: {e}")
+            cql_failed = True
 
     # 起点 page_id の確認 (ルートページIDが指定されている場合)
     if root_page_ids:
@@ -132,10 +166,10 @@ def _resolve_roots(
         raise TargetNotFoundError(
             "現象: 有効な分析対象ページが存在しません。"
             "原因: 指定された起点からページを特定できませんでした。"
-            "対処方法: 正しい --root-page-id または --space-key を指定してください。"
+            "対処方法: 正しい --root-page-id, --space-key, --all-spaces, または --cql を指定してください。"
         )
 
-    return final_root_ids, empty_space_keys
+    return final_root_ids, empty_space_keys, cql_failed
 
 
 def _paginate(records: List[Dict[str, Any]], sort_key: Optional[str], limit: int) -> Tuple[List[Dict[str, Any]], bool]:
@@ -169,8 +203,50 @@ def run_analysis(
                 raise ValueError("base_url and token are required in config")
             client = ConfluenceClient(base_url=config.base_url, token=config.token, proxy=config.proxy)
 
+        # 0. 共有 Space 一覧の取得
+        shared_spaces = []
+        try:
+            shared_spaces = client.list_spaces()
+        except Exception as e:
+            logger.warning(f"Space 一覧の取得に失敗しました: {e}")
+
+        # オプション解決 (params / config 互換)
+        all_spaces = getattr(params, "all_spaces", False) or getattr(config, "all_spaces", False)
+        cql = getattr(params, "cql", None) or getattr(config, "cql", None)
+        deep = getattr(params, "deep", False) or getattr(config, "deep", False)
+
+        def _resolve_flag(p_val: Optional[bool], c_val: Optional[bool]) -> bool:
+            if p_val is not None:
+                return p_val
+            if c_val is not None:
+                return c_val
+            return deep
+
+        collect_history = _resolve_flag(
+            getattr(params, "collect_history", None), getattr(config, "collect_history", None)
+        )
+        collect_labels = _resolve_flag(getattr(params, "collect_labels", None), getattr(config, "collect_labels", None))
+        collect_comments = _resolve_flag(
+            getattr(params, "collect_comments", None), getattr(config, "collect_comments", None)
+        )
+        collect_watchers = _resolve_flag(
+            getattr(params, "collect_watchers", None), getattr(config, "collect_watchers", None)
+        )
+        collect_effective_restrictions = _resolve_flag(
+            getattr(params, "collect_effective_restrictions", None),
+            getattr(config, "collect_effective_restrictions", None),
+        )
+        collect_extracted_text = _resolve_flag(
+            getattr(params, "collect_extracted_text", None), getattr(config, "collect_extracted_text", None)
+        )
+        collect_space_permissions = _resolve_flag(
+            getattr(params, "collect_space_permissions", None), getattr(config, "collect_space_permissions", None)
+        )
+
         # 1. 起点解決
-        resolved_root_ids, empty_space_keys = _resolve_roots(client, config.root_page_ids, config.space_keys)
+        resolved_root_ids, empty_space_keys, cql_failed = _resolve_roots(
+            client, config.root_page_ids, config.space_keys, all_spaces=all_spaces, cql=cql, shared_spaces=shared_spaces
+        )
 
         # 2. 収集
         macros_requested = "macros" in params.usecases
@@ -178,8 +254,29 @@ def run_analysis(
             client=client,
             analyze_restrictions=params.analyze_restrictions if params.analyze_restrictions is not None else True,
             collect_macros=macros_requested,
+            collect_history=collect_history,
+            collect_labels=collect_labels,
+            collect_comments=collect_comments,
+            collect_watchers=collect_watchers,
+            collect_effective_restrictions=collect_effective_restrictions,
+            collect_extracted_text=collect_extracted_text,
+            collect_space_permissions=collect_space_permissions,
         )
+
+        # 全体把握収集
+        collector.collect_workspace_overview(shared_spaces, resolved_root_ids)
+
+        # DFS 走査
         inventory = collector.collect(resolved_root_ids)
+
+        # per-space 詳細調査
+        target_skeys = list(config.space_keys or [])
+        if shared_spaces:
+            for sp in shared_spaces:
+                k = sp.get("key")
+                if k and k not in target_skeys:
+                    target_skeys.append(k)
+        collector.collect_space_details(target_skeys)
 
         # 3. アセスメント集計
         assessment_options = {
@@ -222,6 +319,7 @@ def run_analysis(
         # UC2: stale
         if "stale" in params.usecases:
             records = extract_stale_pages(inventory, params.stale_days, ref_time)
+            records = enrich_stale(records, inventory)
             total_count = len(records)
             uc_block = {
                 "counts": {
@@ -254,6 +352,7 @@ def run_analysis(
                     uc_block["items"] = []
             else:
                 records = extract_restricted_pages(inventory, base_url)
+                records = enrich_restricted(records, inventory)
                 total_count = len(records)
                 uc_block = {
                     "counts": {
@@ -278,6 +377,7 @@ def run_analysis(
         # UC5: empty_with_attachments
         if "empty_with_attachments" in params.usecases:
             records = extract_empty_with_attachments(inventory, params.min_body_bytes)
+            records = enrich_empty_with_attachments(records, inventory)
             total_count = len(records)
             uc_block = {
                 "counts": {
@@ -308,6 +408,11 @@ def run_analysis(
         # レポートサマリ構造の再利用
         json_report_summary = generate_json_report(assess_res)["summary"]
 
+        # 5. workspace / visibility / environment ブロック構築
+        workspace_block = summarize_spaces(inventory.spaces)
+        visibility_block = build_visibility(inventory.visibility, inventory)
+        environment_block = build_environment(inventory.environment)
+
         # uncertainties 情報の収集
         unc = Uncertainties(
             skipped_page_ids=inventory.skipped_page_ids,
@@ -317,10 +422,20 @@ def run_analysis(
             macro_parse_failed_count=inventory.macro_parse_failed_count,
             empty_space_keys=empty_space_keys,
             restrictions_disabled=(params.analyze_restrictions is False),
+            history_failed_count=len(inventory.history_failed_page_ids),
+            label_failed_count=len(inventory.label_failed_page_ids),
+            comment_failed_count=len(inventory.comment_failed_page_ids),
+            effective_restriction_failed_count=len(inventory.effective_restriction_failed_page_ids),
+            extracted_text_failed_count=len(inventory.extracted_text_failed_refs),
+            content_watcher_failed_count=len(inventory.content_watcher_failed_refs),
+            space_watcher_failed_count=len(inventory.space_watcher_failed_keys),
+            space_permission_failed_count=len(inventory.space_permission_failed_keys),
+            cql_failed=cql_failed,
+            unavailable_apis=visibility_block.get("unavailable_apis", []),
         )
 
         response = AnalysisResponse(
-            schema_version="1.0",
+            schema_version="1.1",
             status="ok",
             generated_at=ref_time.strftime("%Y-%m-%dT%H:%M:%SZ"),
             mode=params.mode,
@@ -329,6 +444,9 @@ def run_analysis(
                 space_keys=config.space_keys or [],
                 resolved_root_count=len(resolved_root_ids),
             ),
+            workspace=workspace_block,
+            visibility=visibility_block,
+            environment=environment_block,
             summary=json_report_summary,
             usecases=uc_results,
             uncertainties=unc,

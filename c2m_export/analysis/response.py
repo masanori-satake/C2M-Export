@@ -66,17 +66,30 @@ class Uncertainties:
     macro_parse_failed_count: int = 0
     empty_space_keys: List[str] = field(default_factory=list)
     restrictions_disabled: bool = False
+    history_failed_count: int = 0
+    label_failed_count: int = 0
+    comment_failed_count: int = 0
+    effective_restriction_failed_count: int = 0
+    extracted_text_failed_count: int = 0
+    content_watcher_failed_count: int = 0
+    space_watcher_failed_count: int = 0
+    space_permission_failed_count: int = 0
+    cql_failed: bool = False
+    unavailable_apis: List[str] = field(default_factory=list)
 
 
 @dataclass
 class AnalysisResponse:
     """分析実行結果の最上位レスポンスモデル."""
 
-    schema_version: str = "1.0"
+    schema_version: str = "1.1"
     status: str = "ok"  # "ok" | "error"
     generated_at: str = ""
     mode: str = "summary"
     scope: AnalysisScope = field(default_factory=AnalysisScope)
+    workspace: Optional[Dict[str, Any]] = None
+    visibility: Optional[Dict[str, Any]] = None
+    environment: Optional[Dict[str, Any]] = None
     summary: Dict[str, Any] = field(default_factory=dict)
     usecases: Dict[str, Any] = field(default_factory=dict)
     uncertainties: Uncertainties = field(default_factory=Uncertainties)

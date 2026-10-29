@@ -74,6 +74,16 @@ def main() -> None:
         if config.archive_extensions is not None
         else AnalysisParams().archive_extensions,
         analyze_restrictions=config.analyze_restrictions,
+        all_spaces=config.all_spaces,
+        cql=config.cql,
+        deep=config.deep,
+        collect_history=config.collect_history,
+        collect_labels=config.collect_labels,
+        collect_comments=config.collect_comments,
+        collect_watchers=config.collect_watchers,
+        collect_effective_restrictions=config.collect_effective_restrictions,
+        collect_extracted_text=config.collect_extracted_text,
+        collect_space_permissions=config.collect_space_permissions,
     )
 
     # run_analysis 実行
