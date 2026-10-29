@@ -66,7 +66,9 @@ c2m_export/
 │   ├── sanitize.py    # トークン実値・Authorization/Bearer ヘッダの多層防御マスク
 │   ├── extractors.py  # ユースケース別個別一覧抽出（API 非依存）
 │   ├── categories.py # 圧縮形式カテゴリ集約純粋ロジック
-│   └─ macros.py      # マクロ解析・集計・修復区分判定（converter 方針写像）
+│   ├── macros.py      # マクロ解析・集計・修復区分判定（converter 方針写像）
+│   ├── provenance.py  # provenance 付与（enrich_stale / enrich_restricted / enrich_empty_with_attachments など）
+│   └─ workspace.py   # workspace / visibility / environment 集計
 ├── assess.py          # 分析モードのエントリーポイント（python -m c2m_export.assess）
 ├── fsexport.py        # ファイルシステムモードのエントリーポイント（python -m c2m_export.fsexport / sync・resume分岐）
 ├── permexport.py      # [新規 0006] 権限エクスポートのエントリーポイント（python -m c2m_export.permexport）

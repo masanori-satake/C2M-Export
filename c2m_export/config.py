@@ -35,7 +35,7 @@ class Config:
         self.overwrite: bool = False
 
     def load(self):
-        """設定を読み込む。優先順位は CLI > 設定ファイル > デフォルト."""
+        """設定を読み込む。優先順位は CLI > 環境変数 > 設定ファイル > デフォルト."""
         # 設定ファイルパスを特定するために一度パース
         pre_parser = argparse.ArgumentParser(add_help=False)
         pre_parser.add_argument("--config", type=str, default=str(DEFAULT_CONFIG_PATH))
@@ -415,7 +415,7 @@ class PermissionExportConfig:
         self.page_filename_mode: str = "title"  # "title" | "index"
 
     def load(self):
-        """設定を読み込む。優先順位は CLI > 設定ファイル > デフォルト."""
+        """設定を読み込む。優先順位は CLI > 環境変数 > 設定ファイル > デフォルト."""
         pre_parser = argparse.ArgumentParser(add_help=False)
         pre_parser.add_argument("--config", type=str, default=str(DEFAULT_CONFIG_PATH))
         pre_args, _ = pre_parser.parse_known_args()
@@ -591,7 +591,7 @@ class FsExportConfig:
         self.manifest_name: str = ".c2m_manifest.json"
 
     def load(self):
-        """設定を読み込む。優先順位は CLI > 設定ファイル > デフォルト."""
+        """設定を読み込む。優先順位は CLI > 環境変数 > 設定ファイル > デフォルト."""
         pre_parser = argparse.ArgumentParser(add_help=False)
         pre_parser.add_argument("--config", type=str, default=str(DEFAULT_CONFIG_PATH))
         pre_args, _ = pre_parser.parse_known_args()
@@ -797,7 +797,7 @@ class AssessConfig:
         self.report_format: str = "both"
 
     def load(self):
-        """設定を読み込む。優先順位は CLI > 設定ファイル > デフォルト."""
+        """設定を読み込む。優先順位は CLI > 環境変数 > 設定ファイル > デフォルト."""
         pre_parser = argparse.ArgumentParser(add_help=False)
         pre_parser.add_argument("--config", type=str, default=str(DEFAULT_CONFIG_PATH))
         pre_args, _ = pre_parser.parse_known_args()

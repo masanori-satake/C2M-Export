@@ -16,7 +16,7 @@ Confluence Data Center 9.2 のページツリーを REST API で取得し、AI�
    ```
 
 2. **コマンドの実行**
-   `--base-url`、`--token`、`--root-page-id` を指定して実行します。
+   `--base-url`、`--token`、`--root-page-id` を指定して実行します（アクセストークンは環境変数 `C2M_CONFLUENCE_TOKEN` または `CONFLUENCE_TOKEN` での指定も可能です）。
    ```cmd
    python -m c2m_export.cli --base-url https://your-confluence/wiki --token <TOKEN> --root-page-id 12345678
    ```

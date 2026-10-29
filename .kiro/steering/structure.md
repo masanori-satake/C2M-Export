@@ -10,8 +10,10 @@ C2M-Export/
 │   │   ├── extractors.py  # ユースケース別個別一覧抽出 (API 非依存)
 │   │   ├── macros.py      # マクロ解析・集計・修復区分判定
 │   │   ├── params.py      # 分析パラメータモデル・境界検証
+│   │   ├── provenance.py  # provenance 付与（enrich_stale / enrich_restricted / enrich_empty_with_attachments など）
 │   │   ├── response.py    # レスポンス・ErrorObject スキーマモデル
-│   │   └── sanitize.py    # 秘匿情報サニタイズ（多層防御マスク）
+│   │   ├── sanitize.py    # 秘匿情報サニタイズ（多層防御マスク）
+│   │   └── workspace.py   # workspace / visibility / environment 集計
 │   ├── assessment/        # アセスメント（分析）パッケージ
 │   │   ├── __init__.py
 │   │   ├── analyzers.py   # 分析純粋ロジック (規模・構造・リスク等)
