@@ -222,8 +222,6 @@ class Collector:
     def collect(self, root_ids: List[str]) -> RawInventory:
         """指定されたルートページIDリストからDFS巡回し RawInventory を構築する."""
         inventory = self.raw_inventory
-        """指定されたルートページIDリストからDFS巡回し RawInventory を構築する."""
-        inventory = RawInventory()
         visited_page_ids: Set[str] = set()
 
         # (page_id, level, ancestors_titles) のスタック
@@ -276,6 +274,7 @@ class Collector:
             try:
                 raw_attachments = self.client.get_attachments(page_id)
                 for att in raw_attachments:
+                    att_id = str(att.get("id", ""))
                     att_filename = att.get("title", "")
                     extensions = att.get("extensions", {})
                     file_size = extensions.get("fileSize")
@@ -298,6 +297,7 @@ class Collector:
                             media_type=media_type,
                             file_size=file_size if isinstance(file_size, int) else None,
                             version=att_version,
+                            attachment_id=att_id,
                         )
                     )
             except Exception as e:
@@ -462,7 +462,7 @@ class Collector:
 
             if self.collect_extracted_text:
                 for att_item in attachments_meta:
-                    att_id = att_item.filename  # identifier placeholder
+                    att_id = att_item.attachment_id or att_item.filename
                     try:
                         ext_res = self.client.get_attachment_extracted_text(page_id, att_id)
                         if isinstance(ext_res, dict):

@@ -88,3 +88,77 @@ def test_run_analysis_assessment_options(options, expected_risks):
 
     assert resp.status == "ok"
     assert resp.usecases["risk"]["counts"]["risk_summary"] == expected_risks
+
+
+def test_cql_filters_type_page_only():
+    """CQL 検索結果において type が page のコンテンツのみが起点に採用されることを検証."""
+    client = MagicMock()
+    client.search_cql.return_value = [
+        {"id": "100", "type": "page"},
+        {"id": "200", "type": "blogpost"},
+        {"id": "300", "type": "comment"},
+        {"id": "101", "type": "page"},
+    ]
+    client.get_page.side_effect = lambda pid, **kwargs: {
+        "title": f"Page {pid}",
+        "space": {"key": "SPACE"},
+    }
+    client.get_attachments.return_value = []
+    client.get_restrictions.return_value = {}
+    client.get_child_pages.return_value = []
+
+    cfg = AnalysisConfig()
+    cfg.base_url = "https://example.com/wiki"
+    cfg.cql = "title ~ 'test'"
+
+    params = AnalysisParams(cql="title ~ 'test'")
+    resp = run_analysis(params, cfg, client)
+
+    assert resp.status == "ok"
+    assert resp.scope.resolved_root_count == 2
+    # get_page が呼び出されたのは page タイプの 100 と 101 のみであることを検証
+    called_pids = [call.args[0] for call in client.get_page.call_args_list]
+    assert "100" in called_pids
+    assert "101" in called_pids
+    assert "200" not in called_pids
+    assert "300" not in called_pids
+
+
+def test_all_spaces_true_list_spaces_error_returns_error_response():
+    """all_spaces=True かつ list_spaces 失敗時に構造化された error 応答が返ることを検証."""
+    client = MagicMock()
+    client.list_spaces.side_effect = Exception("Confluence API Connection Failed")
+
+    cfg = AnalysisConfig()
+    cfg.base_url = "https://example.com/wiki"
+
+    params = AnalysisParams(all_spaces=True)
+    resp = run_analysis(params, cfg, client)
+
+    assert resp.status == "error"
+    assert resp.error is not None
+    assert resp.error.code == "API_ERROR"
+    assert "全 Space 一覧の取得に失敗しました" in resp.error.message
+
+
+def test_all_spaces_false_list_spaces_error_continues_with_explicit_roots():
+    """all_spaces=False の場合は list_spaces 失敗でも既存通り明示ルートで分析が継続することを検証."""
+    client = MagicMock()
+    client.list_spaces.side_effect = Exception("Confluence API Connection Failed")
+    client.get_page.return_value = {
+        "title": "Page 100",
+        "space": {"key": "SPACE"},
+    }
+    client.get_attachments.return_value = []
+    client.get_restrictions.return_value = {}
+    client.get_child_pages.return_value = []
+
+    cfg = AnalysisConfig()
+    cfg.base_url = "https://example.com/wiki"
+    cfg.root_page_ids = ["100"]
+
+    params = AnalysisParams(all_spaces=False)
+    resp = run_analysis(params, cfg, client)
+
+    assert resp.status == "ok"
+    assert resp.scope.resolved_root_count == 1

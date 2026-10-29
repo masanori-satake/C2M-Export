@@ -17,6 +17,7 @@ class AttachmentMeta:
         version: バージョン番号
         has_extracted_text: 抽出テキストの有無（未取得/未対応は None）
         extracted_text_length: 抽出テキストの概算長（文字数。未取得は None）
+        attachment_id: 添付コンテンツID（取得不能なら空文字）
     """
 
     page_id: str
@@ -27,6 +28,7 @@ class AttachmentMeta:
     version: Optional[int] = None
     has_extracted_text: Optional[bool] = None
     extracted_text_length: Optional[int] = None
+    attachment_id: str = ""
 
 
 @dataclass
