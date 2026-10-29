@@ -70,3 +70,80 @@ def test_create_mcp_server_and_tool_execution(monkeypatch):
             called_config = mock_run.call_args[1]["config"]
             assert called_config.space_keys == ["TEST"]
             assert called_config.root_page_ids == []
+
+
+def test_analyze_confluence_0008_extension_options(monkeypatch):
+    """MCP ツール経由で 0008 拡張オプションが AnalysisConfig および AnalysisParams へ伝達されることを検証します。"""
+    mock_fast_mcp_cls = MagicMock()
+    mock_mcp_instance = MagicMock()
+    mock_fast_mcp_cls.return_value = mock_mcp_instance
+
+    registered_tools = {}
+
+    def mock_tool():
+        def decorator(func):
+            registered_tools[func.__name__] = func
+            return func
+
+        return decorator
+
+    mock_mcp_instance.tool = mock_tool
+
+    mock_fastmcp_module = MagicMock()
+    mock_fastmcp_module.FastMCP = mock_fast_mcp_cls
+
+    monkeypatch.setenv("C2M_CONFLUENCE_TOKEN", "mock-token-123")
+
+    dummy_response = AnalysisResponse(
+        status="ok",
+        mode="summary",
+        scope={"space_keys": ["TEST"], "resolved_root_count": 1},
+        summary={"total_pages": 10},
+    )
+
+    with patch.dict(sys.modules, {"mcp": MagicMock(), "mcp.server.fastmcp": mock_fastmcp_module}):
+        with patch("c2m_export.mcp_server.run_analysis", return_value=dummy_response) as mock_run:
+            create_mcp_server()
+            tool_fn = registered_tools["analyze_confluence"]
+
+            result = tool_fn(
+                base_url="https://example.com",
+                all_spaces=True,
+                cql="type=page",
+                deep=True,
+                collect_history=True,
+                collect_labels=False,
+                collect_comments=True,
+                collect_watchers=False,
+                collect_effective_restrictions=True,
+                collect_extracted_text=False,
+                collect_space_permissions=True,
+            )
+
+            assert result["status"] == "ok"
+            mock_run.assert_called_once()
+
+            called_params = mock_run.call_args[1]["params"]
+            called_config = mock_run.call_args[1]["config"]
+
+            assert called_config.all_spaces is True
+            assert called_config.cql == "type=page"
+            assert called_config.deep is True
+            assert called_config.collect_history is True
+            assert called_config.collect_labels is False
+            assert called_config.collect_comments is True
+            assert called_config.collect_watchers is False
+            assert called_config.collect_effective_restrictions is True
+            assert called_config.collect_extracted_text is False
+            assert called_config.collect_space_permissions is True
+
+            assert called_params.all_spaces is True
+            assert called_params.cql == "type=page"
+            assert called_params.deep is True
+            assert called_params.collect_history is True
+            assert called_params.collect_labels is False
+            assert called_params.collect_comments is True
+            assert called_params.collect_watchers is False
+            assert called_params.collect_effective_restrictions is True
+            assert called_params.collect_extracted_text is False
+            assert called_params.collect_space_permissions is True
