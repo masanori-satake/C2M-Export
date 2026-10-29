@@ -91,3 +91,10 @@ def test_sanitize_url_query_parameters(param, val):
     assert val not in result
     assert f"{param}=***REDACTED***" in result
     assert "other=123" in result
+
+
+def test_sanitize_url_query_parameters_preserves_hash_fragment():
+    url = "https://confluence.example.com/api?token=secret123#section1"
+    result = sanitize_text(url)
+    assert "secret123" not in result
+    assert "token=***REDACTED***#section1" in result

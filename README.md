@@ -77,6 +77,7 @@ Confluence Data Center 9.2 のページツリーを REST API で取得し、AI�
 - Windows ファイル名制約に基づいたサニタイズ・衝突回避採番
 - 表・リスト・引用・コードブロック・各種マクロなど幅広い Confluence 表現の Markdown 変換対応（[変換方針詳細](docs/conversion.md)）
 - 一部ページの取得・変換に失敗しても処理を止めず、取得できた分を出力する「部分成功」設計
+- 認証トークン実値・`Authorization`/`Bearer` ヘッダー・URL クエリパラメータ (`token`, `access_token`, `api_key`, `secret`, `password` 等) の自動マスク (`***REDACTED***`) による多層防御 (分析 CLI および MCP 応答の返却経路全体に適用)
 
 ---
 

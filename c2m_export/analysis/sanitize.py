@@ -55,7 +55,7 @@ def sanitize_text(text: str, secrets: Optional[Iterable[Optional[str]]] = None) 
     # 3. URL クエリパラメータ内の機密キーワード (token, access_token, api_key, secret, password 等) のマスク
     query_key_pattern = r"(?:token|access_token|api_key|apikey|secret|password|auth_token)"
     sanitized = re.sub(
-        rf"([?&]({query_key_pattern})=)([^&\s\"'\\]+)",
+        rf"([?&]({query_key_pattern})=)([^&#\s\"'\\]+)",
         r"\1***REDACTED***",
         sanitized,
         flags=re.IGNORECASE,
