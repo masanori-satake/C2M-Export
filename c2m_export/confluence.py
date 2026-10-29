@@ -1,10 +1,25 @@
 import logging
 import time
 from typing import Dict, List, Optional
+from urllib.parse import parse_qs, urlparse
 
 import requests
 
 logger = logging.getLogger(__name__)
+
+
+def _next_start(data: Dict, current_start: int) -> Optional[int]:
+    """取得件数に依存せず、次リンクが示すページ位置を返す."""
+    next_link = data.get("_links", {}).get("next")
+    if not next_link:
+        return None
+    try:
+        next_start = int(parse_qs(urlparse(next_link).query).get("start", [])[0])
+    except (IndexError, ValueError):
+        raise ValueError("次ページ位置を取得できません。Confluence API の次リンクを確認してください。") from None
+    if next_start <= current_start:
+        raise ValueError("次ページ位置が進みません。Confluence API の次リンクを確認してください。")
+    return next_start
 
 
 def _safe_request_exception(
@@ -178,9 +193,10 @@ class ConfluenceClient:
             results = data.get("results", [])
             spaces.extend(results)
 
-            if len(results) < limit:
+            next_start = _next_start(data, start)
+            if next_start is None:
                 break
-            start += len(results)
+            start = next_start
 
         return spaces
 
@@ -229,21 +245,16 @@ class ConfluenceClient:
             items.extend(results)
 
             next_link = data.get("_links", {}).get("next")
-            if not next_link or len(results) < limit:
+            if not next_link:
                 break
 
-            if "cursor=" in next_link:
-                from urllib.parse import parse_qs, urlparse
-
-                parsed = urlparse(next_link)
-                qs = parse_qs(parsed.query)
-                cursor_vals = qs.get("cursor", [])
-                if cursor_vals:
-                    current_cursor = cursor_vals[0]
-                else:
-                    break
-            else:
-                break
+            cursor_vals = parse_qs(urlparse(next_link).query).get("cursor", [])
+            next_cursor = data.get("nextCursor") or (cursor_vals[0] if cursor_vals else None)
+            if not next_cursor:
+                raise ValueError("次ページのカーソルを取得できません。Confluence API の次リンクを確認してください。")
+            if next_cursor == current_cursor:
+                raise ValueError("次ページのカーソルが前回と同じです。Confluence API の次リンクを確認してください。")
+            current_cursor = next_cursor
 
         return items
 
@@ -262,9 +273,10 @@ class ConfluenceClient:
             results = data.get("results", [])
             items.extend(results)
 
-            if len(results) < limit:
+            next_start = _next_start(data, start)
+            if next_start is None:
                 break
-            start += len(results)
+            start = next_start
 
         return items
 
@@ -287,9 +299,10 @@ class ConfluenceClient:
             results = data.get("results", [])
             groups.extend(results)
 
-            if len(results) < limit:
+            next_start = _next_start(data, start)
+            if next_start is None:
                 break
-            start += len(results)
+            start = next_start
 
         return groups
 
@@ -324,9 +337,10 @@ class ConfluenceClient:
             results = data.get("results", [])
             labels.extend(results)
 
-            if len(results) < limit:
+            next_start = _next_start(data, start)
+            if next_start is None:
                 break
-            start += len(results)
+            start = next_start
 
         return labels
 
@@ -341,9 +355,10 @@ class ConfluenceClient:
             results = data.get("results", [])
             items.extend(results)
 
-            if len(results) < limit:
+            next_start = _next_start(data, start)
+            if next_start is None:
                 break
-            start += len(results)
+            start = next_start
 
         return items
 
@@ -364,9 +379,10 @@ class ConfluenceClient:
             results = data.get("results", [])
             comments.extend(results)
 
-            if len(results) < limit:
+            next_start = _next_start(data, start)
+            if next_start is None:
                 break
-            start += len(results)
+            start = next_start
 
         return comments
 
