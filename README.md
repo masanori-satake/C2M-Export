@@ -235,6 +235,8 @@ python -m c2m_export.assess --space-key SPACE_A SPACE_B
 
 共通分析 API（`run_analysis`）も、設定に明示値がない場合は同じリスク判定の既定値を使います。マクロ解析失敗は警告と `macro_parse_failed_count` に記録し、そのページの部分集計は含めません。分析 CLI の認証情報マスキングは Bearer・Basic に対応し、JSON の引用符や区切りを保持します。
 
+共通分析 API の Space 概要・詳細収集は、指定した Space と解決済み起点ページの所属 Space に限定します。`--all-spaces` 指定時は参照可能な全 Space が対象です。実効閲覧制限が未取得の場合、`effective_read_users`・`effective_read_groups`・`effective_restriction_present` は `null` となり、取得済みで制限がない場合の空配列・`false` と区別できます。
+
 ---
 
 ### 2. ファイルシステムモードの実行
