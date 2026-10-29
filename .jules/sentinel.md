@@ -1,7 +1,7 @@
-## 2026/10/29 - Prevent Bearer Token Leakage and SSRF in Attachment Downloads
+## 2026/10/29 - 添付ファイルダウンロード時の Bearer Token 漏洩および SSRF の防止
 
-**Vulnerability:** In `ConfluenceClient.download_attachment`, passing an absolute URL targeting an external host or untrusted IP (e.g. `https://attacker.com` or `http://169.254.169.254`) caused `requests.Session` to send the HTTP request with the `Authorization: Bearer <token>` header intact, leaking API tokens to external hosts and allowing SSRF.
+**Vulnerability:** `ConfluenceClient.download_attachment` において、外部ホストや不正な IP（例: `https://attacker.com` や `http://169.254.169.254`）を指す絶対 URL が指定された場合、`requests.Session` が `Authorization: Bearer <token>` ヘッダーを付与したままリクエストを送信し、トークンが外部へ漏洩する脆弱性および SSRF リスクが存在した。
 
-**Learning:** When API responses include URL links (like `_links.download`), directly fetching those URLs using an authenticated HTTP session without verifying that the target host matches the configured API `base_url` exposes credentials to third parties.
+**Learning:** API レスポンスに含まれる URL リンク（`_links.download` など）を認証付きセッションでそのまま取得する際、ターゲットのホスト名が設定済みの `base_url` と一致するか検証しないと、第三者サーバーへクレデンシャルが露出するリスクがある。
 
-**Prevention:** Always validate target URL hosts using `urllib.parse.urlparse` before executing authenticated requests against endpoints specified in dynamic API metadata.
+**Prevention:** 動的な API メタデータで指定されたエンドポイントに認証付きリクエストを実行する前に、必ず `urllib.parse.urlparse` を使用してターゲット URL のホスト名を検証する。
