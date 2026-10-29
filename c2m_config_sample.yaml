@@ -81,6 +81,24 @@ analysis:
   # ページのアクセス制限（権限）情報を分析収集するか (既定: true)
   analyze_restrictions: true
 
+  # 参照可能な全 Space を起点として分析するか (既定: false)
+  # all_spaces: false
+
+  # 起点検索用または課題抽出用の CQL 条件文字列
+  # cql: "space = 'SPACE_A' AND title ~ '設計'"
+
+  # 詳細調査フェーズの情報を一括で有効化するか (既定: false)
+  # deep: false
+
+  # 詳細調査情報の個別収集フラグ (deep が true の場合は個別に false 指定で無効化可能)
+  # collect_history: true
+  # collect_labels: true
+  # collect_comments: true
+  # collect_watchers: true
+  # collect_effective_restrictions: true
+  # collect_extracted_text: true
+  # collect_space_permissions: true
+
 # ==============================================================================
 # 分析（アセスメント）モード固有の設定 (python -m c2m_export.assess で使用)
 # ==============================================================================
