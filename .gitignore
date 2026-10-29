@@ -53,4 +53,5 @@ c2m_config.yaml
 !.kiro/**/*.md
 !.github/**/*.md
 !skills/**/*.md
+!docs/**/*.md
 *.zip
