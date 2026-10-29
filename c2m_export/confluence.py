@@ -7,6 +7,36 @@ import requests
 logger = logging.getLogger(__name__)
 
 
+def _extract_next_start(data: Dict, current_start: int, current_count: int) -> Optional[int]:
+    """レスポンスの _links.next から次ページの start オフセットを取得する.
+
+    次ページが存在しない場合は None を返す。
+    """
+    if not isinstance(data, dict):
+        return None
+    links = data.get("_links")
+    if not isinstance(links, dict):
+        return None
+    next_link = links.get("next")
+    if not next_link or not isinstance(next_link, str):
+        return None
+
+    if "start=" in next_link:
+        from urllib.parse import parse_qs, urlparse
+
+        parsed = urlparse(next_link)
+        qs = parse_qs(parsed.query)
+        start_vals = qs.get("start", [])
+        if start_vals and start_vals[0].isdigit():
+            next_start = int(start_vals[0])
+            if next_start != current_start:
+                return next_start
+
+    if current_count > 0:
+        return current_start + current_count
+    return None
+
+
 def _safe_request_exception(
     error: requests.exceptions.RequestException, message: str
 ) -> requests.exceptions.RequestException:
@@ -91,13 +121,13 @@ class ConfluenceClient:
         while True:
             params = {"limit": limit, "start": start}
             data = self._request("GET", path, params=params)
-            results = data.get("results", [])
+            results = data.get("results", []) if isinstance(data, dict) else []
             children.extend(results)
 
-            # 結果がlimit未満であれば全件取得完了と判断
-            if len(results) < limit:
+            next_start = _extract_next_start(data, start, len(results))
+            if next_start is None:
                 break
-            start += len(results)
+            start = next_start
 
         return children
 
@@ -112,12 +142,13 @@ class ConfluenceClient:
         while True:
             params = {"limit": limit, "start": start, "expand": "extensions,version"}
             data = self._request("GET", path, params=params)
-            results = data.get("results", [])
+            results = data.get("results", []) if isinstance(data, dict) else []
             attachments.extend(results)
 
-            if len(results) < limit:
+            next_start = _extract_next_start(data, start, len(results))
+            if next_start is None:
                 break
-            start += len(results)
+            start = next_start
 
         return attachments
 
@@ -137,12 +168,13 @@ class ConfluenceClient:
         while True:
             params = {"depth": "root", "limit": limit, "start": start}
             data = self._request("GET", path, params=params)
-            results = data.get("results", [])
+            results = data.get("results", []) if isinstance(data, dict) else []
             root_pages.extend(results)
 
-            if len(results) < limit:
+            next_start = _extract_next_start(data, start, len(results))
+            if next_start is None:
                 break
-            start += len(results)
+            start = next_start
 
         return root_pages
 
@@ -175,12 +207,13 @@ class ConfluenceClient:
                 params["expand"] = expand
 
             data = self._request("GET", path, params=params)
-            results = data.get("results", [])
+            results = data.get("results", []) if isinstance(data, dict) else []
             spaces.extend(results)
 
-            if len(results) < limit:
+            next_start = _extract_next_start(data, start, len(results))
+            if next_start is None:
                 break
-            start += len(results)
+            start = next_start
 
         return spaces
 
@@ -225,11 +258,15 @@ class ConfluenceClient:
                 params["cursor"] = current_cursor
 
             data = self._request("GET", path, params=params)
-            results = data.get("results", [])
+            results = data.get("results", []) if isinstance(data, dict) else []
             items.extend(results)
 
-            next_link = data.get("_links", {}).get("next")
-            if not next_link or len(results) < limit:
+            next_link = (
+                data.get("_links", {}).get("next")
+                if isinstance(data, dict) and isinstance(data.get("_links"), dict)
+                else None
+            )
+            if not next_link:
                 break
 
             if "cursor=" in next_link:
@@ -259,12 +296,13 @@ class ConfluenceClient:
             if expand:
                 params["expand"] = expand
             data = self._request("GET", path, params=params)
-            results = data.get("results", [])
+            results = data.get("results", []) if isinstance(data, dict) else []
             items.extend(results)
 
-            if len(results) < limit:
+            next_start = _extract_next_start(data, start, len(results))
+            if next_start is None:
                 break
-            start += len(results)
+            start = next_start
 
         return items
 
@@ -284,12 +322,13 @@ class ConfluenceClient:
         while True:
             params = {"limit": limit, "start": start}
             data = self._request("GET", path, params=params)
-            results = data.get("results", [])
+            results = data.get("results", []) if isinstance(data, dict) else []
             groups.extend(results)
 
-            if len(results) < limit:
+            next_start = _extract_next_start(data, start, len(results))
+            if next_start is None:
                 break
-            start += len(results)
+            start = next_start
 
         return groups
 
@@ -321,12 +360,13 @@ class ConfluenceClient:
             if prefix:
                 params["prefix"] = prefix
             data = self._request("GET", path, params=params)
-            results = data.get("results", [])
+            results = data.get("results", []) if isinstance(data, dict) else []
             labels.extend(results)
 
-            if len(results) < limit:
+            next_start = _extract_next_start(data, start, len(results))
+            if next_start is None:
                 break
-            start += len(results)
+            start = next_start
 
         return labels
 
@@ -338,12 +378,13 @@ class ConfluenceClient:
         while True:
             params = {"cql": cql, "expand": expand, "limit": limit, "start": start}
             data = self._request("GET", path, params=params)
-            results = data.get("results", [])
+            results = data.get("results", []) if isinstance(data, dict) else []
             items.extend(results)
 
-            if len(results) < limit:
+            next_start = _extract_next_start(data, start, len(results))
+            if next_start is None:
                 break
-            start += len(results)
+            start = next_start
 
         return items
 
@@ -361,12 +402,13 @@ class ConfluenceClient:
         while True:
             params = {"depth": depth, "expand": expand, "limit": limit, "start": start}
             data = self._request("GET", path, params=params)
-            results = data.get("results", [])
+            results = data.get("results", []) if isinstance(data, dict) else []
             comments.extend(results)
 
-            if len(results) < limit:
+            next_start = _extract_next_start(data, start, len(results))
+            if next_start is None:
                 break
-            start += len(results)
+            start = next_start
 
         return comments
 

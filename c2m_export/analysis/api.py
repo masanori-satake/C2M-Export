@@ -122,9 +122,10 @@ def _resolve_roots(
         try:
             cql_items = client.search_cql(cql)
             for item in cql_items:
-                cid = str(item.get("id", ""))
-                if cid:
-                    resolved_ids.append(cid)
+                if item.get("type") == "page":
+                    cid = str(item.get("id", ""))
+                    if cid:
+                        resolved_ids.append(cid)
         except Exception as e:
             logger.warning(f"CQL 検索に失敗しました: {e}")
             cql_failed = True
@@ -205,13 +206,20 @@ def run_analysis(
 
         # 0. 共有 Space 一覧の取得
         shared_spaces = []
+        list_spaces_failed = False
+        list_spaces_error_msg = ""
         try:
             shared_spaces = client.list_spaces()
         except Exception as e:
+            list_spaces_failed = True
+            list_spaces_error_msg = str(e)
             logger.warning(f"Space 一覧の取得に失敗しました: {e}")
 
         # オプション解決 (params / config 互換)
         all_spaces = getattr(params, "all_spaces", False) or getattr(config, "all_spaces", False)
+
+        if all_spaces and list_spaces_failed:
+            raise ApiError(f"全 Space 一覧の取得に失敗しました: {list_spaces_error_msg}")
         cql = getattr(params, "cql", None) or getattr(config, "cql", None)
         deep = getattr(params, "deep", False) or getattr(config, "deep", False)
 
