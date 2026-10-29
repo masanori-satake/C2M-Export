@@ -161,6 +161,18 @@ class AnalysisConfig:
         self.archive_extensions: Optional[Set[str]] = None
         self.analyze_restrictions: Optional[bool] = None
 
+        # 0008 拡張オプション
+        self.all_spaces: bool = False
+        self.cql: Optional[str] = None
+        self.deep: bool = False
+        self.collect_history: Optional[bool] = None
+        self.collect_labels: Optional[bool] = None
+        self.collect_comments: Optional[bool] = None
+        self.collect_watchers: Optional[bool] = None
+        self.collect_effective_restrictions: Optional[bool] = None
+        self.collect_extracted_text: Optional[bool] = None
+        self.collect_space_permissions: Optional[bool] = None
+
     def load(self):
         """設定を読み込む。優先順位は CLI > 環境変数 > 設定ファイル > デフォルト."""
         pre_parser = argparse.ArgumentParser(add_help=False)
@@ -207,6 +219,23 @@ class AnalysisConfig:
                                 self.archive_extensions = {str(e).lower().lstrip(".") for e in a_exts}
                             if "analyze_restrictions" in analysis_sec:
                                 self.analyze_restrictions = bool(analysis_sec["analyze_restrictions"])
+                            self.all_spaces = bool(analysis_sec.get("all_spaces", self.all_spaces))
+                            self.cql = analysis_sec.get("cql", self.cql)
+                            self.deep = bool(analysis_sec.get("deep", self.deep))
+                            if "collect_history" in analysis_sec:
+                                self.collect_history = bool(analysis_sec["collect_history"])
+                            if "collect_labels" in analysis_sec:
+                                self.collect_labels = bool(analysis_sec["collect_labels"])
+                            if "collect_comments" in analysis_sec:
+                                self.collect_comments = bool(analysis_sec["collect_comments"])
+                            if "collect_watchers" in analysis_sec:
+                                self.collect_watchers = bool(analysis_sec["collect_watchers"])
+                            if "collect_effective_restrictions" in analysis_sec:
+                                self.collect_effective_restrictions = bool(analysis_sec["collect_effective_restrictions"])
+                            if "collect_extracted_text" in analysis_sec:
+                                self.collect_extracted_text = bool(analysis_sec["collect_extracted_text"])
+                            if "collect_space_permissions" in analysis_sec:
+                                self.collect_space_permissions = bool(analysis_sec["collect_space_permissions"])
             except Exception as e:
                 print(
                     f"設定ファイル {config_path} の読み込みに失敗しました（現象）。詳細: {e}（原因）。ファイル形式を確認してください（対処方法）"
@@ -242,6 +271,26 @@ class AnalysisConfig:
         parser.add_argument("--archive-ext", type=str, nargs="+", help="圧縮形式カテゴリとして扱う拡張子リスト")
         parser.add_argument("--restrictions", action="store_true", default=None, help="権限分析を有効化する")
         parser.add_argument("--no-restrictions", action="store_false", dest="restrictions", help="権限分析を無効化する")
+
+        # 0008 新オプション
+        parser.add_argument("--all-spaces", action="store_true", help="参照可能な全Spaceを起点として分析する")
+        parser.add_argument("--cql", type=str, help="起点検索用または課題抽出用のCQL文字列")
+        parser.add_argument("--deep", action="store_true", help="詳細調査フェーズの情報を一括で有効化する")
+
+        parser.add_argument("--collect-history", action="store_true", default=None)
+        parser.add_argument("--no-collect-history", action="store_false", dest="collect_history")
+        parser.add_argument("--collect-labels", action="store_true", default=None)
+        parser.add_argument("--no-collect-labels", action="store_false", dest="collect_labels")
+        parser.add_argument("--collect-comments", action="store_true", default=None)
+        parser.add_argument("--no-collect-comments", action="store_false", dest="collect_comments")
+        parser.add_argument("--collect-watchers", action="store_true", default=None)
+        parser.add_argument("--no-collect-watchers", action="store_false", dest="collect_watchers")
+        parser.add_argument("--collect-effective-restrictions", action="store_true", default=None)
+        parser.add_argument("--no-collect-effective-restrictions", action="store_false", dest="collect_effective_restrictions")
+        parser.add_argument("--collect-extracted-text", action="store_true", default=None)
+        parser.add_argument("--no-collect-extracted-text", action="store_false", dest="collect_extracted_text")
+        parser.add_argument("--collect-space-permissions", action="store_true", default=None)
+        parser.add_argument("--no-collect-space-permissions", action="store_false", dest="collect_space_permissions")
 
         try:
             cli_args = parser.parse_args()
@@ -290,15 +339,41 @@ class AnalysisConfig:
         if cli_args.restrictions is not None:
             self.analyze_restrictions = cli_args.restrictions
 
+        if cli_args.all_spaces:
+            self.all_spaces = True
+        if cli_args.cql:
+            self.cql = cli_args.cql
+        if cli_args.deep:
+            self.deep = True
+
+        if cli_args.collect_history is not None:
+            self.collect_history = cli_args.collect_history
+        if cli_args.collect_labels is not None:
+            self.collect_labels = cli_args.collect_labels
+        if cli_args.collect_comments is not None:
+            self.collect_comments = cli_args.collect_comments
+        if cli_args.collect_watchers is not None:
+            self.collect_watchers = cli_args.collect_watchers
+        if cli_args.collect_effective_restrictions is not None:
+            self.collect_effective_restrictions = cli_args.collect_effective_restrictions
+        if cli_args.collect_extracted_text is not None:
+            self.collect_extracted_text = cli_args.collect_extracted_text
+        if cli_args.collect_space_permissions is not None:
+            self.collect_space_permissions = cli_args.collect_space_permissions
+
     def validate(self):
         """必須設定の有無を確認し、URLの正規化および矛盾チェックを行う."""
         if not self.base_url:
             raise ValueError(
                 "現象: base_url が未指定です。原因: --base-url または設定ファイルに base_url が存在しません。対処方法: --base-url オプションまたは設定ファイルで base_url を指定してください。"
             )
-        if not self.root_page_ids and not self.space_keys:
+        if not self.root_page_ids and not self.space_keys and not self.all_spaces and not self.cql:
             raise ValueError(
-                "現象: ルート指定が存在しません。原因: root_page_id および space_key が指定されていません。対処方法: --root-page-id または --space-key を指定してください。"
+                "現象: ルート指定が存在しません。原因: root_page_id, space_key, all_spaces, cql のいずれも指定されていません。対処方法: --root-page-id, --space-key, --all-spaces, --cql のいずれかを指定してください。"
+            )
+        if self.cql is not None and not self.cql.strip():
+            raise ValueError(
+                "現象: cql パラメータが無効です。原因: --cql に空の文字列が指定されました。対処方法: 有効な CQL 文字列を指定してください。"
             )
         if not self.token:
             raise ValueError(

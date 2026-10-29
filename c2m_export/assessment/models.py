@@ -15,6 +15,8 @@ class AttachmentMeta:
         media_type: MIMEタイプ（取得不能なら空文字）
         file_size: バイト単位のファイルサイズ（メタデータ欠落時は None）
         version: バージョン番号
+        has_extracted_text: 抽出テキストの有無（未取得/未対応は None）
+        extracted_text_length: 抽出テキストの概算長（文字数。未取得は None）
     """
 
     page_id: str
@@ -23,6 +25,8 @@ class AttachmentMeta:
     media_type: str
     file_size: Optional[int]
     version: Optional[int] = None
+    has_extracted_text: Optional[bool] = None
+    extracted_text_length: Optional[int] = None
 
 
 @dataclass
@@ -72,6 +76,52 @@ class PageMeta:
     attachments: List[AttachmentMeta] = field(default_factory=list)
     restriction: Optional[RestrictionMeta] = None
     macro_counts: Dict[str, int] = field(default_factory=dict)
+    created_by: Optional[str] = None
+    last_updated_by: Optional[str] = None
+    contributors: List[str] = field(default_factory=list)
+    owner_unknown: bool = False
+    labels: List[str] = field(default_factory=list)
+    comment_count: int = 0
+    unresolved_comment_count: Optional[int] = None
+    inline_comment_count: Optional[int] = None
+    footer_comment_count: Optional[int] = None
+    effective_view_restrictions: Optional[RestrictionMeta] = None
+
+
+@dataclass
+class SpaceMeta:
+    """Spaceのメタデータモデル."""
+
+    space_key: str
+    name: str
+    type: str
+    status: str
+    description: Optional[str] = None
+    label_count: int = 0
+    page_count_preview: Optional[int] = None
+    watcher_count: Optional[int] = None
+    permission_entries: Optional[List[str]] = None
+
+
+@dataclass
+class VisibilityMeta:
+    """可視範囲自己診断データモデル."""
+
+    username: Optional[str] = None
+    display_name: Optional[str] = None
+    groups: List[str] = field(default_factory=list)
+    visible_space_keys: List[str] = field(default_factory=list)
+    unavailable_apis: List[str] = field(default_factory=list)
+
+
+@dataclass
+class EnvironmentMeta:
+    """環境コンテキストデータモデル."""
+
+    access_mode: Optional[str] = None
+    server_version: Optional[str] = None
+    build_number: Optional[str] = None
+    base_url: Optional[str] = None
 
 
 @dataclass
@@ -92,6 +142,18 @@ class RawInventory:
     restriction_failed_page_ids: List[str] = field(default_factory=list)
     size_meta_missing_count: int = 0
     macro_parse_failed_count: int = 0
+    spaces: List[SpaceMeta] = field(default_factory=list)
+    history_failed_page_ids: List[str] = field(default_factory=list)
+    label_failed_page_ids: List[str] = field(default_factory=list)
+    comment_failed_page_ids: List[str] = field(default_factory=list)
+    effective_restriction_failed_page_ids: List[str] = field(default_factory=list)
+    extracted_text_failed_refs: List[str] = field(default_factory=list)
+    content_watcher_failed_refs: List[str] = field(default_factory=list)
+    space_watcher_failed_keys: List[str] = field(default_factory=list)
+    space_permission_failed_keys: List[str] = field(default_factory=list)
+    cql_failed: bool = False
+    visibility: Optional[VisibilityMeta] = None
+    environment: Optional[EnvironmentMeta] = None
 
 
 @dataclass

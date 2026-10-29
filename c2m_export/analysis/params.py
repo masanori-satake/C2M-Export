@@ -36,6 +36,16 @@ class AnalysisParams:
     )
     analyze_restrictions: Optional[bool] = None
     sort: Optional[str] = None
+    all_spaces: bool = False
+    cql: Optional[str] = None
+    deep: bool = False
+    collect_history: Optional[bool] = None
+    collect_labels: Optional[bool] = None
+    collect_comments: Optional[bool] = None
+    collect_watchers: Optional[bool] = None
+    collect_effective_restrictions: Optional[bool] = None
+    collect_extracted_text: Optional[bool] = None
+    collect_space_permissions: Optional[bool] = None
 
     def __post_init__(self):
         """インスタンス初期化後の正規化処理."""
