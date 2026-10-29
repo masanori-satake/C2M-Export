@@ -1,6 +1,6 @@
 """来歴・分類・制限情報の集約純粋関数."""
 
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from c2m_export.assessment.models import RawInventory
 
