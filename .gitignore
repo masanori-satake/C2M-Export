@@ -54,4 +54,5 @@ c2m_config.yaml
 !.github/**/*.md
 !skills/**/*.md
 !docs/**/*.md
+!.jules/**/*.md
 *.zip
