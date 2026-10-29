@@ -73,3 +73,21 @@ def test_sanitize_authentication_inside_json_message(scheme):
 
     expected = f"{scheme} ***REDACTED***" if scheme == "Bearer" else "***REDACTED***"
     assert json.loads(result) == {"message": f'Authorization: {expected}", next=1'}
+
+
+@pytest.mark.parametrize(
+    ("param", "val"),
+    [
+        ("token", "secret123"),
+        ("access_token", "abc-456"),
+        ("api_key", "key_789"),
+        ("secret", "topsecret"),
+        ("password", "p@ssword1"),
+    ],
+)
+def test_sanitize_url_query_parameters(param, val):
+    url = f"https://confluence.example.com/api?{param}={val}&other=123"
+    result = sanitize_text(url)
+    assert val not in result
+    assert f"{param}=***REDACTED***" in result
+    assert "other=123" in result
