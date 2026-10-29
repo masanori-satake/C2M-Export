@@ -58,6 +58,8 @@ python skills/confluence-analysis/scripts/run_analysis.py \
 | `--base-url` | 文字列 (必須) | Confluence のベース URL (例: `https://confluence.example.com`) | なし |
 | `--space-key` | 文字列リスト | 対象の Confluence Space キー (複数指定可) | なし |
 | `--root-page-id` | 文字列リスト | 対象のルートページ ID (複数指定可) | なし |
+| `--all-spaces` | フラグ | 参照可能な全 Space を起点として分析 | `False` |
+| `--cql` | 文字列 | 起点検索用または課題抽出用の CQL 文字列 | なし |
 | `--usecase` | 文字列リスト | 分析ユースケース (`risk`, `stale`, `restricted`, `archives`, `empty_with_attachments`, `macros`) | 全 6 種 |
 | `--mode` | 文字列 | 出力モード (`summary`: 集計サマリのみ, `detail`: 個別一覧含む) | `summary` |
 | `--limit` | 整数 | `detail` モード時の個別項目抽出上限件数 | `1000` |
@@ -66,8 +68,19 @@ python skills/confluence-analysis/scripts/run_analysis.py \
 | `--min-body-bytes` | 整数 | 添付あり空ページの判定基準バイト数 | `200` |
 | `--archive-ext` | 文字列リスト | 圧縮形式とみなす拡張子一覧 | `zip 7z rar gz tar bz2 xz tgz lzh cab` |
 | `--restrictions` / `--no-restrictions` | フラグ | アクセス制限（権限）情報の収集可否 | 自動収集 (有効) |
+| `--deep` | フラグ | 詳細調査フェーズの情報を一括で有効化 | `False` |
+| `--collect-history` / `--no-collect-history` | フラグ | ページ更新履歴の個別収集制御 | `deep` に依存 |
+| `--collect-labels` / `--no-collect-labels` | フラグ | ラベル情報の個別収集制御 | `deep` に依存 |
+| `--collect-comments` / `--no-collect-comments` | フラグ | コメント情報の個別収集制御 | `deep` に依存 |
+| `--collect-watchers` / `--no-collect-watchers` | フラグ | ウォッチャー情報の個別収集制御 | `deep` に依存 |
+| `--collect-effective-restrictions` / `--no-collect-effective-restrictions` | フラグ | 実効アクセス制限の個別収集制御 | `deep` に依存 |
+| `--collect-extracted-text` / `--no-collect-extracted-text` | フラグ | 抽出テキストの個別収集制御 | `deep` に依存 |
+| `--collect-space-permissions` / `--no-collect-space-permissions` | フラグ | Space 権限情報の個別収集制御 | `deep` に依存 |
+| `--proxy` | 文字列 | HTTP/HTTPS プロキシ URL | なし |
+| `--config` | 文字列 | 設定ファイルのパス | `c2m_config.yaml` |
+| `--token` | 文字列 | Confluence Bearer トークン (環境変数推奨) | なし |
 
-※ `--space-key` または `--root-page-id` の少なくとも一方が必須です。
+※ `--space-key`、`--root-page-id`、`--all-spaces`、`--cql` の少なくとも 1 つが必須です。
 
 ## 分析ユースケース一覧
 
@@ -84,15 +97,25 @@ python skills/confluence-analysis/scripts/run_analysis.py \
 
 ```json
 {
-  "schema_version": "1.0",
+  "schema_version": "1.1",
   "status": "ok",
   "generated_at": "2026-03-31T00:00:00Z",
   "mode": "detail",
   "scope": {
-    "base_url": "https://confluence.example.com",
-    "space_keys": ["DEV"],
     "root_page_ids": [],
+    "space_keys": ["DEV"],
     "resolved_root_count": 10
+  },
+  "workspace": {
+    "total_spaces": 1,
+    "spaces": []
+  },
+  "visibility": {
+    "anonymous_access": false,
+    "unavailable_apis": []
+  },
+  "environment": {
+    "confluence_version": "9.2.0"
   },
   "summary": {
     "total_pages": 120,
@@ -120,7 +143,21 @@ python skills/confluence-analysis/scripts/run_analysis.py \
   "uncertainties": {
     "skipped_page_ids": [],
     "skipped_attachment_refs": [],
-    "restriction_failed_page_ids": []
+    "restriction_failed_page_ids": [],
+    "size_meta_missing_count": 0,
+    "macro_parse_failed_count": 0,
+    "empty_space_keys": [],
+    "restrictions_disabled": false,
+    "history_failed_count": 0,
+    "label_failed_count": 0,
+    "comment_failed_count": 0,
+    "effective_restriction_failed_count": 0,
+    "extracted_text_failed_count": 0,
+    "content_watcher_failed_count": 0,
+    "space_watcher_failed_count": 0,
+    "space_permission_failed_count": 0,
+    "cql_failed": false,
+    "unavailable_apis": []
   }
 }
 ```
@@ -138,6 +175,6 @@ python skills/confluence-analysis/scripts/run_analysis.py \
 
 ## `schema_version` の互換性ポリシー
 
-- 初期バージョンは `"1.0"` です。
+- 現在のバージョンは `"1.1"` です。
 - キーの追加や非破壊的な変更（マイナー更新）では `schema_version` のメジャー番号は変更されません。
 - 既存キーの削除や型の不互換な変更（メジャー更新）が行われる場合は、`schema_version` がインクリメントされます。
