@@ -61,11 +61,7 @@ class Collector:
             name = sp.get("name", space_key)
             sp_type = sp.get("type", "global")
             status = sp.get("status", "current")
-            description = (
-                sp.get("description", {}).get("plain", {}).get("value")
-                if isinstance(sp.get("description"), dict)
-                else None
-            )
+            description = sp.get("description", {}).get("plain", {}).get("value") if isinstance(sp.get("description"), dict) else None
 
             # Space labels
             label_count = 0
@@ -436,12 +432,18 @@ class Collector:
                     raw_eff = self.client.get_relevant_view_restrictions(page_id)
                     r_users = [
                         u.get("username", "")
-                        for u in raw_eff.get("read", {}).get("restrictions", {}).get("user", {}).get("results", [])
+                        for u in raw_eff.get("read", {})
+                        .get("restrictions", {})
+                        .get("user", {})
+                        .get("results", [])
                         if u.get("username")
                     ]
                     r_groups = [
                         g.get("name", "")
-                        for g in raw_eff.get("read", {}).get("restrictions", {}).get("group", {}).get("results", [])
+                        for g in raw_eff.get("read", {})
+                        .get("restrictions", {})
+                        .get("group", {})
+                        .get("results", [])
                         if g.get("name")
                     ]
                     eff_restriction_meta = RestrictionMeta(
@@ -461,14 +463,14 @@ class Collector:
                     inventory.content_watcher_failed_refs.append(page_id)
 
             if self.collect_extracted_text:
-                for att in attachments_meta:
-                    att_id = att.filename  # identifier placeholder
+                for att_item in attachments_meta:
+                    att_id = att_item.filename  # identifier placeholder
                     try:
                         ext_res = self.client.get_attachment_extracted_text(page_id, att_id)
                         if isinstance(ext_res, dict):
                             text = ext_res.get("text") or ""
-                            att.has_extracted_text = bool(text)
-                            att.extracted_text_length = len(text)
+                            att_item.has_extracted_text = bool(text)
+                            att_item.extracted_text_length = len(text)
                     except Exception as e:
                         logger.warning(f"添付 ({page_id}:{att_id}) の抽出テキスト取得に失敗しました: {e}")
                         inventory.extracted_text_failed_refs.append(f"{page_id}:{att_id}")

@@ -222,26 +222,13 @@ def run_analysis(
                 return c_val
             return deep
 
-        collect_history = _resolve_flag(
-            getattr(params, "collect_history", None), getattr(config, "collect_history", None)
-        )
+        collect_history = _resolve_flag(getattr(params, "collect_history", None), getattr(config, "collect_history", None))
         collect_labels = _resolve_flag(getattr(params, "collect_labels", None), getattr(config, "collect_labels", None))
-        collect_comments = _resolve_flag(
-            getattr(params, "collect_comments", None), getattr(config, "collect_comments", None)
-        )
-        collect_watchers = _resolve_flag(
-            getattr(params, "collect_watchers", None), getattr(config, "collect_watchers", None)
-        )
-        collect_effective_restrictions = _resolve_flag(
-            getattr(params, "collect_effective_restrictions", None),
-            getattr(config, "collect_effective_restrictions", None),
-        )
-        collect_extracted_text = _resolve_flag(
-            getattr(params, "collect_extracted_text", None), getattr(config, "collect_extracted_text", None)
-        )
-        collect_space_permissions = _resolve_flag(
-            getattr(params, "collect_space_permissions", None), getattr(config, "collect_space_permissions", None)
-        )
+        collect_comments = _resolve_flag(getattr(params, "collect_comments", None), getattr(config, "collect_comments", None))
+        collect_watchers = _resolve_flag(getattr(params, "collect_watchers", None), getattr(config, "collect_watchers", None))
+        collect_effective_restrictions = _resolve_flag(getattr(params, "collect_effective_restrictions", None), getattr(config, "collect_effective_restrictions", None))
+        collect_extracted_text = _resolve_flag(getattr(params, "collect_extracted_text", None), getattr(config, "collect_extracted_text", None))
+        collect_space_permissions = _resolve_flag(getattr(params, "collect_space_permissions", None), getattr(config, "collect_space_permissions", None))
 
         # 1. 起点解決
         resolved_root_ids, empty_space_keys, cql_failed = _resolve_roots(

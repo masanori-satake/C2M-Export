@@ -171,43 +171,6 @@ python -m c2m_export.analyze \
 
 終了コード規約: `0` (成功), `2` (パラメータ不正), `3` (認証失敗), `4` (対象未存在), `5` (APIエラー), `10` (内部エラー)。
 
-#### ワークスペースの取得 API と詳細収集オプション
-
-`analyze` はスペース一覧・スペースラベル・子孫ページ数の概算、実行ユーザー・所属グループ、アクセスモード・サーバー情報を全体把握として収集します。`--all-spaces` で参照可能な全スペースを起点にでき、`--cql 'space = "DEV"'` で検索結果を起点に追加できます。
-
-詳細収集は既定で無効です。次のオプションで個別に有効化でき、`--deep` ですべて有効になります。各オプションの `--no-collect-...` を明示すると、`--deep` より優先してその収集を無効化できます。
-
-| オプション | 収集内容 |
-|---|---|
-| `--collect-history` | ページの作成者・最終更新者・貢献者 |
-| `--collect-labels` | ページラベル（スペースラベルは全体把握で収集） |
-| `--collect-comments` | コメント総数・インライン/フッター別・未解決件数 |
-| `--collect-watchers` | ページとスペースのウォッチャー |
-| `--collect-effective-restrictions` | 継承を含む実効的な閲覧制限 |
-| `--collect-extracted-text` | 添付ファイルの抽出テキスト情報 |
-| `--collect-space-permissions` | スペースの権限情報 |
-
-```bash
-python -m c2m_export.analyze --base-url "https://confluence.example.com/wiki" \
-  --space-key DEV --deep --no-collect-comments
-```
-
-Python からは `ConfluenceClient` の取得 API も直接利用できます（トークンは上記の環境変数を使用）。
-
-```python
-import os
-from c2m_export.confluence import ConfluenceClient
-
-client = ConfluenceClient("https://confluence.example.com/wiki", os.environ["C2M_CONFLUENCE_TOKEN"])
-spaces = client.list_spaces(type_="global", status="current")
-pages = client.scan_content("DEV", expand="space,version", limit=100)
-comments = client.get_comments("12345678")
-```
-
-追加された API は、`get_space` / `get_space_labels`（スペース情報）、`get_descendant_page_count` / `get_descendants`（子孫数・一覧）、`get_current_user` / `get_user_memberof`（実行ユーザー）、`get_access_mode` / `get_server_information`（環境情報）、`get_content_history` / `get_labels` / `search_cql`（来歴・ラベル・検索）、`get_attachment_extracted_text`、`get_relevant_view_restrictions`、`get_space_permissions`、`get_content_watchers` / `get_space_watchers` も含みます。引数と収集への組み込み例は [開発者向けドキュメント](README_DEV.md#ワークスペース取得-api-と収集への組み込み) を参照してください。
-
-`list_spaces` / `get_descendants` / `get_user_memberof` / `get_labels` / `search_cql` / `get_comments` は `_links.next` の `start` を、`scan_content` は次リンクとカーソルを使って全件取得します。API の `limit` は1リクエストの件数であり、総取得数の上限ではありません。短いページや空ページでも次リンクがあれば継続し、次リンクがなくなれば終了します。次リンクのページ位置が不正・進行しない場合や、scan のカーソルが取得不能・前回と同一の場合は `ValueError` になります。Confluence API の次リンクを確認してください。
-
 ### 2. Agent Skill (`SKILL.md`)
 
 GitHub Copilot、Kiro、および汎用 Agent Skills で共通して利用可能な `SKILL.md` が提供されています。

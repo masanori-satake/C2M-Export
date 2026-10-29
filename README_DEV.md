@@ -125,48 +125,6 @@ MOVE_RENAME は `computed_paths` で再計算した新しい親と、移動先�
 401・403・404 の `HTTPError` は初回で同じサニタイズ処理を適用して送出し、再試行・待機は行いません。429・5xx・通信エラーの指数バックオフによる再試行は維持します。
 5xx の指数バックオフは次の試行がある場合だけ行い、最終試行では `raise_for_status()` を経由して同じサニタイズ処理を適用します。分析 API では `root_page_ids`・`space_keys` の両経路で `API_ERROR` として扱います。
 
-### ワークスペース取得 API と収集への組み込み
-
-`ConfluenceClient` に次の取得メソッドを追加しています。ID・スペースキーは文字列で指定します。`get_page(page_id, expand="body.storage,space")` は `expand` を変更でき、既定値は従来どおりです。
-
-| API の呼び出し例 | 用途 |
-|---|---|
-| `list_spaces(type_="global", status="current", label="team", content_label="doc", expand="description")` | 参照可能スペース一覧。各絞り込み引数は省略可能 |
-| `get_space("DEV", expand="description")` / `get_space_labels("DEV")` | スペース情報・ラベル |
-| `get_descendant_page_count("123")` / `get_descendants("123", type_="page", expand="space")` | 子孫ページ数・型別の子孫一覧 |
-| `scan_content("DEV", type_="page", status="current", expand="space", cursor=None, limit=100)` | カーソルによるコンテンツ一覧 |
-| `get_current_user()` / `get_user_memberof()` | 実行ユーザー・所属グループ |
-| `get_access_mode()` / `get_server_information()` | アクセスモード・サーバー情報 |
-| `get_content_history("123")` / `get_labels("123", prefix="global")` | 来歴・ページラベル |
-| `search_cql('space = "DEV"', expand="history,space,version")` | CQL検索によるコンテンツ一覧 |
-| `get_comments("123", depth="all", expand="extensions.location,extensions.resolution")` | コメント・種別・解決状態 |
-| `get_attachment_extracted_text("123", "456", limit=1000)` | 添付の抽出テキスト情報 |
-| `get_relevant_view_restrictions("123")` / `get_space_permissions("DEV")` | 実効閲覧制限・スペース権限照会 |
-| `get_content_watchers("123")` / `get_space_watchers("DEV")` | ページ・スペースのウォッチャー |
-
-`list_spaces` / `get_descendants` / `get_user_memberof` / `get_labels` / `search_cql` / `get_comments` は結果リストを全件返します。終了判定は `_links.next` の有無で行い、次リンクのクエリから `start` を取得します。結果数が `limit` 未満またはゼロでも継続します。次リンクの `start` が欠落・不正・現在位置以下なら `ValueError` を送出し、不完全な結果の返却や同一ページの再取得を防ぎます。元の絞り込み・`expand`・`limit` は後続リクエストにも保持します。
-
-`scan_content` も次リンクがなくなるまで取得し、`nextCursor`、なければ次リンクの `cursor` を URL デコードして次のリクエストに渡します。カーソルの欠落や前回と同じ値は、再取得前に `ValueError` にします。これらのエラーにページ位置やカーソルの実値は含めません。`tests/test_confluence_pagination.py` で短いページ・空ページ・最終ページ・不正な次位置を検証します。
-
-`run_analysis(AnalysisParams(...), config, client)` では、`all_spaces=True` / `cql='space = "DEV"'` で起点を追加できます。`deep=True` は詳細収集を一括で有効化し、個別の `collect_*` の明示値が優先されます（`None` は未指定、`False` は `deep` でも無効）。CLI は [README のオプション表](README.md#ワークスペースの取得-api-と詳細収集オプション) を参照してください。
-
-Collector を直接利用する場合は、全体把握・DFS・スペース単位の詳細収集を次のように呼び出します。
-
-```python
-import os
-from c2m_export.confluence import ConfluenceClient
-from c2m_export.assessment.collector import Collector
-
-client = ConfluenceClient("https://confluence.example.com/wiki", os.environ["C2M_CONFLUENCE_TOKEN"])
-collector = Collector(client, collect_history=True, collect_labels=True, collect_comments=True)
-spaces = client.list_spaces()
-collector.collect_workspace_overview(spaces, ["123"])
-inventory = collector.collect(["123"])
-collector.collect_space_details(["DEV"])
-```
-
-Collector の詳細収集フラグはすべて既定 `False` です。ページ単位の `collect_history` / `collect_labels` / `collect_comments` / `collect_effective_restrictions` / `collect_extracted_text`、スペース単位の `collect_space_permissions`、両単位の `collect_watchers` を指定できます。スペースラベルは `collect_labels` とは独立して全体把握で収集します。取得できない API は欠落情報として記録し、ほかの収集を継続します。通常のページ巡回は DFS を使い、`scan_content` / `get_descendants` は直接利用できる代替 API です。
-
 ### Agent Skill (`SKILL.md`) の管理・同期運用方針
 
 C2M-Export の分析 Skill 定義 (`SKILL.md`) は、GitHub Copilot、Kiro、および汎用 Agent Skills の 3 形態で同一の標準フォーマットを採用しています。

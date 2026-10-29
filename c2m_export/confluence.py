@@ -1,25 +1,10 @@
 import logging
 import time
 from typing import Dict, List, Optional
-from urllib.parse import parse_qs, urlparse
 
 import requests
 
 logger = logging.getLogger(__name__)
-
-
-def _next_start(data: Dict, current_start: int) -> Optional[int]:
-    """取得件数に依存せず、次リンクが示すページ位置を返す."""
-    next_link = data.get("_links", {}).get("next")
-    if not next_link:
-        return None
-    try:
-        next_start = int(parse_qs(urlparse(next_link).query).get("start", [])[0])
-    except (IndexError, ValueError):
-        raise ValueError("次ページ位置を取得できません。Confluence API の次リンクを確認してください。") from None
-    if next_start <= current_start:
-        raise ValueError("次ページ位置が進みません。Confluence API の次リンクを確認してください。")
-    return next_start
 
 
 def _safe_request_exception(
@@ -193,10 +178,9 @@ class ConfluenceClient:
             results = data.get("results", [])
             spaces.extend(results)
 
-            next_start = _next_start(data, start)
-            if next_start is None:
+            if len(results) < limit:
                 break
-            start = next_start
+            start += len(results)
 
         return spaces
 
@@ -245,16 +229,21 @@ class ConfluenceClient:
             items.extend(results)
 
             next_link = data.get("_links", {}).get("next")
-            if not next_link:
+            if not next_link or len(results) < limit:
                 break
 
-            cursor_vals = parse_qs(urlparse(next_link).query).get("cursor", [])
-            next_cursor = data.get("nextCursor") or (cursor_vals[0] if cursor_vals else None)
-            if not next_cursor:
-                raise ValueError("次ページのカーソルを取得できません。Confluence API の次リンクを確認してください。")
-            if next_cursor == current_cursor:
-                raise ValueError("次ページのカーソルが前回と同じです。Confluence API の次リンクを確認してください。")
-            current_cursor = next_cursor
+            if "cursor=" in next_link:
+                from urllib.parse import parse_qs, urlparse
+
+                parsed = urlparse(next_link)
+                qs = parse_qs(parsed.query)
+                cursor_vals = qs.get("cursor", [])
+                if cursor_vals:
+                    current_cursor = cursor_vals[0]
+                else:
+                    break
+            else:
+                break
 
         return items
 
@@ -273,10 +262,9 @@ class ConfluenceClient:
             results = data.get("results", [])
             items.extend(results)
 
-            next_start = _next_start(data, start)
-            if next_start is None:
+            if len(results) < limit:
                 break
-            start = next_start
+            start += len(results)
 
         return items
 
@@ -299,10 +287,9 @@ class ConfluenceClient:
             results = data.get("results", [])
             groups.extend(results)
 
-            next_start = _next_start(data, start)
-            if next_start is None:
+            if len(results) < limit:
                 break
-            start = next_start
+            start += len(results)
 
         return groups
 
@@ -337,10 +324,9 @@ class ConfluenceClient:
             results = data.get("results", [])
             labels.extend(results)
 
-            next_start = _next_start(data, start)
-            if next_start is None:
+            if len(results) < limit:
                 break
-            start = next_start
+            start += len(results)
 
         return labels
 
@@ -355,10 +341,9 @@ class ConfluenceClient:
             results = data.get("results", [])
             items.extend(results)
 
-            next_start = _next_start(data, start)
-            if next_start is None:
+            if len(results) < limit:
                 break
-            start = next_start
+            start += len(results)
 
         return items
 
@@ -379,10 +364,9 @@ class ConfluenceClient:
             results = data.get("results", [])
             comments.extend(results)
 
-            next_start = _next_start(data, start)
-            if next_start is None:
+            if len(results) < limit:
                 break
-            start = next_start
+            start += len(results)
 
         return comments
 

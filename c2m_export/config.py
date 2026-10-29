@@ -231,9 +231,7 @@ class AnalysisConfig:
                             if "collect_watchers" in analysis_sec:
                                 self.collect_watchers = bool(analysis_sec["collect_watchers"])
                             if "collect_effective_restrictions" in analysis_sec:
-                                self.collect_effective_restrictions = bool(
-                                    analysis_sec["collect_effective_restrictions"]
-                                )
+                                self.collect_effective_restrictions = bool(analysis_sec["collect_effective_restrictions"])
                             if "collect_extracted_text" in analysis_sec:
                                 self.collect_extracted_text = bool(analysis_sec["collect_extracted_text"])
                             if "collect_space_permissions" in analysis_sec:
@@ -288,9 +286,7 @@ class AnalysisConfig:
         parser.add_argument("--collect-watchers", action="store_true", default=None)
         parser.add_argument("--no-collect-watchers", action="store_false", dest="collect_watchers")
         parser.add_argument("--collect-effective-restrictions", action="store_true", default=None)
-        parser.add_argument(
-            "--no-collect-effective-restrictions", action="store_false", dest="collect_effective_restrictions"
-        )
+        parser.add_argument("--no-collect-effective-restrictions", action="store_false", dest="collect_effective_restrictions")
         parser.add_argument("--collect-extracted-text", action="store_true", default=None)
         parser.add_argument("--no-collect-extracted-text", action="store_false", dest="collect_extracted_text")
         parser.add_argument("--collect-space-permissions", action="store_true", default=None)
