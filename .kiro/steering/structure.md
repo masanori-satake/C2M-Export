@@ -52,11 +52,14 @@ C2M-Export/
 │   ├── utils.py           # ユーティリティ (ファイル名サニタイズ, サイズ計算, Zip生成)
 │   └── web.py             # Streamlit Web UI (python -m c2m_export.web)
 ├── skills/                # Agent Skill 正本ディレクトリ
-│   └── confluence-analysis/ # 分析 Skill 正本 (SKILL.md + scripts/)
+│   ├── confluence-analysis/ # 分析 Skill 正本 (SKILL.md + scripts/)
+│   └── confluence-setup/    # セットアップ支援 Skill 正本 (SKILL.md + scripts/)
 ├── .github/skills/        # GitHub Copilot 用 Agent Skill 複製ディレクトリ
-│   └── confluence-analysis/ # SKILL.md 複製
+│   ├── confluence-analysis/ # SKILL.md 複製
+│   └── confluence-setup/    # SKILL.md + scripts/ 複製
 ├── .kiro/skills/          # Kiro 用 Agent Skill 複製ディレクトリ
-│   └── confluence-analysis/ # SKILL.md 複製
+│   ├── confluence-analysis/ # SKILL.md 複製
+│   └── confluence-setup/    # SKILL.md + scripts/ 複製
 ├── tests/                 # テストディレクトリ
 │   ├── conftest.py                   # Pytest 共通フィクスチャ
 │   ├── test_assess_config.py         # アセスメント設定テスト
@@ -120,6 +123,7 @@ C2M-Export/
 | `analyze.py` / `analysis/` | 分析 CLI エントリーポイント、抽出・集約・マクロ統計純粋ロジック、共通 1 層 `run_analysis` |
 | `mcp_server.py` | MCP サーバエントリーポイント (FastMCP) |
 | `skills/confluence-analysis/` | Agent Skill 定義の正本 (`SKILL.md` + `scripts/run_analysis.py`) |
+| `skills/confluence-setup/` | Agent Skill 定義の正本 (`SKILL.md` + `scripts/diagnose.py`) |
 | `.github/skills/` / `.kiro/skills/` | Agent Skill 定義の Copilot / Kiro 用複製先 (正本 `skills/` からのコピーを厳守) |
 | `utils.py` | ファイル名生成・サニタイズ、サイズユーティリティ、Zip圧縮 |
 | `web.py` | Streamlit UI、排他制御、進捗表示 |
