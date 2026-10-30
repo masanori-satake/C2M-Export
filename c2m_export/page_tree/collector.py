@@ -8,6 +8,8 @@
 import logging
 from typing import Any, Dict, List, Optional, Set, Tuple
 
+import requests
+
 from c2m_export.confluence import ConfluenceClient
 from c2m_export.page_tree.annotations import aggregate_macros, classify_restriction
 from c2m_export.page_tree.models import Annotation
@@ -52,7 +54,10 @@ def collect_tree(
         "macro_failed": 0,
         "attachment_failed": 0,
         "history_failed": 0,
+        "child_fetch_failed": 0,
     }
+
+    last_root_exception: Optional[Exception] = None
 
     # 1. 起点（ルートページ ID）の解決
     if space_keys:
@@ -66,6 +71,7 @@ def collect_tree(
                     if "title" in r:
                         page_titles_map[r_id] = str(r["title"])
             except Exception as e:
+                last_root_exception = e
                 logger.warning(
                     f"現象: Space {sk} のルートページ一覧取得に失敗しました。 原因: {e} 対処方法: Space キーおよびアクセス権限を確認してください。"
                 )
@@ -73,18 +79,27 @@ def collect_tree(
     if root_page_ids:
         for r_id in root_page_ids:
             r_id_str = str(r_id)
-            if r_id_str not in resolved_root_ids:
-                resolved_root_ids.append(r_id_str)
-            if r_id_str not in page_titles_map:
-                try:
-                    p_data = client.get_page(r_id_str, expand="version")
-                    if isinstance(p_data, dict) and "title" in p_data:
+            try:
+                p_data = client.get_page(r_id_str, expand="version")
+                if isinstance(p_data, dict):
+                    if r_id_str not in resolved_root_ids:
+                        resolved_root_ids.append(r_id_str)
+                    if "title" in p_data:
                         page_titles_map[r_id_str] = str(p_data["title"])
-                except Exception as e:
-                    logger.warning(
-                        f"現象: ルートページ {r_id_str} の基本情報取得に失敗しました。 原因: {e} 対処方法: ページ ID およびアクセス権限を確認してください。"
-                    )
-                    page_titles_map[r_id_str] = f"Page {r_id_str}"
+            except Exception as e:
+                last_root_exception = e
+                logger.warning(
+                    f"現象: ルートページ {r_id_str} の基本情報取得に失敗しました。 原因: {e} 対処方法: ページ ID およびアクセス権限を確認してください。"
+                )
+
+    # 起点を1件も解決できなかった場合は例外を再送出する
+    if not resolved_root_ids:
+        if last_root_exception is not None:
+            raise last_root_exception
+        raise requests.exceptions.HTTPError(
+            "現象: 起点ページまたは Space が見つかりませんでした。原因: 指定された --space-key または --root-page-id に該当するコンテンツが存在しないか権限がありません。対処方法: 指定内容およびアクセス権限を確認してください。",
+            response=type("Response", (), {"status_code": 404})(),
+        )
 
     # 2. 階層および付帯情報の再帰収集
     def _traverse_and_collect(page_id: str, current_depth: int):
@@ -179,6 +194,7 @@ def collect_tree(
                 f"現象: ページ {page_id} の子ページ一覧取得に失敗しました。 原因: {e} 対処方法: アクセス権限を確認してください。"
             )
             children_map[page_id] = []
+            uncertainties["child_fetch_failed"] += 1
 
     for root_id in resolved_root_ids:
         _traverse_and_collect(root_id, current_depth=1)

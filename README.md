@@ -53,7 +53,7 @@ Confluence Data Center 9.2 のページツリーを REST API で取得し、AI�
 5. **権限エクスポート（権限モード / `permexport`）**:
    - Confluence のページに設定されたコンテンツ制限 (Read / Read+Write) を収集し、管理者向けの参照用権限レポート（Markdown & JSON）を出力します。 [詳細ガイド](docs/permission_export.md)
 6. **ページツリー表示（ツリーモード / `tree`）**:
-   - ページ階層を樹形図（テキスト / Markdown / JSON）として可視化出力します。オプトインで個別アクセス制限・マクロ種別数・添付数・最終更新日を併記できます。
+   - ページ階層を樹形図（テキスト / Markdown / JSON）として可視化出力します。オプトインで個別アクセス制限・マクロ種別数・添付数・最終更新日を併記できます。 [詳細ガイド](docs/tree_visualization.md)
 
 ---
 
@@ -67,6 +67,7 @@ Confluence Data Center 9.2 のページツリーを REST API で取得し、AI�
 | [アセスメントモード詳細](docs/assessment.md) | 規模・構造・移設リスク分析、推奨ワークフロー |
 | [ファイルシステムエクスポート詳細](docs/filesystem_export.md) | OS ディレクトリ構造出力、差分同期 (`--sync`)・レジューム (`--resume`)・削除ポリシー |
 | [権限エクスポート詳細](docs/permission_export.md) | コンテンツ制限収集、集約/分散レポート形式 |
+| [ツリー可視化モード詳細](docs/tree_visualization.md) | 樹形図出力 (text/markdown/json)、付帯情報マーク (🔒/📎N/⚙N)・別表、探索制御 |
 | [AI 連携機能詳細](docs/ai_integration.md) | 分析 CLI (`analyze`)、Agent Skill (`SKILL.md`)、MCP サーバ (`mcp_server.py`) |
 | [変換方針・サポート表現](docs/conversion.md) | AI ナレッジ利用最優先方針、Markdown 変換対応表、部分成功・エラー挙動 |
 

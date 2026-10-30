@@ -135,6 +135,27 @@ MOVE_RENAME は `computed_paths` で再計算した新しい親と、移動先�
 401・403・404 の `HTTPError` は初回で同じサニタイズ処理を適用して送出し、再試行・待機は行いません。429・5xx・通信エラーの指数バックオフによる再試行は維持します。
 5xx の指数バックオフは次の試行がある場合だけ行い、最終試行では `raise_for_status()` を経由して同じサニタイズ処理を適用します。分析 API では `root_page_ids`・`space_keys` の両経路で `API_ERROR` として扱います。
 
+### ページツリー可視化モード（`tree.py` / `page_tree/`）の設計・エラー分類・マーク規則
+
+ツリーモードは、ページ階層とオプトイン付帯情報を樹形図として出力します。
+
+- **マーク規則（インライン表記）**:
+  - 個別アクセス制限あり: `🔒` (ASCII: `[R]`)
+  - 添付件数: `📎N` (ASCII: `att:N`)
+  - マクロ種別数: `⚙N` (ASCII: `mac:N`)
+  - 最終更新日: `(YYYY-MM-DD)`
+  - 取得失敗/不明: `(?)`
+- **エラー分類と終了コード** (`_classify_error`):
+  - `2` (`INVALID_PARAM`): パラメータ不正、起点未指定、既存出力ファイル上書き拒否
+  - `3` (`AUTH_FAILED`): 401 / 403 認証・認可エラー
+  - `4` (`TARGET_NOT_FOUND`): 404 リソース未発見または起点コンテンツ未発見
+  - `5` (`API_ERROR`): 5xx サーバエラー等
+  - `10` (`INTERNAL_ERROR`): 予期せぬ内部例外
+- **`collect_tree` 失敗時の挙動**:
+  - **起点解決失敗**: Space ルート一覧取得やルートページ詳細取得で例外が発生し、起点を1件も解決できなかった場合は最後の例外を再送出して `_classify_error` に伝播させます。
+  - **個別付帯情報失敗**: 個別ページの restriction / macros / attachments / history 取得失敗は `Annotation.failed_fields` と `uncertainties` に記録し、ページの探索を継続します。
+  - **子ページ一覧取得失敗**: 該当ページの子探索をスキップしつつ、`uncertainties["child_fetch_failed"]` を加算してツリー全体の構築を継続します。
+
 ### Agent Skill (`SKILL.md`) の管理・同期運用方針
 
 C2M-Export の分析 Skill 定義 (`SKILL.md`) は、GitHub Copilot、Kiro、および汎用 Agent Skills の 3 形態で同一の標準フォーマットを採用しています。各ツールの自動検出・発火条件（`.kiro/skills/`: Kiro、`.github/skills/`: GitHub Copilot、`skills/`: 汎用 Agent Skills）に合わせて 3 箇所に配置しています。

@@ -1,5 +1,7 @@
 from unittest.mock import MagicMock
 
+import pytest
+
 from c2m_export.confluence import ConfluenceClient
 from c2m_export.page_tree.collector import collect_tree
 
@@ -57,3 +59,26 @@ def test_collect_tree_with_opt_in_and_failure_handling():
     assert ann.attachment_count == 1
     assert ann.macros == {"code": 1}
     assert ann.last_modified == "2025-08-20T00:00:00Z"
+
+
+def test_collect_tree_root_resolution_failure():
+    client = MagicMock(spec=ConfluenceClient)
+    client.get_space_root_pages.side_effect = Exception("Space Not Found")
+
+    with pytest.raises(Exception, match="Space Not Found"):
+        collect_tree(client=client, space_keys=["NONEXISTENT"])
+
+
+def test_collect_tree_child_fetch_failure_recorded():
+    client = MagicMock(spec=ConfluenceClient)
+    client.get_space_root_pages.return_value = [{"id": "1", "title": "Home"}]
+    client.get_child_pages.side_effect = Exception("Child fetch failed")
+
+    resolved_roots, children_map, annotations_map, page_titles_map, uncertainties = collect_tree(
+        client=client,
+        space_keys=["TEST"],
+    )
+
+    assert resolved_roots == ["1"]
+    assert children_map["1"] == []
+    assert uncertainties["child_fetch_failed"] == 1
