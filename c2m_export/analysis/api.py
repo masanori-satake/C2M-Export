@@ -313,7 +313,9 @@ def run_analysis(
 
         c_chk_interval = getattr(config, "checkpoint_interval", None)
         p_chk_interval = getattr(params, "checkpoint_interval", 1)
-        checkpoint_interval = int(c_chk_interval if (c_chk_interval is not None and c_chk_interval != 1) else p_chk_interval)
+        checkpoint_interval = int(
+            c_chk_interval if (c_chk_interval is not None and c_chk_interval != 1) else p_chk_interval
+        )
 
         c_chk_dir = getattr(config, "checkpoint_dir", None)
         p_chk_dir = getattr(params, "checkpoint_dir", ".c2m_analyze_checkpoint")
