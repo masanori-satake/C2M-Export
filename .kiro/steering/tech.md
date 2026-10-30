@@ -40,6 +40,11 @@ python -m c2m_export.cli
 python -m c2m_export.analyze --base-url https://confluence.example.com --space-key DEV --usecase stale --mode summary
 ```
 
+分析 CLI モード（レジューム再開）:
+```powershell
+python -m c2m_export.analyze --base-url https://confluence.example.com --space-key DEV --resume
+```
+
 MCP サーバ起動:
 ```powershell
 python -m c2m_export.mcp_server

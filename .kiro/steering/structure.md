@@ -12,6 +12,7 @@ C2M-Export/
 │   │   ├── params.py      # 分析パラメータモデル・境界検証
 │   │   ├── provenance.py  # provenance 付与（enrich_stale / enrich_restricted / enrich_empty_with_attachments など）
 │   │   ├── response.py    # レスポンス・ErrorObject スキーマモデル
+│   │   ├── checkpoint.py  # チェックポイント永続化・復元・スコープハッシュ (純粋関数 + CheckpointStore)
 │   │   ├── sanitize.py    # 秘匿情報サニタイズ（多層防御マスク）
 │   │   └── workspace.py   # workspace / visibility / environment 集計
 │   ├── assessment/        # アセスメント（分析）パッケージ
@@ -129,7 +130,7 @@ C2M-Export/
 | `assess.py` / `assessment/` | アセスメントエントリーポイント、メタデータ収集、規模/リスク/権限/鮮度分析、レポート出力 |
 | `fsexport.py` / `fs_export/` | FS エクスポートエントリーポイント、ディレクトリ/ファイル構造化、Frontmatter、添付保存、差分同期・レジューム処理 |
 | `permexport.py` / `permission/` | 権限エクスポートエントリーポイント、アクセス制限（Read/Read+Write）収集、レポート出力 |
-| `analyze.py` / `analysis/` | 分析 CLI エントリーポイント、抽出・集約・マクロ統計純粋ロジック、共通 1 層 `run_analysis` |
+| `analyze.py` / `analysis/` | 分析 CLI エントリーポイント、抽出・集約・マクロ統計純粋ロジック、共通 1 層 `run_analysis`、JSONL チェックポイント永続化/レジューム (`checkpoint.py`) |
 | `tree.py` / `page_tree/` | ページツリー表示 CLI エントリーポイント、付帯情報選択収集、3フォーマット描画 |
 | `mcp_server.py` | MCP サーバエントリーポイント (FastMCP) |
 | `skills/confluence-analysis/` | Agent Skill 定義の正本 (`SKILL.md` + `scripts/run_analysis.py`) |

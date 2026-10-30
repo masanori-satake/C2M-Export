@@ -76,6 +76,10 @@ python skills/confluence-analysis/scripts/run_analysis.py \
 | `--collect-effective-restrictions` / `--no-collect-effective-restrictions` | フラグ | 実効アクセス制限の個別収集制御 | `deep` に依存 |
 | `--collect-extracted-text` / `--no-collect-extracted-text` | フラグ | 抽出テキストの個別収集制御 | `deep` に依存 |
 | `--collect-space-permissions` / `--no-collect-space-permissions` | フラグ | Space 権限情報の個別収集制御 | `deep` に依存 |
+| `--no-checkpoint` | フラグ | チェックポイント永続化を無効化 | 自動保持 (有効) |
+| `--resume` | フラグ | 既存のチェックポイントから未収集分を再開 | `False` |
+| `--checkpoint-interval` | 整数 | チェックポイント flush 粒度 (件数) | `1` |
+| `--checkpoint-dir` | 文字列 | チェックポイント保存先ディレクトリ | `.c2m_analyze_checkpoint` |
 | `--proxy` | 文字列 | HTTP/HTTPS プロキシ URL | なし |
 | `--config` | 文字列 | 設定ファイルのパス | `c2m_config.yaml` |
 | `--token` | 文字列 | Confluence Bearer トークン (環境変数推奨) | なし |
@@ -97,7 +101,7 @@ python skills/confluence-analysis/scripts/run_analysis.py \
 
 ```json
 {
-  "schema_version": "1.1",
+  "schema_version": "1.2",
   "status": "ok",
   "generated_at": "2026-03-31T00:00:00Z",
   "mode": "detail",
@@ -157,7 +161,13 @@ python skills/confluence-analysis/scripts/run_analysis.py \
     "space_watcher_failed_count": 0,
     "space_permission_failed_count": 0,
     "cql_failed": false,
-    "unavailable_apis": []
+    "unavailable_apis": [],
+    "interrupted": false,
+    "interrupted_reason": null,
+    "collected_page_count": 120,
+    "resumed_from_checkpoint": false,
+    "checkpoint_reused_count": 0,
+    "checkpoint_corrupted_line_count": 0
   }
 }
 ```
@@ -169,12 +179,13 @@ python skills/confluence-analysis/scripts/run_analysis.py \
 - `3`: 認証失敗 (`AUTH_FAILED`)
 - `4`: 対象未存在 (`TARGET_NOT_FOUND`)
 - `5`: Confluence API / ネットワークエラー (`API_ERROR`)
+- `6`: 部分成功 (`partial`)
 - `10`: 内部エラー (`INTERNAL_ERROR`)
 
 エラー発生時も、標準出力に `status: "error"` の構造化 JSON (ErrorObject) が出力されます（標準エラー出力には日本語詳細メッセージが出力されます）。
 
 ## `schema_version` の互換性ポリシー
 
-- 現在のバージョンは `"1.1"` です。
+- 現在のバージョンは `"1.2"` です。
 - キーの追加や非破壊的な変更（マイナー更新）では `schema_version` のメジャー番号は変更されません。
 - 既存キーの削除や型の不互換な変更（メジャー更新）が行われる場合は、`schema_version` がインクリメントされます。

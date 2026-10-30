@@ -118,5 +118,5 @@ API 通信・添付ダウンロードの最終失敗時は、URL や元の例外
 | **ファイルシステムモード** | `python -m c2m_export.fsexport` | `0` | **`1`**: 設定・起点未発見・出力権限等のエラー |
 | **アセスメントモード** | `python -m c2m_export.assess` | `0` | **`1`**: 設定・起点未発見・レポート出力等のエラー |
 | **権限モード** | `python -m c2m_export.permexport` | `0` | **`1`**: 設定・取得・レポート出力等の致命的エラー |
-| **分析モード** | `python -m c2m_export.analyze` | `0` | **`2`**: `INVALID_PARAM` (設定・引数エラー)<br>**`3`**: `AUTH_FAILED` (401/403 認証失敗)<br>**`4`**: `TARGET_NOT_FOUND` (404 対象未発見)<br>**`5`**: `API_ERROR` (API通信エラー)<br>**`10`**: `INTERNAL_ERROR` (内部例外エラー) |
+| **分析モード** | `python -m c2m_export.analyze` | `0` | **`2`**: `INVALID_PARAM` (設定・引数エラー)<br>**`3`**: `AUTH_FAILED` (401/403 認証失敗)<br>**`4`**: `TARGET_NOT_FOUND` (404 対象未発見)<br>**`5`**: `API_ERROR` (API通信エラー)<br>**`6`**: `PARTIAL` (シグナル中断・途中エラーによる部分成功)<br>**`10`**: `INTERNAL_ERROR` (内部例外エラー) |
 | **ツリーモード** | `python -m c2m_export.tree` | `0` | **`2`**: `INVALID_PARAM` (設定・引数エラー)<br>**`3`**: `AUTH_FAILED` (401/403 認証失敗)<br>**`4`**: `TARGET_NOT_FOUND` (404 対象未発見)<br>**`5`**: `API_ERROR` (API通信エラー)<br>**`10`**: `INTERNAL_ERROR` (内部例外エラー) |

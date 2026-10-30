@@ -68,7 +68,8 @@ c2m_export/
 │   ├── categories.py # 圧縮形式カテゴリ集約純粋ロジック
 │   ├── macros.py      # マクロ解析・集計・修復区分判定（converter 方針写像）
 │   ├── provenance.py  # provenance 付与（enrich_stale / enrich_restricted / enrich_empty_with_attachments など）
-│   └─ workspace.py   # workspace / visibility / environment 集計
+│   ├── workspace.py   # workspace / visibility / environment 集計
+│   └─ checkpoint.py  # [新規 0010] チェックポイント永続化・復元・スコープハッシュ（純粋関数 + CheckpointStore）
 ├── assess.py          # 分析モードのエントリーポイント（python -m c2m_export.assess）
 ├── fsexport.py        # ファイルシステムモードのエントリーポイント（python -m c2m_export.fsexport / sync・resume分岐）
 ├── permexport.py      # [新規 0006] 権限エクスポートのエントリーポイント（python -m c2m_export.permexport）
@@ -435,3 +436,9 @@ mypy
 - `tests/test_tree_renderers.py`: text / markdown / json 描画の単体テスト。
 - `tests/test_tree_collector.py`: 付帯情報オプトイン収集および例外ハンドリングのテスト。
 - `tests/test_tree_main.py`: tree.py エントリーポイント、stdout/stderr 振り分け、終了コードのテスト。
+- `tests/test_checkpoint_pure.py`: スコープハッシュ・PageMeta 変換の純粋関数テスト。
+- `tests/test_checkpoint_store.py`: CheckpointStore JSONL 追記・読込・スコープ照合・破損耐性テスト。
+- `tests/test_collector_checkpoint.py`: Collector チェックポイント追記・レジュームスキップ・協調的中断テスト。
+- `tests/test_run_analysis_checkpoint.py`: run_analysis チェックポイントライフサイクル・partial 統合テスト。
+- `tests/test_analyze_config_checkpoint.py`: AnalysisConfig チェックポイント設定解決テスト。
+- `tests/test_analyze_cli_checkpoint.py`: analyze.py シグナル捕捉・partial 出力・終了コード 6 テスト。

@@ -108,3 +108,26 @@ def test_analysis_config_does_not_expose_token():
     config = AnalysisConfig()
     config.token = "SECRET_TOKEN_VALUE"
     assert config.token == "SECRET_TOKEN_VALUE"
+
+
+def test_token_not_in_checkpoint_file(tmp_path):
+    """チェックポイントファイル（JSONL）内に認証トークンが含まれないことを検証します。"""
+    from c2m_export.analysis.checkpoint import CheckpointStore
+    from c2m_export.assessment.models import PageMeta
+
+    secret_token = "TOP_SECRET_CHECKPOINT_TOKEN_999"
+    chk_path = tmp_path / "chk.jsonl"
+
+    store = CheckpointStore(
+        path=chk_path,
+        scope_hash="1234567890abcdef",
+        scope_meta={"root_page_ids": ["100"], "space_keys": ["TEST"]},
+    )
+    store.open_for_write(append=False)
+    page = PageMeta(page_id="100", space_key="TEST", title="Secret Page", version=1)
+    store.append_page(page)
+    store.close()
+
+    content = chk_path.read_text(encoding="utf-8")
+    assert secret_token not in content
+    assert "token" not in content.lower()

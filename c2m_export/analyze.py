@@ -2,7 +2,9 @@
 
 import json
 import logging
+import signal
 import sys
+import threading
 from typing import Dict
 
 from c2m_export.analysis.api import run_analysis
@@ -12,6 +14,7 @@ from c2m_export.analysis.response import (
     CODE_AUTH_FAILED,
     CODE_INTERNAL_ERROR,
     CODE_INVALID_PARAM,
+    CODE_PARTIAL,
     CODE_TARGET_NOT_FOUND,
     AnalysisResponse,
     ErrorObject,
@@ -25,8 +28,16 @@ EXIT_CODES: Dict[str, int] = {
     CODE_AUTH_FAILED: 3,
     CODE_TARGET_NOT_FOUND: 4,
     CODE_API_ERROR: 5,
+    CODE_PARTIAL: 6,
     CODE_INTERNAL_ERROR: 10,
 }
+
+_interrupted_event = threading.Event()
+
+
+def _signal_handler(signum: int, frame: object) -> None:
+    """SIGINT / SIGTERM シグナル受信時に協調的中断フラグを立てるハンドラ."""
+    _interrupted_event.set()
 
 
 def main() -> None:
@@ -37,6 +48,20 @@ def main() -> None:
         format="%(asctime)s [%(levelname)s] %(message)s",
         stream=sys.stderr,
     )
+
+    _interrupted_event.clear()
+
+    # シグナルハンドラ登録
+    try:
+        signal.signal(signal.SIGINT, _signal_handler)
+    except (ValueError, OSError):
+        pass  # メインスレッド以外での実行時はスキップ
+
+    if hasattr(signal, "SIGTERM"):
+        try:
+            signal.signal(signal.SIGTERM, _signal_handler)
+        except (ValueError, OSError):
+            pass
 
     config = AnalysisConfig()
 
@@ -93,13 +118,21 @@ def main() -> None:
     )
 
     # run_analysis 実行
-    response = run_analysis(params, config)
+    response = run_analysis(params, config, interrupt_checker=_interrupted_event.is_set)
 
     # 出力文字列のサニタイズ（全出力に対して1回のみ適用）
     json_out = json.dumps(response.to_dict(), ensure_ascii=False, indent=2)
     sanitized_json = sanitize_text(json_out, secrets=[config.token])
 
     sys.stdout.write(sanitized_json + "\n")
+
+    if response.status == "partial":
+        partial_msg = (
+            "部分成功結果 (partial) を出力しました。--resume オプションを指定することで未収集ページから再開できます。"
+        )
+        stderr_msg = sanitize_text(partial_msg, secrets=[config.token])
+        sys.stderr.write(stderr_msg + "\n")
+        sys.exit(EXIT_CODES.get(CODE_PARTIAL, 6))
 
     if response.status != "ok":
         err_code = response.error.code if response.error else CODE_INTERNAL_ERROR

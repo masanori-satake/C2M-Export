@@ -99,6 +99,18 @@ analysis:
   # collect_extracted_text: true
   # collect_space_permissions: true
 
+  # チェックポイント永続化を有効化するか (既定: true)
+  # checkpoint_enabled: true
+
+  # 既存チェックポイントから未収集分を再開するか (既定: false)
+  # resume: false
+
+  # チェックポイントの flush 粒度 (件数) (既定: 1)
+  # checkpoint_interval: 1
+
+  # チェックポイントの保存先ディレクトリ (既定: .c2m_analyze_checkpoint)
+  # checkpoint_dir: ".c2m_analyze_checkpoint"
+
 # ==============================================================================
 # 分析（アセスメント）モード固有の設定 (python -m c2m_export.assess で使用)
 # ==============================================================================
