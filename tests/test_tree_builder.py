@@ -49,3 +49,21 @@ def test_build_tree_max_depth():
     c1 = roots[0].children[0]
     assert c1.page_id == "2"
     assert len(c1.children) == 0  # Depth 3 truncated
+
+
+def test_build_tree_multiple_roots_shared_descendants():
+    # Root 1 and Root 2 both have Child 10 as child
+    root_ids = ["1", "2"]
+    children_map = {
+        "1": [{"id": "10", "title": "Shared Child"}],
+        "2": [{"id": "10", "title": "Shared Child"}],
+    }
+    page_titles_map = {"1": "Root 1", "2": "Root 2"}
+
+    roots, total_count = build_tree(root_ids, children_map, {}, page_titles_map)
+    assert len(roots) == 2
+    assert roots[0].children[0].page_id == "10"
+    # Root 2 should also construct Child 10 (not blocked by Root 1's visited nodes)
+    assert roots[1].children[0].page_id == "10"
+    # Total unique pages counted across both roots is 3 ("1", "2", "10")
+    assert total_count == 3

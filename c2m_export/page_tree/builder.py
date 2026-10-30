@@ -24,18 +24,15 @@ def build_tree(
     Returns:
         (roots: List[TreeNode], total_pages_count: int)
     """
-    visited_ids: Set[str] = set()
-    total_pages = 0
+    counted_page_ids: Set[str] = set()
 
-    def _build_node(page_id: str, depth: int) -> Optional[TreeNode]:
-        nonlocal total_pages
-
-        if page_id in visited_ids:
-            # 循環参照防止
+    def _build_node(page_id: str, depth: int, current_visited: Set[str]) -> Optional[TreeNode]:
+        if page_id in current_visited:
+            # 単一ルートツリー内での循環参照防止
             return None
 
-        visited_ids.add(page_id)
-        total_pages += 1
+        current_visited.add(page_id)
+        counted_page_ids.add(page_id)
 
         title = page_titles_map.get(page_id, f"Page {page_id}")
         ann = annotations_map.get(page_id, Annotation())
@@ -58,7 +55,7 @@ def build_tree(
                 # 子のタイトルを page_titles_map に保存（あれば）
                 if "title" in c:
                     page_titles_map[c_id] = str(c["title"])
-                child_node = _build_node(c_id, depth + 1)
+                child_node = _build_node(c_id, depth + 1, current_visited)
                 if child_node is not None:
                     node.children.append(child_node)
 
@@ -66,8 +63,9 @@ def build_tree(
 
     roots: List[TreeNode] = []
     for r_id in root_ids:
-        r_node = _build_node(r_id, depth=1)
+        visited_ids_per_root: Set[str] = set()
+        r_node = _build_node(r_id, depth=1, current_visited=visited_ids_per_root)
         if r_node is not None:
             roots.append(r_node)
 
-    return roots, total_pages
+    return roots, len(counted_page_ids)

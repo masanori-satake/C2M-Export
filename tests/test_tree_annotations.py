@@ -51,3 +51,9 @@ def test_inline_marks():
     assert "att:3" in m_ascii
     assert "mac:2" in m_ascii
     assert "(2025-08-20)" in m_ascii
+
+
+def test_inline_marks_failed_restriction():
+    ann = Annotation(failed_fields=["restriction"])
+    assert "🔒?" in inline_marks(ann, ascii=False)
+    assert "[R]?" in inline_marks(ann, ascii=True)

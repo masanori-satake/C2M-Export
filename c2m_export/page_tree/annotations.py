@@ -84,15 +84,17 @@ def inline_marks(annotation: Annotation, ascii: bool = False) -> str:
     """ノードの付帯情報からインライン表記文字列を生成する.
 
     設計に基づくマーク規則:
-      - 個別制限あり: 🔒 (ASCII: [R])
-      - 添付: 📎N (ASCII: att:N)
-      - マクロ: ⚙N (ASCII: mac:N)
-      - 最終更新日: (YYYY-MM-DD) または不明 (?)
+      - 個別制限あり: 🔒 (ASCII: [R])、取得失敗時: 🔒? (ASCII: [R]?)
+      - 添付: 📎N (ASCII: att:N)、取得失敗時: 📎? (ASCII: att:?)
+      - マクロ: ⚙N (ASCII: mac:N)、取得失敗時: ⚙? (ASCII: mac:?)
+      - 最終更新日: (YYYY-MM-DD)、取得失敗時: (?)
     """
     parts: List[str] = []
 
     # 1. 制限マーク
-    if annotation.has_restriction is True:
+    if "restriction" in annotation.failed_fields:
+        parts.append("[R]?" if ascii else "🔒?")
+    elif annotation.has_restriction is True:
         parts.append("[R]" if ascii else "🔒")
 
     # 2. 添付件数
