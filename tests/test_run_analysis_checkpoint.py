@@ -151,3 +151,15 @@ def test_run_analysis_resume_from_checkpoint(tmp_path, mock_client):
     assert resp.uncertainties.resumed_from_checkpoint is True
     assert resp.uncertainties.checkpoint_reused_count == 1
     assert resp.uncertainties.collected_page_count == 2
+
+
+def test_run_analysis_params_resume_false_overrides_config_resume_true(tmp_path, mock_client):
+    """params.resume=False が config.resume=True をオーバーライドすることを確認."""
+    cfg = DummyConfig(tmp_path)
+    cfg.resume = True
+
+    params = AnalysisParams(usecases=["risk"], resume=False)
+    resp = run_analysis(params, cfg, client=mock_client)
+
+    assert resp.status == "ok"
+    assert resp.uncertainties.resumed_from_checkpoint is False

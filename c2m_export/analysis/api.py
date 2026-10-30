@@ -304,18 +304,28 @@ def run_analysis(
             getattr(params, "collect_space_permissions", None), getattr(config, "collect_space_permissions", None)
         )
 
-        # チェックポイント設定の解決 (params と config の論理積/優先順位解決)
-        p_chk_enabled = getattr(params, "checkpoint_enabled", True)
-        c_chk_enabled = getattr(config, "checkpoint_enabled", True)
-        checkpoint_enabled = bool(p_chk_enabled and (c_chk_enabled if c_chk_enabled is not None else True))
+        # チェックポイント設定の解決 (params 優先、None 時のみ config 参照)
+        p_chk_enabled = getattr(params, "checkpoint_enabled", None)
+        c_chk_enabled = getattr(config, "checkpoint_enabled", None)
+        if p_chk_enabled is not None:
+            checkpoint_enabled = bool(p_chk_enabled)
+        elif c_chk_enabled is not None:
+            checkpoint_enabled = bool(c_chk_enabled)
+        else:
+            checkpoint_enabled = True
 
-        resume = bool(getattr(params, "resume", False) or getattr(config, "resume", False))
+        p_resume = getattr(params, "resume", None)
+        c_resume = getattr(config, "resume", None)
+        if p_resume is not None:
+            resume = bool(p_resume)
+        elif c_resume is not None:
+            resume = bool(c_resume)
+        else:
+            resume = False
 
         c_chk_interval = getattr(config, "checkpoint_interval", None)
         p_chk_interval = getattr(params, "checkpoint_interval", 1)
-        checkpoint_interval = int(
-            c_chk_interval if (c_chk_interval is not None and c_chk_interval != 1) else p_chk_interval
-        )
+        checkpoint_interval = int(c_chk_interval if (c_chk_interval is not None and c_chk_interval != 1) else p_chk_interval)
 
         c_chk_dir = getattr(config, "checkpoint_dir", None)
         p_chk_dir = getattr(params, "checkpoint_dir", ".c2m_analyze_checkpoint")

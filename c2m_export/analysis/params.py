@@ -46,8 +46,8 @@ class AnalysisParams:
     collect_effective_restrictions: Optional[bool] = None
     collect_extracted_text: Optional[bool] = None
     collect_space_permissions: Optional[bool] = None
-    checkpoint_enabled: bool = True
-    resume: bool = False
+    checkpoint_enabled: Optional[bool] = None
+    resume: Optional[bool] = None
     checkpoint_interval: int = 1
     checkpoint_dir: str = ".c2m_analyze_checkpoint"
 

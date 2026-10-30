@@ -12,8 +12,8 @@ from c2m_export.config import AnalysisConfig
 def test_analysis_params_checkpoint_defaults_and_validation():
     """AnalysisParams のデフォルト値および checkpoint_interval バリデーションの検証."""
     params = AnalysisParams()
-    assert params.checkpoint_enabled is True
-    assert params.resume is False
+    assert params.checkpoint_enabled is None
+    assert params.resume is None
     assert params.checkpoint_interval == 1
     assert params.checkpoint_dir == ".c2m_analyze_checkpoint"
 
