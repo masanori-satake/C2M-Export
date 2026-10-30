@@ -53,7 +53,7 @@ def create_mcp_server() -> Any:
         collect_extracted_text: Optional[bool] = None,
         collect_space_permissions: Optional[bool] = None,
     ) -> Dict[str, Any]:
-        """Confluence ワークスペースの状況（移設リスク、古いページ、アクセス制限、圧縮ファイル、添付あり空ページ、マクロ統計）を分析します。
+        """Confluence ワークスペースの状況（移設リスク、古いページ、アクセス制限、圧縮ファイル、添付あり空ページ、マクロ統計）を分析します。レスポンスは schema_version 1.2 に準拠し、status に ok, partial, error を返します。
 
         引数:
             base_url: Confluence のベース URL (例: https://confluence.example.com)

@@ -108,3 +108,44 @@ def test_analysis_config_does_not_expose_token():
     config = AnalysisConfig()
     config.token = "SECRET_TOKEN_VALUE"
     assert config.token == "SECRET_TOKEN_VALUE"
+
+
+def test_token_not_in_checkpoint_file(tmp_path):
+    """分析処理で生成されるチェックポイントファイル（JSONL）内に認証トークンが含まれないことを検証します。"""
+    from c2m_export.analysis.api import run_analysis
+    from c2m_export.analysis.params import AnalysisParams
+
+    secret_token = "TOP_SECRET_CHECKPOINT_TOKEN_999"
+    chk_dir = tmp_path / "chk_dir"
+
+    config = AnalysisConfig()
+    config.base_url = "https://confluence.example.com"
+    config.token = secret_token
+    config.root_page_ids = ["100"]
+    config.checkpoint_enabled = True
+    config.checkpoint_dir = str(chk_dir)
+
+    params = AnalysisParams(checkpoint_enabled=True, checkpoint_dir=str(chk_dir))
+
+    mock_client = MagicMock()
+    mock_client.get_page.return_value = {
+        "id": "100",
+        "title": "Test Title",
+        "space": {"key": "TEST"},
+        "version": {"when": "2026-01-01T00:00:00Z"},
+        "body": {"storage": {"value": "Test body"}},
+    }
+    mock_client.get_attachments.return_value = []
+    mock_client.get_restrictions.return_value = {}
+    mock_client.get_child_pages.return_value = []
+    mock_client.list_spaces.return_value = []
+
+    # 中断させてチェックポイントを残す
+    run_analysis(params, config, client=mock_client, interrupt_checker=lambda: True)
+
+    chk_files = list(chk_dir.glob("*.jsonl"))
+    assert len(chk_files) == 1
+    content = chk_files[0].read_text(encoding="utf-8")
+
+    assert secret_token not in content
+    assert "token" not in content.lower()

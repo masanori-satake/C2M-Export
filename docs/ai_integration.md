@@ -41,9 +41,16 @@ python -m c2m_export.analyze \
 - `--collect-effective-restrictions` / `--no-collect-effective-restrictions`: 実効アクセスの個別収集制御
 - `--collect-extracted-text` / `--no-collect-extracted-text`: 抽出テキストの個別収集制御
 - `--collect-space-permissions` / `--no-collect-space-permissions`: Space 権限の個別収集制御
+- `--no-checkpoint`: チェックポイント永続化を無効化 (既定: 有効)
+- `--resume`: 既存のチェックポイントから未収集分を再開
+- `--checkpoint-interval`: チェックポイント flush 粒度 (件数, 既定: 1)
+- `--checkpoint-dir`: チェックポイント保存先ディレクトリ (既定: `.c2m_analyze_checkpoint`)
+
+### 中断耐性とレジューム機能
+大規模ワークスペース分析時、1ページ収集ごとに JSONL 形式のチェックポイント（既定: `.c2m_analyze_checkpoint/<scope_hash>.jsonl`）へ自動保存されます。`SIGINT` (Ctrl+C) や通信エラー等で収集処理自体が途中で中断した場合、それまでに収集されたデータで部分集計され `status: "partial"`（終了コード 6）が出力されます（※個別のページ取得失敗をスキップして収集処理を継続しただけの通常ケースでは `status: "partial"` にはならず、`uncertainties` に記録されて `status: "ok"` となります）。次回実行時に `--resume` オプションを指定することで、同一スコープの未収集ページのみから処理を再開できます。正常完了時はチェックポイントファイルは自動削除されます。
 
 ### 終了コード規約
-`0` (成功), `2` (パラメータ不正), `3` (認証失敗), `4` (対象未存在), `5` (APIエラー), `10` (内部エラー)。
+`0` (成功), `2` (パラメータ不正), `3` (認証失敗), `4` (対象未存在), `5` (APIエラー), `6` (部分成功 partial), `10` (内部エラー)。
 
 ---
 
@@ -136,7 +143,7 @@ MCP クライアント (Kiro、Claude Desktop 等) に本 MCP サーバを登録
    }
    ```
 3. **JSON 応答の確認**:
-   応答 JSON の最上位に `"status": "ok"` および `"schema_version": "1.1"`、`"summary"` などのブロックが含まれていることを確認します。
+   応答 JSON の最上位に `"status": "ok"` (または `"partial"`) および `"schema_version": "1.2"`、`"summary"` などのブロックが含まれていることを確認します。
 
 ---
 

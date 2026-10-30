@@ -45,6 +45,9 @@ htmlcov/
 c2m_config.yaml
 .env
 
+# Analysis Checkpoints
+.c2m_analyze_checkpoint/
+
 # Output
 *.md
 !README.md
