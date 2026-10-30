@@ -230,12 +230,11 @@ class CheckpointStore:
             Tuple[List[PageMeta], Set[str], List[str]]:
                 (復元 PageMeta リスト, 収集済み page_id 集合, 破損行リスト)
         """
-        pages: List[PageMeta] = []
-        collected_ids: Set[str] = set()
+        pages_map: Dict[str, PageMeta] = {}
         corrupted_lines: List[str] = []
 
         if not self.path.exists():
-            return pages, collected_ids, corrupted_lines
+            return [], set(), corrupted_lines
 
         try:
             with open(self.path, encoding="utf-8") as f:
@@ -260,8 +259,7 @@ class CheckpointStore:
                     if record.get("_type") == "page":
                         try:
                             pm = record_to_page_meta(record)
-                            pages.append(pm)
-                            collected_ids.add(pm.page_id)
+                            pages_map[pm.page_id] = pm
                         except Exception as e:
                             logger.warning(f"PageMeta 復元中にエラーが発生しました: {e}")
                             corrupted_lines.append(line_str)
@@ -270,6 +268,8 @@ class CheckpointStore:
         except Exception as e:
             logger.error(f"チェックポイントファイルの復元読み込み中にエラーが発生しました: {e}")
 
+        pages = list(pages_map.values())
+        collected_ids = set(pages_map.keys())
         return pages, collected_ids, corrupted_lines
 
     def close(self) -> None:

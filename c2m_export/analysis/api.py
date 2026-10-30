@@ -233,6 +233,8 @@ def run_analysis(
             参照される属性一覧と出所:
             - base_url, token, proxy, root_page_ids, space_keys: 全 Config クラス共通
             - all_spaces, cql, deep, collect_*: AnalysisConfig
+            - checkpoint_enabled, resume, checkpoint_interval, checkpoint_dir:
+              優先順位: params > config > デフォルト値 (checkpoint_enabled は両者が有効な場合のみ True)。
             - single_file_max_mb, path_length_limit, blocked_extensions, attachment_dir_name:
               AssessConfig / FsExportConfig 等から hasattr で選択的に参照。
               AnalysisConfig に属性がない場合は analyze_inventory 内の既定値に委譲。
@@ -302,16 +304,20 @@ def run_analysis(
             getattr(params, "collect_space_permissions", None), getattr(config, "collect_space_permissions", None)
         )
 
-        # チェックポイント設定の解決
-        checkpoint_enabled = getattr(params, "checkpoint_enabled", True)
-        if hasattr(config, "checkpoint_enabled") and config.checkpoint_enabled is not None:
-            checkpoint_enabled = config.checkpoint_enabled
+        # チェックポイント設定の解決 (params と config の論理積/優先順位解決)
+        p_chk_enabled = getattr(params, "checkpoint_enabled", True)
+        c_chk_enabled = getattr(config, "checkpoint_enabled", True)
+        checkpoint_enabled = bool(p_chk_enabled and (c_chk_enabled if c_chk_enabled is not None else True))
 
-        resume = getattr(params, "resume", False) or getattr(config, "resume", False)
-        checkpoint_interval = getattr(params, "checkpoint_interval", 1)
-        checkpoint_dir = getattr(params, "checkpoint_dir", ".c2m_analyze_checkpoint")
-        if hasattr(config, "checkpoint_dir") and config.checkpoint_dir:
-            checkpoint_dir = config.checkpoint_dir
+        resume = bool(getattr(params, "resume", False) or getattr(config, "resume", False))
+
+        c_chk_interval = getattr(config, "checkpoint_interval", None)
+        p_chk_interval = getattr(params, "checkpoint_interval", 1)
+        checkpoint_interval = int(c_chk_interval if (c_chk_interval is not None and c_chk_interval != 1) else p_chk_interval)
+
+        c_chk_dir = getattr(config, "checkpoint_dir", None)
+        p_chk_dir = getattr(params, "checkpoint_dir", ".c2m_analyze_checkpoint")
+        checkpoint_dir = str(c_chk_dir if (c_chk_dir and c_chk_dir != ".c2m_analyze_checkpoint") else p_chk_dir)
 
         # 1. 起点解決
         resolved_root_ids, empty_space_keys, cql_failed = _resolve_roots(
@@ -379,6 +385,16 @@ def run_analysis(
                     logger.warning(
                         f"既存チェックポイント ({checkpoint_path}) のスコープハッシュが現在の実行スコープと不一致のため、復元をスキップします"
                     )
+
+            try:
+                checkpoint_store.open_for_write(append=resumed_from_checkpoint)
+            except Exception as e:
+                logger.warning(
+                    f"現象: チェックポイントファイルのオープンに失敗しました。"
+                    f"原因: {e}。"
+                    f"対処方法: チェックポイント永続化を無効化し、通常実行へフォールバックします。"
+                )
+                checkpoint_store = None
 
         # 2. 収集
         collector = Collector(

@@ -11,7 +11,6 @@ from c2m_export.assessment.collector import Collector
 @pytest.fixture
 def mock_client():
     client = MagicMock()
-
     # ページ 101, 102
     def get_page_side_effect(page_id, **kwargs):
         return {

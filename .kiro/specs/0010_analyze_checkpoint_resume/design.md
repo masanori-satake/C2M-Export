@@ -73,14 +73,13 @@ def compute_scope_hash(
 ```python
 class CheckpointStore:
     def __init__(self, path: Path, scope_hash: str, scope_meta: dict, interval: int = 1): ...
-    def open_for_write(self, *, append: bool) -> None: ...  # ファイルを開きヘッダ検証/書込
-    def append_page(self, page_meta: PageMeta) -> None: ...  # 1 レコード追記（interval で flush 制御）
-    def flush(self) -> None: ...  # 明示 flush（fsync 相当）
+    def open_for_write(self, *, append: bool) -> None: ...     # ファイルを開きヘッダ検証/書込
+    def append_page(self, page_meta: PageMeta) -> None: ...     # 1 レコード追記（interval で flush 制御）
+    def flush(self) -> None: ...                                # 明示 flush（fsync 相当）
     def load_collected(self) -> Tuple[List[PageMeta], Set[str], List[str]]:
         """収集済み PageMeta 復元・収集済み page_id 集合・破損行リストを返す。"""
-
-    def scope_matches(self, scope_hash: str) -> bool: ...  # ヘッダのスコープ照合
-    def finalize(self, *, success: bool) -> None: ...  # 完了印付与 or 後始末（削除）
+    def scope_matches(self, scope_hash: str) -> bool: ...       # ヘッダのスコープ照合
+    def finalize(self, *, success: bool) -> None: ...           # 完了印付与 or 後始末（削除）
     def close(self) -> None: ...
 ```
 
