@@ -52,6 +52,8 @@ Confluence Data Center 9.2 のページツリーを REST API で取得し、AI�
    - Confluence のページツリーを OS のディレクトリ/ファイル構造に再現し、ページ本文（YAML Frontmatter 付き Markdown）と添付バイナリを保存します。差分同期・レジュームに対応します。 [詳細ガイド](docs/filesystem_export.md)
 5. **権限エクスポート（権限モード / `permexport`）**:
    - Confluence のページに設定されたコンテンツ制限 (Read / Read+Write) を収集し、管理者向けの参照用権限レポート（Markdown & JSON）を出力します。 [詳細ガイド](docs/permission_export.md)
+6. **ページツリー表示（ツリーモード / `tree`）**:
+   - ページ階層を樹形図（テキスト / Markdown / JSON）として可視化出力します。オプトインで個別アクセス制限・マクロ種別数・添付数・最終更新日を併記できます。
 
 ---
 
@@ -116,3 +118,4 @@ API 通信・添付ダウンロードの最終失敗時は、URL や元の例外
 | **アセスメントモード** | `python -m c2m_export.assess` | `0` | **`1`**: 設定・起点未発見・レポート出力等のエラー |
 | **権限モード** | `python -m c2m_export.permexport` | `0` | **`1`**: 設定・取得・レポート出力等の致命的エラー |
 | **分析モード** | `python -m c2m_export.analyze` | `0` | **`2`**: `INVALID_PARAM` (設定・引数エラー)<br>**`3`**: `AUTH_FAILED` (401/403 認証失敗)<br>**`4`**: `TARGET_NOT_FOUND` (404 対象未発見)<br>**`5`**: `API_ERROR` (API通信エラー)<br>**`10`**: `INTERNAL_ERROR` (内部例外エラー) |
+| **ツリーモード** | `python -m c2m_export.tree` | `0` | **`2`**: `INVALID_PARAM` (設定・引数エラー)<br>**`3`**: `AUTH_FAILED` (401/403 認証失敗)<br>**`4`**: `TARGET_NOT_FOUND` (404 対象未発見)<br>**`5`**: `API_ERROR` (API通信エラー)<br>**`10`**: `INTERNAL_ERROR` (内部例外エラー) |

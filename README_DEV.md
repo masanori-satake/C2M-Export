@@ -72,6 +72,14 @@ c2m_export/
 ├── assess.py          # 分析モードのエントリーポイント（python -m c2m_export.assess）
 ├── fsexport.py        # ファイルシステムモードのエントリーポイント（python -m c2m_export.fsexport / sync・resume分岐）
 ├── permexport.py      # [新規 0006] 権限エクスポートのエントリーポイント（python -m c2m_export.permexport）
+├── tree.py            # [新規 0009] ページツリー表示のエントリーポイント（python -m c2m_export.tree）
+├── page_tree/         # [新規 0009] ページツリー表示ロジック一式
+│   ├── __init__.py
+│   ├── models.py      # Annotation / TreeNode / TreeResult
+│   ├── builder.py     # 収集辞書データからの TreeNode 木構造構築純粋ロジック
+│   ├── annotations.py # マクロ集計・制限分類・インラインマーク生成純粋ロジック
+│   ├── collector.py   # DFS 巡回でメタデータおよびオプトイン付帯情報を収集 (I/O)
+│   └── renderers.py   # text / markdown / json レンダラ純粋ロジック
 ├── permission/        # [新規 0006] 権限エクスポートロジック一式
 │   ├── __init__.py
 │   ├── models.py      # PagePermission / PermissionReport / PermissionResult
@@ -400,3 +408,9 @@ mypy
 - `tests/test_perm_report.py`: 集約・分散 Markdown および JSON レポート生成のテスト。
 - `tests/test_perm_summary.py`: 権限エクスポートサマリ集計とファイル出力のテスト。
 - `tests/test_permexport_main.py`: permexport エントリーポイントのテスト。
+- `tests/test_tree_config.py`: TreeConfig の設定解決・バリデーションのテスト。
+- `tests/test_tree_annotations.py`: マクロ集計・制限分類・インラインマーク生成の単体テスト。
+- `tests/test_tree_builder.py`: TreeNode ツリー構築・循環防御・深さ制限の単体テスト。
+- `tests/test_tree_renderers.py`: text / markdown / json 描画の単体テスト。
+- `tests/test_tree_collector.py`: 付帯情報オプトイン収集および例外ハンドリングのテスト。
+- `tests/test_tree_main.py`: tree.py エントリーポイント、stdout/stderr 振り分け、終了コードのテスト。
