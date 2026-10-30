@@ -198,3 +198,23 @@ permission_export:
 
   # ページ本文ファイル命名方式 (per_page 時の相対パス整合用) (既定: title)
   page_filename_mode: "title"
+
+# ==============================================================================
+# ページツリー可視化モード固有の設定 (python -m c2m_export.tree で使用)
+# ==============================================================================
+tree:
+  # 出力フォーマット: text (罫線ツリー), markdown (箇条書きツリー + 別表), json (構造化データ) (既定: text)
+  format: "text"
+
+  # 取得・表示する付帯情報リスト (restriction, macros, attachments, last_modified)
+  # include:
+  #   - restriction
+  #   - macros
+  #   - attachments
+  #   - last_modified
+
+  # 文字化け防止用 ASCII 互換マークを使用するか (既定: false)
+  ascii: false
+
+  # 探索する最大階層深さ (指定なし/0で無制限)
+  # max_depth: 3

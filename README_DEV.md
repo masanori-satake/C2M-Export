@@ -72,6 +72,14 @@ c2m_export/
 ├── assess.py          # 分析モードのエントリーポイント（python -m c2m_export.assess）
 ├── fsexport.py        # ファイルシステムモードのエントリーポイント（python -m c2m_export.fsexport / sync・resume分岐）
 ├── permexport.py      # [新規 0006] 権限エクスポートのエントリーポイント（python -m c2m_export.permexport）
+├── tree.py            # [新規 0009] ページツリー表示のエントリーポイント（python -m c2m_export.tree）
+├── page_tree/         # [新規 0009] ページツリー表示ロジック一式
+│   ├── __init__.py
+│   ├── models.py      # Annotation / TreeNode / TreeResult
+│   ├── builder.py     # 収集辞書データからの TreeNode 木構造構築純粋ロジック
+│   ├── annotations.py # マクロ集計・制限分類・インラインマーク生成純粋ロジック
+│   ├── collector.py   # DFS 巡回でメタデータおよびオプトイン付帯情報を収集 (I/O)
+│   └── renderers.py   # text / markdown / json レンダラ純粋ロジック
 ├── permission/        # [新規 0006] 権限エクスポートロジック一式
 │   ├── __init__.py
 │   ├── models.py      # PagePermission / PermissionReport / PermissionResult
@@ -126,6 +134,27 @@ MOVE_RENAME は `computed_paths` で再計算した新しい親と、移動先�
 `ConfluenceClient._request` と `download_attachment` は、最終試行の通信例外を URL・元メッセージを含まない `RequestException` に変換し、元例外のトレースバック表示を抑制します。HTTP エラーは `HTTPError` と `response.status_code` を保持するため、401/403・404 の分析エラー分類は維持します。応答オブジェクトにはステータスコードだけを引き継ぎ、URL・ヘッダ・本文・元リクエストを含めません。
 401・403・404 の `HTTPError` は初回で同じサニタイズ処理を適用して送出し、再試行・待機は行いません。429・5xx・通信エラーの指数バックオフによる再試行は維持します。
 5xx の指数バックオフは次の試行がある場合だけ行い、最終試行では `raise_for_status()` を経由して同じサニタイズ処理を適用します。分析 API では `root_page_ids`・`space_keys` の両経路で `API_ERROR` として扱います。
+
+### ページツリー可視化モード（`tree.py` / `page_tree/`）の設計・エラー分類・マーク規則
+
+ツリーモードは、ページ階層とオプトイン付帯情報を樹形図として出力します。
+
+- **マーク規則（インライン表記）**:
+  - 個別アクセス制限あり: `🔒` (ASCII: `[R]`)
+  - 添付件数: `📎N` (ASCII: `att:N`)
+  - マクロ種別数: `⚙N` (ASCII: `mac:N`)
+  - 最終更新日: `(YYYY-MM-DD)`
+  - 取得失敗/不明: `(?)`
+- **エラー分類と終了コード** (`_classify_error`):
+  - `2` (`INVALID_PARAM`): パラメータ不正、起点未指定、既存出力ファイル上書き拒否
+  - `3` (`AUTH_FAILED`): 401 / 403 認証・認可エラー
+  - `4` (`TARGET_NOT_FOUND`): 404 リソース未発見または起点コンテンツ未発見
+  - `5` (`API_ERROR`): 5xx サーバエラー等
+  - `10` (`INTERNAL_ERROR`): 予期せぬ内部例外
+- **`collect_tree` 失敗時の挙動**:
+  - **起点解決失敗**: Space ルート一覧取得やルートページ詳細取得で例外が発生し、起点を1件も解決できなかった場合は最後の例外を再送出して `_classify_error` に伝播させます。
+  - **個別付帯情報失敗**: 個別ページの restriction / macros / attachments / history 取得失敗は `Annotation.failed_fields` と `uncertainties` に記録し、ページの探索を継続します。
+  - **子ページ一覧取得失敗**: 該当ページの子探索をスキップしつつ、`uncertainties["child_fetch_failed"]` を加算してツリー全体の構築を継続します。
 
 ### Agent Skill (`SKILL.md`) の管理・同期運用方針
 
@@ -400,3 +429,9 @@ mypy
 - `tests/test_perm_report.py`: 集約・分散 Markdown および JSON レポート生成のテスト。
 - `tests/test_perm_summary.py`: 権限エクスポートサマリ集計とファイル出力のテスト。
 - `tests/test_permexport_main.py`: permexport エントリーポイントのテスト。
+- `tests/test_tree_config.py`: TreeConfig の設定解決・バリデーションのテスト。
+- `tests/test_tree_annotations.py`: マクロ集計・制限分類・インラインマーク生成の単体テスト。
+- `tests/test_tree_builder.py`: TreeNode ツリー構築・循環防御・深さ制限の単体テスト。
+- `tests/test_tree_renderers.py`: text / markdown / json 描画の単体テスト。
+- `tests/test_tree_collector.py`: 付帯情報オプトイン収集および例外ハンドリングのテスト。
+- `tests/test_tree_main.py`: tree.py エントリーポイント、stdout/stderr 振り分け、終了コードのテスト。

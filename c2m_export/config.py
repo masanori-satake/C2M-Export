@@ -774,6 +774,203 @@ class FsExportConfig:
         self.base_url = self.base_url.rstrip("/")
 
 
+class TreeConfig:
+    """ページツリー表示（tree）モードの設定を管理するクラス.
+
+    CLI引数、環境変数、設定ファイル (YAML) の順で優先順位を制御し、
+    ツリー可視化用の設定パラメーターを保持・検証する。
+    """
+
+    ALLOWED_FORMATS = {"text", "markdown", "json"}
+    ALLOWED_ANNOTATIONS = {"restriction", "macros", "attachments", "last_modified"}
+
+    def __init__(self):
+        self.base_url: Optional[str] = None
+        self.root_page_ids: List[str] = []
+        self.space_keys: List[str] = []
+        self.proxy: Optional[str] = None
+        self.token: Optional[str] = None
+
+        # ツリーモード固有設定
+        self.format: str = "text"
+        self.include: Set[str] = set()
+        self.ascii: bool = False
+        self.output: Optional[str] = None
+        self.overwrite: bool = False
+        self.max_depth: Optional[int] = None
+
+    def load(self):
+        """設定を読み込む。優先順位は CLI > 環境変数 > 設定ファイル > デフォルト."""
+        pre_parser = argparse.ArgumentParser(add_help=False)
+        pre_parser.add_argument("--config", type=str, default=str(DEFAULT_CONFIG_PATH))
+        pre_args, _ = pre_parser.parse_known_args()
+
+        config_path = Path(pre_args.config) if pre_args.config else DEFAULT_CONFIG_PATH
+
+        if config_path.exists():
+            try:
+                with open(config_path, encoding="utf-8") as f:
+                    file_config = yaml.safe_load(f)
+                    if file_config:
+                        self.base_url = file_config.get("base_url", self.base_url)
+                        root_ids = file_config.get("root_page_ids")
+                        if root_ids:
+                            if isinstance(root_ids, list):
+                                self.root_page_ids = [str(i) for i in root_ids]
+                            else:
+                                self.root_page_ids = [str(root_ids)]
+                        s_keys = file_config.get("space_keys")
+                        if s_keys:
+                            if isinstance(s_keys, list):
+                                self.space_keys = [str(k) for k in s_keys]
+                            else:
+                                self.space_keys = [str(s_keys)]
+
+                        self.proxy = file_config.get("proxy", self.proxy)
+                        self.token = file_config.get("token", self.token)
+                        self.overwrite = bool(file_config.get("overwrite", self.overwrite))
+
+                        # tree セクション
+                        tree_sec = file_config.get("tree", {})
+                        if isinstance(tree_sec, dict):
+                            if "format" in tree_sec:
+                                self.format = str(tree_sec["format"])
+                            if "include" in tree_sec:
+                                inc = tree_sec["include"]
+                                if isinstance(inc, list):
+                                    self.include = {str(i) for i in inc}
+                                elif isinstance(inc, str):
+                                    self.include = {inc}
+                            if "ascii" in tree_sec:
+                                self.ascii = bool(tree_sec["ascii"])
+                            if "output" in tree_sec:
+                                self.output = str(tree_sec["output"]) if tree_sec["output"] else None
+                            if "max_depth" in tree_sec and tree_sec["max_depth"] is not None:
+                                self.max_depth = int(tree_sec["max_depth"])
+            except Exception as e:
+                print(
+                    f"設定ファイル {config_path} の読み込みに失敗しました（現象）。詳細: {e}（原因）。ファイル形式を確認してください（対処方法）"
+                )
+
+        env_token = os.environ.get("C2M_CONFLUENCE_TOKEN") or os.environ.get("CONFLUENCE_TOKEN")
+        if env_token:
+            self.token = env_token
+
+        env_https_proxy = os.environ.get("HTTPS_PROXY")
+        env_http_proxy = os.environ.get("HTTP_PROXY")
+        if env_https_proxy:
+            self.proxy = env_https_proxy
+        elif env_http_proxy:
+            self.proxy = env_http_proxy
+
+        parser = argparse.ArgumentParser(description="Confluenceのページ階層を樹形図として可視化・出力するツール")
+        parser.add_argument("--base-url", type=str, help="ConfluenceのベースURL (例: https://host/wiki)")
+        parser.add_argument("--root-page-id", type=str, nargs="+", help="起点とするルートページのID（複数指定可能）")
+        parser.add_argument("--space-key", type=str, nargs="+", help="起点とするSpaceキー（複数指定可能）")
+        parser.add_argument("--proxy", type=str, help="HTTP/HTTPS プロキシURL")
+        parser.add_argument("--config", type=str, help="設定ファイルのパス (既定: c2m_config.yaml)")
+        parser.add_argument("--token", type=str, help="ConfluenceのBearerトークン")
+
+        parser.add_argument(
+            "--format", type=str, choices=["text", "markdown", "json"], help="出力フォーマット (text | markdown | json)"
+        )
+        parser.add_argument(
+            "--include",
+            type=str,
+            nargs="+",
+            help="取得・表示する付帯情報 (restriction | macros | attachments | last_modified | all)",
+        )
+        parser.add_argument("--ascii", action="store_true", help="文字化け防止用 ASCII 互換マークを使用する")
+        parser.add_argument("--output", type=str, help="出力先ファイルパス (省略時 stdout)")
+        parser.add_argument("--overwrite", action="store_true", help="出力ファイルが存在する場合に上書き許可")
+        parser.add_argument("--max-depth", type=int, help="探索する最大階層深さ (指定なし/0で無制限)")
+
+        try:
+            cli_args = parser.parse_args()
+        except SystemExit as e:
+            if e.code == 0:
+                raise e
+            raise ValueError(
+                "現象: 無効なコマンドライン引数が指定されました。原因: コマンドライン引数の解析に失敗しました。対処方法: 引数の指定内容および構文を確認してください。"
+            ) from e
+
+        if cli_args.base_url:
+            self.base_url = cli_args.base_url
+        if cli_args.root_page_id:
+            self.root_page_ids = cli_args.root_page_id
+        if cli_args.space_key:
+            self.space_keys = cli_args.space_key
+
+        if self.root_page_ids:
+            seen = set()
+            self.root_page_ids = [x for x in self.root_page_ids if not (x in seen or seen.add(x))]
+        if self.space_keys:
+            seen_s = set()
+            self.space_keys = [x for x in self.space_keys if not (x in seen_s or seen_s.add(x))]
+
+        if cli_args.proxy:
+            self.proxy = cli_args.proxy
+        if cli_args.token:
+            self.token = cli_args.token
+
+        if cli_args.format:
+            self.format = cli_args.format
+        if cli_args.include:
+            inc_items = set()
+            for item in cli_args.include:
+                if item == "all":
+                    inc_items.update(self.ALLOWED_ANNOTATIONS)
+                else:
+                    inc_items.add(item)
+            self.include = inc_items
+        else:
+            # CLI 引数が無くて YAML 等から all が入った場合の展開補助
+            if "all" in self.include:
+                self.include.remove("all")
+                self.include.update(self.ALLOWED_ANNOTATIONS)
+
+        if cli_args.ascii:
+            self.ascii = True
+        if cli_args.output:
+            self.output = cli_args.output
+        if cli_args.overwrite:
+            self.overwrite = True
+        if cli_args.max_depth is not None:
+            self.max_depth = cli_args.max_depth
+
+    def validate(self):
+        """必須設定の有無を確認し、URLの正規化および値の妥当性チェックを行う."""
+        if not self.base_url:
+            raise ValueError(
+                "現象: base_url が未指定です。原因: --base-url または設定ファイルに base_url が存在しません。対処方法: --base-url オプションまたは設定ファイルで base_url を指定してください。"
+            )
+        if not self.root_page_ids and not self.space_keys:
+            raise ValueError(
+                "現象: 起点（ルートページIDまたはSpaceキー）が指定されていません。原因: --root-page-id および --space-key のいずれも指定されていません。対処方法: --root-page-id または --space-key を指定してください。"
+            )
+        if not self.token:
+            raise ValueError(
+                "現象: token が未指定です。原因: 認証トークンが指定されていません。対処方法: C2M_CONFLUENCE_TOKEN 環境変数または --token オプションでトークンを指定してください。"
+            )
+
+        if self.format not in self.ALLOWED_FORMATS:
+            raise ValueError(
+                f"現象: 出力フォーマットが無効です。原因: '{self.format}' はサポートされていないフォーマットです。対処方法: text, markdown, json のいずれかを指定してください。"
+            )
+
+        invalid_includes = self.include - self.ALLOWED_ANNOTATIONS
+        if invalid_includes:
+            invalid_str = ", ".join(sorted(invalid_includes))
+            raise ValueError(
+                f"現象: 無効な付帯情報指定が含まれています。原因: '{invalid_str}' は対象外の指定です。対処方法: restriction, macros, attachments, last_modified, all のいずれかを指定してください。"
+            )
+
+        if self.max_depth is not None and self.max_depth <= 0:
+            self.max_depth = None
+
+        self.base_url = self.base_url.rstrip("/")
+
+
 class AssessConfig:
     """アセスメント（分析モード）の設定を管理するクラス."""
 
