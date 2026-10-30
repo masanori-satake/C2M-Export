@@ -20,7 +20,7 @@ def create_mcp_server() -> Any:
     mcp パッケージは関数内で遅延 import するため、未導入環境でもモジュール読み込み自体は失敗しません。
     """
     try:
-        from mcp.server.fastmcp import FastMCP  # type: ignore[attr-defined]
+        from mcp.server.fastmcp import FastMCP
     except ImportError as err:
         raise ImportError(
             "MCP サーバの実行には 'mcp' パッケージが必要です。pip install -r requirements-mcp.txt を実行してください。"

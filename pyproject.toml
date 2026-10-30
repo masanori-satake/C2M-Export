@@ -7,6 +7,7 @@ python_version = "3.8"
 # サードパーティライブラリ（型スタブのないもの）の import エラーを抑制する。
 # 段階導入のため、まずは緩めの設定から始める。
 ignore_missing_imports = true
+follow_imports = "skip"
 # 安全に品質を上げるための警告
 warn_unused_ignores = true
 warn_redundant_casts = true

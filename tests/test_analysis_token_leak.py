@@ -124,7 +124,15 @@ def test_token_not_in_checkpoint_file(tmp_path):
         scope_meta={"root_page_ids": ["100"], "space_keys": ["TEST"]},
     )
     store.open_for_write(append=False)
-    page = PageMeta(page_id="100", space_key="TEST", title="Secret Page", version=1)
+    page = PageMeta(
+        page_id="100",
+        title="Secret Page",
+        space_key="TEST",
+        level=1,
+        body_bytes=100,
+        last_modified="2026-01-01T00:00:00Z",
+        ancestors_titles=[],
+    )
     store.append_page(page)
     store.close()
 
