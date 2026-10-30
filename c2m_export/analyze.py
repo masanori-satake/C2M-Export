@@ -53,6 +53,7 @@ def main() -> None:
             else f"現象: 設定エラー。原因: {msg}。対処方法: 引数または設定ファイルを確認してください。"
         )
         err_resp = AnalysisResponse(
+            schema_version="1.2",
             status="error",
             error=ErrorObject(code=CODE_INVALID_PARAM, message=err_msg),
         )
@@ -85,6 +86,10 @@ def main() -> None:
         collect_effective_restrictions=config.collect_effective_restrictions,
         collect_extracted_text=config.collect_extracted_text,
         collect_space_permissions=config.collect_space_permissions,
+        checkpoint_enabled=config.checkpoint_enabled,
+        resume=config.resume,
+        checkpoint_interval=config.checkpoint_interval,
+        checkpoint_dir=config.checkpoint_dir,
     )
 
     # run_analysis 実行

@@ -28,7 +28,7 @@ def test_run_analysis_success():
     resp = run_analysis(params, cfg, client)
 
     assert resp.status == "ok"
-    assert resp.schema_version == "1.1"
+    assert resp.schema_version == "1.2"
     assert "risk" in resp.usecases
     assert "macros" in resp.usecases
     assert resp.scope.resolved_root_count == 1

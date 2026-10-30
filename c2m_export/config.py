@@ -173,6 +173,12 @@ class AnalysisConfig:
         self.collect_extracted_text: Optional[bool] = None
         self.collect_space_permissions: Optional[bool] = None
 
+        # 0010 チェックポイント設定
+        self.checkpoint_enabled: bool = True
+        self.resume: bool = False
+        self.checkpoint_interval: int = 1
+        self.checkpoint_dir: str = ".c2m_analyze_checkpoint"
+
     def load(self):
         """設定を読み込む。優先順位は CLI > 環境変数 > 設定ファイル > デフォルト."""
         pre_parser = argparse.ArgumentParser(add_help=False)
@@ -238,6 +244,16 @@ class AnalysisConfig:
                                 self.collect_extracted_text = bool(analysis_sec["collect_extracted_text"])
                             if "collect_space_permissions" in analysis_sec:
                                 self.collect_space_permissions = bool(analysis_sec["collect_space_permissions"])
+                            if "checkpoint_enabled" in analysis_sec:
+                                self.checkpoint_enabled = bool(analysis_sec["checkpoint_enabled"])
+                            if "resume" in analysis_sec:
+                                self.resume = bool(analysis_sec["resume"])
+                            if "checkpoint_interval" in analysis_sec and isinstance(
+                                analysis_sec["checkpoint_interval"], int
+                            ):
+                                self.checkpoint_interval = int(analysis_sec["checkpoint_interval"])
+                            if "checkpoint_dir" in analysis_sec and analysis_sec["checkpoint_dir"]:
+                                self.checkpoint_dir = str(analysis_sec["checkpoint_dir"])
             except Exception as e:
                 print(
                     f"設定ファイル {config_path} の読み込みに失敗しました（現象）。詳細: {e}（原因）。ファイル形式を確認してください（対処方法）"
@@ -295,6 +311,23 @@ class AnalysisConfig:
         parser.add_argument("--no-collect-extracted-text", action="store_false", dest="collect_extracted_text")
         parser.add_argument("--collect-space-permissions", action="store_true", default=None)
         parser.add_argument("--no-collect-space-permissions", action="store_false", dest="collect_space_permissions")
+
+        # 0010 チェックポイント新オプション
+        parser.add_argument(
+            "--no-checkpoint",
+            action="store_false",
+            dest="checkpoint_enabled",
+            default=None,
+            help="中間チェックポイントの永続化を無効化します",
+        )
+        parser.add_argument(
+            "--resume",
+            action="store_true",
+            default=None,
+            help="既存のチェックポイントから収集を再開します",
+        )
+        parser.add_argument("--checkpoint-interval", type=int, help="チェックポイントの書き出し間隔 (件数)")
+        parser.add_argument("--checkpoint-dir", type=str, help="チェックポイントファイルの保存ディレクトリ")
 
         try:
             cli_args = parser.parse_args()
@@ -365,6 +398,15 @@ class AnalysisConfig:
         if cli_args.collect_space_permissions is not None:
             self.collect_space_permissions = cli_args.collect_space_permissions
 
+        if cli_args.checkpoint_enabled is not None:
+            self.checkpoint_enabled = cli_args.checkpoint_enabled
+        if cli_args.resume is not None:
+            self.resume = cli_args.resume
+        if cli_args.checkpoint_interval is not None:
+            self.checkpoint_interval = cli_args.checkpoint_interval
+        if cli_args.checkpoint_dir is not None:
+            self.checkpoint_dir = cli_args.checkpoint_dir
+
     def validate(self):
         """必須設定の有無を確認し、URLの正規化および矛盾チェックを行う."""
         if not self.base_url:
@@ -388,6 +430,11 @@ class AnalysisConfig:
         if self.usecases and "restricted" in self.usecases and self.analyze_restrictions is False:
             raise ValueError(
                 "現象: restricted の分析を実行できません。原因: restricted ユースケースが要求されているにもかかわらず --no-restrictions が指定されています。対処方法: --no-restrictions を外すか --usecase から restricted を除外してください。"
+            )
+
+        if not isinstance(self.checkpoint_interval, int) or self.checkpoint_interval < 1:
+            raise ValueError(
+                f"現象: checkpoint_interval '{self.checkpoint_interval}' は無効です。原因: 1 以上の整数でない値が指定されました。対処方法: --checkpoint-interval に 1 以上の整数を指定してください。"
             )
 
         self.base_url = self.base_url.rstrip("/")
