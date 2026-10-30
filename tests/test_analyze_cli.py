@@ -42,6 +42,7 @@ def test_analyze_cli_success(monkeypatch, capsys, tmp_path):
     # stdout MUST be valid JSON
     out_json = json.loads(captured.out)
     assert out_json["status"] == "ok"
+    assert out_json["schema_version"] == "1.2"
     assert "secret_token_123" not in captured.out
     assert "secret_token_123" not in captured.err
 
@@ -66,7 +67,7 @@ def test_analyze_cli_invalid_param(monkeypatch, capsys, tmp_path):
 
     captured = capsys.readouterr()
     out_json = json.loads(captured.out)
-    assert out_json["schema_version"] == "1.1"
+    assert out_json["schema_version"] == "1.2"
     assert out_json["status"] == "error"
     assert out_json["error"]["code"] == "INVALID_PARAM"
     assert "secret_token_123" not in captured.out

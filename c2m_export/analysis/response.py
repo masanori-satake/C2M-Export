@@ -2,8 +2,8 @@
 
 JSON スキーマ概要:
 {
-  "schema_version": "1.1",
-  "status": "ok" | "error",
+  "schema_version": "1.2",
+  "status": "ok" | "partial" | "error",
   "generated_at": "YYYY-MM-DDTHH:MM:SSZ",
   "mode": "summary" | "detail",
   "scope": {
@@ -33,7 +33,13 @@ JSON スキーマ概要:
     "space_watcher_failed_count": int,
     "space_permission_failed_count": int,
     "cql_failed": bool,
-    "unavailable_apis": ["..."]
+    "unavailable_apis": ["..."],
+    "interrupted": bool,
+    "interrupted_reason": null | "signal" | "error",
+    "collected_page_count": int,
+    "resumed_from_checkpoint": bool,
+    "checkpoint_reused_count": int,
+    "checkpoint_corrupted_line_count": int
   },
   "error": null | { "code": "...", "message": "...", "detail": "..." }
 }
@@ -48,6 +54,7 @@ CODE_AUTH_FAILED = "AUTH_FAILED"
 CODE_TARGET_NOT_FOUND = "TARGET_NOT_FOUND"
 CODE_API_ERROR = "API_ERROR"
 CODE_INTERNAL_ERROR = "INTERNAL_ERROR"
+CODE_PARTIAL = "PARTIAL"
 
 
 @dataclass
@@ -89,14 +96,20 @@ class Uncertainties:
     space_permission_failed_count: int = 0
     cql_failed: bool = False
     unavailable_apis: List[str] = field(default_factory=list)
+    interrupted: bool = False
+    interrupted_reason: Optional[str] = None
+    collected_page_count: int = 0
+    resumed_from_checkpoint: bool = False
+    checkpoint_reused_count: int = 0
+    checkpoint_corrupted_line_count: int = 0
 
 
 @dataclass
 class AnalysisResponse:
     """分析実行結果の最上位レスポンスモデル."""
 
-    schema_version: str = "1.1"
-    status: str = "ok"  # "ok" | "error"
+    schema_version: str = "1.2"
+    status: str = "ok"  # "ok" | "partial" | "error"
     generated_at: str = ""
     mode: str = "summary"
     scope: AnalysisScope = field(default_factory=AnalysisScope)

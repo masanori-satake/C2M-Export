@@ -1,8 +1,9 @@
 """Confluence REST API を用いたメタデータ収集モジュール."""
 
 import logging
-from typing import List, Set, Tuple, Union
+from typing import Callable, List, Optional, Set, Tuple, Union
 
+from c2m_export.analysis.checkpoint import CheckpointStore, CollectInterrupted
 from c2m_export.analysis.macros import count_macros
 from c2m_export.assessment.models import (
     AttachmentMeta,
@@ -33,6 +34,9 @@ class Collector:
         collect_effective_restrictions: bool = False,
         collect_extracted_text: bool = False,
         collect_space_permissions: bool = False,
+        checkpoint_store: Optional[CheckpointStore] = None,
+        resume_collected_ids: Optional[Set[str]] = None,
+        interrupt_checker: Optional[Callable[[], bool]] = None,
     ):
         self.client = client
         self.analyze_restrictions = analyze_restrictions
@@ -44,6 +48,9 @@ class Collector:
         self.collect_effective_restrictions = collect_effective_restrictions
         self.collect_extracted_text = collect_extracted_text
         self.collect_space_permissions = collect_space_permissions
+        self.checkpoint_store = checkpoint_store
+        self.resume_collected_ids = set(resume_collected_ids) if resume_collected_ids else set()
+        self.interrupt_checker = interrupt_checker
         self.raw_inventory = RawInventory()
 
     def collect_workspace_overview(self, spaces: List[dict], root_ids: List[str]) -> None:
@@ -230,274 +237,294 @@ class Collector:
         processed_count = 0
 
         while stack:
+            if self.interrupt_checker and self.interrupt_checker():
+                logger.info("収集処理の自己中断シグナルを検知しました。収集を停止します。")
+                raise CollectInterrupted("収集処理が中断されました")
+
             page_id, level, ancestors_titles = stack.pop()
 
             if page_id in visited_page_ids:
                 continue
             visited_page_ids.add(page_id)
 
-            processed_count += 1
-            if processed_count % 50 == 0 or processed_count == 1:
-                logger.info(f"アセスメント収集進捗: {processed_count} ページ処理中... (現在のID: {page_id})")
+            title = f"Untitled_{page_id}"
 
-            # 1. ページ詳細取得
-            try:
-                page_data = self.client.get_page(page_id, expand="body.storage,space,version,history.lastUpdated")
-            except Exception as e:
-                logger.warning(f"ページ (ID: {page_id}) のメタデータ取得に失敗しました。スキップします: {e}")
-                inventory.skipped_page_ids.append(page_id)
-                continue
+            # 収集済みページ (resume 対象) の判定
+            if page_id in self.resume_collected_ids:
+                # すでにチェックポイントから復元済みのため再取得をスキップ
+                for pm in inventory.pages:
+                    if pm.page_id == page_id:
+                        title = pm.title
+                        break
+            else:
+                processed_count += 1
+                if processed_count % 50 == 0 or processed_count == 1:
+                    logger.info(f"アセスメント収集進捗: {processed_count} ページ処理中... (現在のID: {page_id})")
 
-            title = page_data.get("title", f"Untitled_{page_id}")
-            space_key = page_data.get("space", {}).get("key", "UNKNOWN")
-
-            # Storage Format 生サイズ
-            body_storage = page_data.get("body", {}).get("storage", {}).get("value", "")
-            body_bytes = len(body_storage.encode("utf-8")) if body_storage else 0
-
-            # マクロ収集（有効時）
-            macro_counts_dict = {}
-            if self.collect_macros and body_storage:
+                # 1. ページ詳細取得
                 try:
-                    macro_counts_dict = count_macros(body_storage)
+                    page_data = self.client.get_page(page_id, expand="body.storage,space,version,history.lastUpdated")
                 except Exception as e:
-                    logger.warning(f"ページ (ID: {page_id}) のマクロ解析に失敗しました: {e}")
-                    inventory.macro_parse_failed_count += 1
+                    logger.warning(f"ページ (ID: {page_id}) のメタデータ取得に失敗しました。スキップします: {e}")
+                    inventory.skipped_page_ids.append(page_id)
+                    continue
 
-            # 最終更新日時 (version.when や history.lastUpdated.when)
-            last_modified = page_data.get("version", {}).get("when") or page_data.get("history", {}).get(
-                "lastUpdated", {}
-            ).get("when")
+                title = page_data.get("title", f"Untitled_{page_id}")
+                space_key = page_data.get("space", {}).get("key", "UNKNOWN")
 
-            # 2. 添付ファイルメタデータ取得
-            attachments_meta: List[AttachmentMeta] = []
-            try:
-                raw_attachments = self.client.get_attachments(page_id)
-                for att in raw_attachments:
-                    att_id = str(att.get("id", ""))
-                    att_filename = att.get("title", "")
-                    extensions = att.get("extensions", {})
-                    file_size = extensions.get("fileSize")
-                    media_type = extensions.get("mediaType", "")
-                    att_version = att.get("version", {}).get("number")
+                # Storage Format 生サイズ
+                body_storage = page_data.get("body", {}).get("storage", {}).get("value", "")
+                body_bytes = len(body_storage.encode("utf-8")) if body_storage else 0
 
-                    if file_size is None:
-                        inventory.size_meta_missing_count += 1
-
-                    # 拡張子抽出 (ドット無しの小文字)
-                    ext = ""
-                    if "." in att_filename:
-                        ext = att_filename.rsplit(".", 1)[1].lower()
-
-                    attachments_meta.append(
-                        AttachmentMeta(
-                            page_id=page_id,
-                            filename=att_filename,
-                            extension=ext,
-                            media_type=media_type,
-                            file_size=file_size if isinstance(file_size, int) else None,
-                            version=att_version,
-                            attachment_id=att_id,
-                        )
-                    )
-            except Exception as e:
-                logger.warning(f"ページ (ID: {page_id}) の添付ファイル一覧取得に失敗しました: {e}")
-                inventory.skipped_attachment_refs.append(f"{page_id}:all")
-
-            # 3. 権限メタデータ取得 (有効時)
-            restriction_meta: Union[RestrictionMeta, None] = None
-            if self.analyze_restrictions:
-                try:
-                    raw_restrictions = self.client.get_restrictions(page_id)
-                    read_users = [
-                        u.get("username", "")
-                        for u in raw_restrictions.get("read", {})
-                        .get("restrictions", {})
-                        .get("user", {})
-                        .get("results", [])
-                        if u.get("username")
-                    ]
-                    read_groups = [
-                        g.get("name", "")
-                        for g in raw_restrictions.get("read", {})
-                        .get("restrictions", {})
-                        .get("group", {})
-                        .get("results", [])
-                        if g.get("name")
-                    ]
-                    update_users = [
-                        u.get("username", "")
-                        for u in raw_restrictions.get("update", {})
-                        .get("restrictions", {})
-                        .get("user", {})
-                        .get("results", [])
-                        if u.get("username")
-                    ]
-                    update_groups = [
-                        g.get("name", "")
-                        for g in raw_restrictions.get("update", {})
-                        .get("restrictions", {})
-                        .get("group", {})
-                        .get("results", [])
-                        if g.get("name")
-                    ]
-
-                    has_explicit = bool(read_users or read_groups or update_users or update_groups)
-                    restriction_meta = RestrictionMeta(
-                        has_explicit=has_explicit,
-                        read_users=read_users,
-                        read_groups=read_groups,
-                        update_users=update_users,
-                        update_groups=update_groups,
-                    )
-                except Exception as e:
-                    logger.warning(f"ページ (ID: {page_id}) の制限情報取得に失敗しました: {e}")
-                    inventory.restriction_failed_page_ids.append(page_id)
-                    restriction_meta = RestrictionMeta(has_explicit=False, fetch_failed=True)
-
-            # 3.5 詳細調査フェーズ (per-page オプトイン収集)
-            created_by: Union[str, None] = None
-            last_updated_by: Union[str, None] = None
-            contributors: List[str] = []
-            owner_unknown: bool = False
-            if self.collect_history:
-                try:
-                    hist = self.client.get_content_history(page_id)
-                    cb = hist.get("createdBy", {})
-                    if isinstance(cb, dict):
-                        created_by = cb.get("displayName") or cb.get("username")
-                    lub = hist.get("lastUpdated", {}).get("by", {})
-                    if isinstance(lub, dict):
-                        last_updated_by = lub.get("displayName") or lub.get("username")
-                    contribs = hist.get("contributors", {}).get("publishers", {}).get("users", [])
-                    if isinstance(contribs, list):
-                        for u in contribs:
-                            if isinstance(u, dict):
-                                uname = u.get("displayName") or u.get("username")
-                                if uname and uname not in contributors:
-                                    contributors.append(uname)
-                    if not created_by and not last_updated_by:
-                        owner_unknown = True
-                except Exception as e:
-                    logger.warning(f"ページ (ID: {page_id}) の更新履歴取得に失敗しました: {e}")
-                    inventory.history_failed_page_ids.append(page_id)
-
-            page_labels: List[str] = []
-            if self.collect_labels:
-                try:
-                    lbls = self.client.get_labels(page_id)
-                    for litem in lbls:
-                        if isinstance(litem, dict) and "name" in litem:
-                            page_labels.append(litem["name"])
-                except Exception as e:
-                    logger.warning(f"ページ (ID: {page_id}) のラベル取得に失敗しました: {e}")
-                    inventory.label_failed_page_ids.append(page_id)
-
-            comment_count: int = 0
-            unresolved_comment_count: Union[int, None] = None
-            inline_comment_count: Union[int, None] = None
-            footer_comment_count: Union[int, None] = None
-            if self.collect_comments:
-                try:
-                    cmts = self.client.get_comments(page_id)
-                    comment_count = len(cmts)
-                    u_cnt = 0
-                    i_cnt = 0
-                    f_cnt = 0
-                    has_loc = False
-                    has_res = False
-                    for c in cmts:
-                        exts = c.get("extensions", {}) if isinstance(c, dict) else {}
-                        loc = exts.get("location")
-                        if loc == "inline":
-                            i_cnt += 1
-                            has_loc = True
-                        elif loc == "footer":
-                            f_cnt += 1
-                            has_loc = True
-
-                        res = exts.get("resolution", {})
-                        if isinstance(res, dict) and "status" in res:
-                            has_res = True
-                            if res.get("status") != "resolved":
-                                u_cnt += 1
-                    if has_loc:
-                        inline_comment_count = i_cnt
-                        footer_comment_count = f_cnt
-                    if has_res:
-                        unresolved_comment_count = u_cnt
-                except Exception as e:
-                    logger.warning(f"ページ (ID: {page_id}) のコメント取得に失敗しました: {e}")
-                    inventory.comment_failed_page_ids.append(page_id)
-
-            eff_restriction_meta: Union[RestrictionMeta, None] = None
-            if self.collect_effective_restrictions:
-                try:
-                    raw_eff = self.client.get_relevant_view_restrictions(page_id)
-                    r_users = [
-                        u.get("username", "")
-                        for u in raw_eff.get("read", {}).get("restrictions", {}).get("user", {}).get("results", [])
-                        if u.get("username")
-                    ]
-                    r_groups = [
-                        g.get("name", "")
-                        for g in raw_eff.get("read", {}).get("restrictions", {}).get("group", {}).get("results", [])
-                        if g.get("name")
-                    ]
-                    eff_restriction_meta = RestrictionMeta(
-                        has_explicit=bool(r_users or r_groups),
-                        read_users=r_users,
-                        read_groups=r_groups,
-                    )
-                except Exception as e:
-                    logger.warning(f"ページ (ID: {page_id}) の実効閲覧制限取得に失敗しました: {e}")
-                    inventory.effective_restriction_failed_page_ids.append(page_id)
-
-            if self.collect_watchers:
-                try:
-                    self.client.get_content_watchers(page_id)
-                except Exception as e:
-                    logger.warning(f"ページ (ID: {page_id}) のウォッチャー取得に失敗しました: {e}")
-                    inventory.content_watcher_failed_refs.append(page_id)
-
-            if self.collect_extracted_text:
-                for att_item in attachments_meta:
-                    att_id = att_item.attachment_id or att_item.filename
+                # マクロ収集（有効時）
+                macro_counts_dict = {}
+                if self.collect_macros and body_storage:
                     try:
-                        ext_res = self.client.get_attachment_extracted_text(page_id, att_id)
-                        if isinstance(ext_res, dict):
-                            text = ext_res.get("text") or ""
-                            att_item.has_extracted_text = bool(text)
-                            att_item.extracted_text_length = len(text)
+                        macro_counts_dict = count_macros(body_storage)
                     except Exception as e:
-                        logger.warning(f"添付 ({page_id}:{att_id}) の抽出テキスト取得に失敗しました: {e}")
-                        inventory.extracted_text_failed_refs.append(f"{page_id}:{att_id}")
+                        logger.warning(f"ページ (ID: {page_id}) のマクロ解析に失敗しました: {e}")
+                        inventory.macro_parse_failed_count += 1
 
-            page_meta = PageMeta(
-                page_id=page_id,
-                title=title,
-                space_key=space_key,
-                level=level,
-                body_bytes=body_bytes,
-                last_modified=last_modified,
-                ancestors_titles=ancestors_titles,
-                attachments=attachments_meta,
-                restriction=restriction_meta,
-                macro_counts=macro_counts_dict,
-                created_by=created_by,
-                last_updated_by=last_updated_by,
-                contributors=contributors,
-                owner_unknown=owner_unknown,
-                labels=page_labels,
-                comment_count=comment_count,
-                unresolved_comment_count=unresolved_comment_count,
-                inline_comment_count=inline_comment_count,
-                footer_comment_count=footer_comment_count,
-                effective_view_restrictions=eff_restriction_meta,
-            )
-            inventory.pages.append(page_meta)
+                # 最終更新日時 (version.when や history.lastUpdated.when)
+                last_modified = page_data.get("version", {}).get("when") or page_data.get("history", {}).get(
+                    "lastUpdated", {}
+                ).get("when")
 
-            # 4. 子ページ取得
+                # 2. 添付ファイルメタデータ取得
+                attachments_meta: List[AttachmentMeta] = []
+                try:
+                    raw_attachments = self.client.get_attachments(page_id)
+                    for att in raw_attachments:
+                        att_id = str(att.get("id", ""))
+                        att_filename = att.get("title", "")
+                        extensions = att.get("extensions", {})
+                        file_size = extensions.get("fileSize")
+                        media_type = extensions.get("mediaType", "")
+                        att_version = att.get("version", {}).get("number")
+
+                        if file_size is None:
+                            inventory.size_meta_missing_count += 1
+
+                        # 拡張子抽出 (ドット無しの小文字)
+                        ext = ""
+                        if "." in att_filename:
+                            ext = att_filename.rsplit(".", 1)[1].lower()
+
+                        attachments_meta.append(
+                            AttachmentMeta(
+                                page_id=page_id,
+                                filename=att_filename,
+                                extension=ext,
+                                media_type=media_type,
+                                file_size=file_size if isinstance(file_size, int) else None,
+                                version=att_version,
+                                attachment_id=att_id,
+                            )
+                        )
+                except Exception as e:
+                    logger.warning(f"ページ (ID: {page_id}) の添付ファイル一覧取得に失敗しました: {e}")
+                    inventory.skipped_attachment_refs.append(f"{page_id}:all")
+
+                # 3. 権限メタデータ取得 (有効時)
+                restriction_meta: Union[RestrictionMeta, None] = None
+                if self.analyze_restrictions:
+                    try:
+                        raw_restrictions = self.client.get_restrictions(page_id)
+                        read_users = [
+                            u.get("username", "")
+                            for u in raw_restrictions.get("read", {})
+                            .get("restrictions", {})
+                            .get("user", {})
+                            .get("results", [])
+                            if u.get("username")
+                        ]
+                        read_groups = [
+                            g.get("name", "")
+                            for g in raw_restrictions.get("read", {})
+                            .get("restrictions", {})
+                            .get("group", {})
+                            .get("results", [])
+                            if g.get("name")
+                        ]
+                        update_users = [
+                            u.get("username", "")
+                            for u in raw_restrictions.get("update", {})
+                            .get("restrictions", {})
+                            .get("user", {})
+                            .get("results", [])
+                            if u.get("username")
+                        ]
+                        update_groups = [
+                            g.get("name", "")
+                            for g in raw_restrictions.get("update", {})
+                            .get("restrictions", {})
+                            .get("group", {})
+                            .get("results", [])
+                            if g.get("name")
+                        ]
+
+                        has_explicit = bool(read_users or read_groups or update_users or update_groups)
+                        restriction_meta = RestrictionMeta(
+                            has_explicit=has_explicit,
+                            read_users=read_users,
+                            read_groups=read_groups,
+                            update_users=update_users,
+                            update_groups=update_groups,
+                        )
+                    except Exception as e:
+                        logger.warning(f"ページ (ID: {page_id}) の制限情報取得に失敗しました: {e}")
+                        inventory.restriction_failed_page_ids.append(page_id)
+                        restriction_meta = RestrictionMeta(has_explicit=False, fetch_failed=True)
+
+                # 3.5 詳細調査フェーズ (per-page オプトイン収集)
+                created_by: Union[str, None] = None
+                last_updated_by: Union[str, None] = None
+                contributors: List[str] = []
+                owner_unknown: bool = False
+                if self.collect_history:
+                    try:
+                        hist = self.client.get_content_history(page_id)
+                        cb = hist.get("createdBy", {})
+                        if isinstance(cb, dict):
+                            created_by = cb.get("displayName") or cb.get("username")
+                        lub = hist.get("lastUpdated", {}).get("by", {})
+                        if isinstance(lub, dict):
+                            last_updated_by = lub.get("displayName") or lub.get("username")
+                        contribs = hist.get("contributors", {}).get("publishers", {}).get("users", [])
+                        if isinstance(contribs, list):
+                            for u in contribs:
+                                if isinstance(u, dict):
+                                    uname = u.get("displayName") or u.get("username")
+                                    if uname and uname not in contributors:
+                                        contributors.append(uname)
+                        if not created_by and not last_updated_by:
+                            owner_unknown = True
+                    except Exception as e:
+                        logger.warning(f"ページ (ID: {page_id}) の更新履歴取得に失敗しました: {e}")
+                        inventory.history_failed_page_ids.append(page_id)
+
+                page_labels: List[str] = []
+                if self.collect_labels:
+                    try:
+                        lbls = self.client.get_labels(page_id)
+                        for litem in lbls:
+                            if isinstance(litem, dict) and "name" in litem:
+                                page_labels.append(litem["name"])
+                    except Exception as e:
+                        logger.warning(f"ページ (ID: {page_id}) のラベル取得に失敗しました: {e}")
+                        inventory.label_failed_page_ids.append(page_id)
+
+                comment_count: int = 0
+                unresolved_comment_count: Union[int, None] = None
+                inline_comment_count: Union[int, None] = None
+                footer_comment_count: Union[int, None] = None
+                if self.collect_comments:
+                    try:
+                        cmts = self.client.get_comments(page_id)
+                        comment_count = len(cmts)
+                        u_cnt = 0
+                        i_cnt = 0
+                        f_cnt = 0
+                        has_loc = False
+                        has_res = False
+                        for c in cmts:
+                            exts = c.get("extensions", {}) if isinstance(c, dict) else {}
+                            loc = exts.get("location")
+                            if loc == "inline":
+                                i_cnt += 1
+                                has_loc = True
+                            elif loc == "footer":
+                                f_cnt += 1
+                                has_loc = True
+
+                            res = exts.get("resolution", {})
+                            if isinstance(res, dict) and "status" in res:
+                                has_res = True
+                                if res.get("status") != "resolved":
+                                    u_cnt += 1
+                        if has_loc:
+                            inline_comment_count = i_cnt
+                            footer_comment_count = f_cnt
+                        if has_res:
+                            unresolved_comment_count = u_cnt
+                    except Exception as e:
+                        logger.warning(f"ページ (ID: {page_id}) のコメント取得に失敗しました: {e}")
+                        inventory.comment_failed_page_ids.append(page_id)
+
+                eff_restriction_meta: Union[RestrictionMeta, None] = None
+                if self.collect_effective_restrictions:
+                    try:
+                        raw_eff = self.client.get_relevant_view_restrictions(page_id)
+                        r_users = [
+                            u.get("username", "")
+                            for u in raw_eff.get("read", {}).get("restrictions", {}).get("user", {}).get("results", [])
+                            if u.get("username")
+                        ]
+                        r_groups = [
+                            g.get("name", "")
+                            for g in raw_eff.get("read", {}).get("restrictions", {}).get("group", {}).get("results", [])
+                            if g.get("name")
+                        ]
+                        eff_restriction_meta = RestrictionMeta(
+                            has_explicit=bool(r_users or r_groups),
+                            read_users=r_users,
+                            read_groups=r_groups,
+                        )
+                    except Exception as e:
+                        logger.warning(f"ページ (ID: {page_id}) の実効閲覧制限取得に失敗しました: {e}")
+                        inventory.effective_restriction_failed_page_ids.append(page_id)
+
+                if self.collect_watchers:
+                    try:
+                        self.client.get_content_watchers(page_id)
+                    except Exception as e:
+                        logger.warning(f"ページ (ID: {page_id}) のウォッチャー取得に失敗しました: {e}")
+                        inventory.content_watcher_failed_refs.append(page_id)
+
+                if self.collect_extracted_text:
+                    for att_item in attachments_meta:
+                        att_id = att_item.attachment_id or att_item.filename
+                        try:
+                            ext_res = self.client.get_attachment_extracted_text(page_id, att_id)
+                            if isinstance(ext_res, dict):
+                                text = ext_res.get("text") or ""
+                                att_item.has_extracted_text = bool(text)
+                                att_item.extracted_text_length = len(text)
+                        except Exception as e:
+                            logger.warning(f"添付 ({page_id}:{att_id}) の抽出テキスト取得に失敗しました: {e}")
+                            inventory.extracted_text_failed_refs.append(f"{page_id}:{att_id}")
+
+                page_meta = PageMeta(
+                    page_id=page_id,
+                    title=title,
+                    space_key=space_key,
+                    level=level,
+                    body_bytes=body_bytes,
+                    last_modified=last_modified,
+                    ancestors_titles=ancestors_titles,
+                    attachments=attachments_meta,
+                    restriction=restriction_meta,
+                    macro_counts=macro_counts_dict,
+                    created_by=created_by,
+                    last_updated_by=last_updated_by,
+                    contributors=contributors,
+                    owner_unknown=owner_unknown,
+                    labels=page_labels,
+                    comment_count=comment_count,
+                    unresolved_comment_count=unresolved_comment_count,
+                    inline_comment_count=inline_comment_count,
+                    footer_comment_count=footer_comment_count,
+                    effective_view_restrictions=eff_restriction_meta,
+                )
+                inventory.pages.append(page_meta)
+
+                if self.checkpoint_store is not None:
+                    try:
+                        self.checkpoint_store.append_page(page_meta)
+                    except Exception as e:
+                        logger.warning(f"チェックポイントの追記に失敗しました (ページ ID: {page_id}): {e}")
+
+            # 4. 子ページ取得 (未収集ページの発見のために収集済みページも含め実行)
             try:
                 child_pages = self.client.get_child_pages(page_id)
                 next_ancestors = ancestors_titles + [title]

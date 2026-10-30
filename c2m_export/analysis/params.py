@@ -46,6 +46,10 @@ class AnalysisParams:
     collect_effective_restrictions: Optional[bool] = None
     collect_extracted_text: Optional[bool] = None
     collect_space_permissions: Optional[bool] = None
+    checkpoint_enabled: bool = True
+    resume: bool = False
+    checkpoint_interval: int = 1
+    checkpoint_dir: str = ".c2m_analyze_checkpoint"
 
     def __post_init__(self):
         """インスタンス初期化後の正規化処理."""
@@ -83,4 +87,9 @@ class AnalysisParams:
         if not isinstance(self.min_body_bytes, int) or self.min_body_bytes < 0:
             raise ValueError(
                 f"現象: min_body_bytes '{self.min_body_bytes}' は無効です。原因: 0 以上の整数でない値が指定されました。対処方法: --min-body-bytes に 0 以上の整数を指定してください。"
+            )
+
+        if not isinstance(self.checkpoint_interval, int) or self.checkpoint_interval < 1:
+            raise ValueError(
+                f"現象: checkpoint_interval '{self.checkpoint_interval}' は無効です。原因: 1 以上の整数でない値が指定されました。対処方法: --checkpoint-interval に 1 以上の整数を指定してください。"
             )

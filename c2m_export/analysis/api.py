@@ -2,11 +2,17 @@
 
 import logging
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Protocol, Tuple
+from pathlib import Path
+from typing import Any, Callable, Dict, List, Optional, Protocol, Set, Tuple
 
 import requests
 
 from c2m_export.analysis.categories import summarize_archives
+from c2m_export.analysis.checkpoint import (
+    CheckpointStore,
+    CollectInterrupted,
+    compute_scope_hash,
+)
 from c2m_export.analysis.extractors import (
     extract_empty_with_attachments,
     extract_restricted_pages,
@@ -38,6 +44,7 @@ from c2m_export.analysis.workspace import (
 )
 from c2m_export.assessment.analyzers import analyze_inventory
 from c2m_export.assessment.collector import Collector
+from c2m_export.assessment.models import PageMeta
 from c2m_export.assessment.report import generate_json_report
 from c2m_export.confluence import ConfluenceClient
 
@@ -216,6 +223,7 @@ def run_analysis(
     params: AnalysisParams,
     config: Any,
     client: Optional[ConfluenceClient] = None,
+    interrupt_checker: Optional[Callable[[], bool]] = None,
 ) -> AnalysisResponse:
     """共通 1 層 Analysis API メイン関数.
 
@@ -229,6 +237,7 @@ def run_analysis(
               AssessConfig / FsExportConfig 等から hasattr で選択的に参照。
               AnalysisConfig に属性がない場合は analyze_inventory 内の既定値に委譲。
         client: ConfluenceClient インスタンス (省略時は config から生成)
+        interrupt_checker: 協調的中断判定コールバック
 
     Returns:
         AnalysisResponse: 分析結果オブジェクト
@@ -293,13 +302,85 @@ def run_analysis(
             getattr(params, "collect_space_permissions", None), getattr(config, "collect_space_permissions", None)
         )
 
+        # チェックポイント設定の解決
+        checkpoint_enabled = getattr(params, "checkpoint_enabled", True)
+        if hasattr(config, "checkpoint_enabled") and config.checkpoint_enabled is not None:
+            checkpoint_enabled = config.checkpoint_enabled
+
+        resume = getattr(params, "resume", False) or getattr(config, "resume", False)
+        checkpoint_interval = getattr(params, "checkpoint_interval", 1)
+        checkpoint_dir = getattr(params, "checkpoint_dir", ".c2m_analyze_checkpoint")
+        if hasattr(config, "checkpoint_dir") and config.checkpoint_dir:
+            checkpoint_dir = config.checkpoint_dir
+
         # 1. 起点解決
         resolved_root_ids, empty_space_keys, cql_failed = _resolve_roots(
-            client, config.root_page_ids, config.space_keys, all_spaces=all_spaces, cql=cql, shared_spaces=shared_spaces
+            client,
+            getattr(config, "root_page_ids", []),
+            getattr(config, "space_keys", []),
+            all_spaces=all_spaces,
+            cql=cql,
+            shared_spaces=shared_spaces,
         )
 
-        # 2. 収集
+        # 1.5 スコープハッシュ算出とチェックポイント初期化
         macros_requested = "macros" in params.usecases
+        collect_flags = {
+            "analyze_restrictions": params.analyze_restrictions if params.analyze_restrictions is not None else True,
+            "collect_macros": macros_requested,
+            "collect_history": collect_history,
+            "collect_labels": collect_labels,
+            "collect_comments": collect_comments,
+            "collect_watchers": collect_watchers,
+            "collect_effective_restrictions": collect_effective_restrictions,
+            "collect_extracted_text": collect_extracted_text,
+            "collect_space_permissions": collect_space_permissions,
+        }
+
+        scope_hash = compute_scope_hash(
+            base_url=getattr(config, "base_url", None),
+            root_page_ids=getattr(config, "root_page_ids", []),
+            space_keys=getattr(config, "space_keys", []),
+            all_spaces=all_spaces,
+            cql=cql,
+            collect_flags=collect_flags,
+        )
+
+        checkpoint_store: Optional[CheckpointStore] = None
+        resumed_from_checkpoint = False
+        checkpoint_reused_count = 0
+        checkpoint_corrupted_line_count = 0
+        restored_pages: List[PageMeta] = []
+        resume_collected_ids: Set[str] = set()
+
+        if checkpoint_enabled:
+            checkpoint_path = Path(checkpoint_dir) / f"{scope_hash}.jsonl"
+            scope_meta = {
+                "root_page_ids": getattr(config, "root_page_ids", []),
+                "space_keys": getattr(config, "space_keys", []),
+            }
+            checkpoint_store = CheckpointStore(
+                checkpoint_path,
+                scope_hash=scope_hash,
+                scope_meta=scope_meta,
+                interval=checkpoint_interval,
+            )
+
+            if resume:
+                if checkpoint_store.scope_matches(scope_hash):
+                    restored_pages, resume_collected_ids, corrupted_lines = checkpoint_store.load_collected()
+                    resumed_from_checkpoint = True
+                    checkpoint_reused_count = len(restored_pages)
+                    checkpoint_corrupted_line_count = len(corrupted_lines)
+                    logger.info(
+                        f"チェックポイントから {checkpoint_reused_count} 件のページメタデータを復元しました ({checkpoint_path})"
+                    )
+                else:
+                    logger.warning(
+                        f"既存チェックポイント ({checkpoint_path}) のスコープハッシュが現在の実行スコープと不一致のため、復元をスキップします"
+                    )
+
+        # 2. 収集
         collector = Collector(
             client=client,
             analyze_restrictions=params.analyze_restrictions if params.analyze_restrictions is not None else True,
@@ -311,28 +392,51 @@ def run_analysis(
             collect_effective_restrictions=collect_effective_restrictions,
             collect_extracted_text=collect_extracted_text,
             collect_space_permissions=collect_space_permissions,
+            checkpoint_store=checkpoint_store,
+            resume_collected_ids=resume_collected_ids,
+            interrupt_checker=interrupt_checker,
         )
+
+        # 復元済みページの先行投入
+        if restored_pages:
+            collector.raw_inventory.pages.extend(restored_pages)
 
         # 全体把握収集
         collector.collect_workspace_overview(shared_spaces, resolved_root_ids)
 
-        # DFS 走査
-        inventory = collector.collect(resolved_root_ids)
+        is_interrupted = False
+        interrupted_reason: Optional[str] = None
 
-        # per-space 詳細調査
-        target_skeys = list(config.space_keys or [])
-        if shared_spaces:
-            for sp in shared_spaces:
-                k = sp.get("key")
-                if k and k not in target_skeys:
-                    target_skeys.append(k)
-        collector.collect_space_details(target_skeys)
+        # DFS 走査
+        try:
+            inventory = collector.collect(resolved_root_ids)
+        except CollectInterrupted:
+            logger.info("収集処理が中断されました。部分集計 (partial) に移行します。")
+            is_interrupted = True
+            interrupted_reason = "signal"
+            inventory = collector.raw_inventory
+        except Exception as e:
+            if len(collector.raw_inventory.pages) > 0:
+                logger.error(
+                    f"収集フェーズでエラーが発生しました。収集済み {len(collector.raw_inventory.pages)} 件で部分集計 (partial) を構築します: {e}"
+                )
+                is_interrupted = True
+                interrupted_reason = "error"
+                inventory = collector.raw_inventory
+            else:
+                raise
+
+        # per-space 詳細調査 (未中断時のみ実行)
+        if not is_interrupted:
+            target_skeys = list(getattr(config, "space_keys", []) or [])
+            if shared_spaces:
+                for sp in shared_spaces:
+                    k = sp.get("key")
+                    if k and k not in target_skeys:
+                        target_skeys.append(k)
+            collector.collect_space_details(target_skeys)
 
         # 3. アセスメント集計
-        # 将来リスク閾値を AnalysisConfig に持たせる場合の方針:
-        # hasattr(config, name) により選択的に属性を抽出しているため、将来 AnalysisConfig 等に
-        # リスク閾値属性を追加した場合も既存ロジックを変更することなく自動的に拾われる設計となっている。
-        # 属性が存在しない場合は analyze_inventory のデフォルト引数に委ねられる。
         assessment_options = {
             name: getattr(config, name)
             for name in ("single_file_max_mb", "path_length_limit", "blocked_extensions", "attachment_dir_name")
@@ -347,7 +451,7 @@ def run_analysis(
         )
 
         # Base URL 取得
-        base_url = config.base_url or ""
+        base_url = getattr(config, "base_url", "") or ""
 
         # 4. 各ユースケース結果構築
         uc_results: Dict[str, Any] = {}
@@ -450,10 +554,8 @@ def run_analysis(
         # UC6: macros
         if "macros" in params.usecases:
             records = summarize_macros(inventory.pages)
-            # ソートは count 降順固定
             records.sort(key=lambda x: x["count"], reverse=True)
             if params.mode == "summary":
-                # summary モード時は repair_* 情報を省く
                 summary_items = [{"name": r["name"], "count": r["count"]} for r in records]
                 uc_results["macros"] = {"total_macro_types": len(records), "macros": summary_items}
             else:
@@ -486,16 +588,28 @@ def run_analysis(
             space_permission_failed_count=len(inventory.space_permission_failed_keys),
             cql_failed=cql_failed,
             unavailable_apis=visibility_block.get("unavailable_apis", []),
+            interrupted=is_interrupted,
+            interrupted_reason=interrupted_reason,
+            collected_page_count=len(inventory.pages),
+            resumed_from_checkpoint=resumed_from_checkpoint,
+            checkpoint_reused_count=checkpoint_reused_count,
+            checkpoint_corrupted_line_count=checkpoint_corrupted_line_count,
         )
 
+        status_str = "partial" if is_interrupted else "ok"
+
+        # チェックポイントの後始末
+        if checkpoint_store:
+            checkpoint_store.finalize(success=(status_str == "ok"))
+
         response = AnalysisResponse(
-            schema_version="1.1",
-            status="ok",
+            schema_version="1.2",
+            status=status_str,
             generated_at=ref_time.strftime("%Y-%m-%dT%H:%M:%SZ"),
             mode=params.mode,
             scope=AnalysisScope(
-                root_page_ids=config.root_page_ids or [],
-                space_keys=config.space_keys or [],
+                root_page_ids=getattr(config, "root_page_ids", []) or [],
+                space_keys=getattr(config, "space_keys", []) or [],
                 resolved_root_count=len(resolved_root_ids),
             ),
             workspace=workspace_block,
@@ -510,27 +624,32 @@ def run_analysis(
 
     except ValueError as e:
         return AnalysisResponse(
+            schema_version="1.2",
             status="error",
             error=ErrorObject(code=CODE_INVALID_PARAM, message=str(e)),
         )
     except AuthFailedError as e:
         return AnalysisResponse(
+            schema_version="1.2",
             status="error",
             error=ErrorObject(code=CODE_AUTH_FAILED, message=str(e)),
         )
     except TargetNotFoundError as e:
         return AnalysisResponse(
+            schema_version="1.2",
             status="error",
             error=ErrorObject(code=CODE_TARGET_NOT_FOUND, message=str(e)),
         )
     except ApiError as e:
         return AnalysisResponse(
+            schema_version="1.2",
             status="error",
             error=ErrorObject(code=CODE_API_ERROR, message=str(e)),
         )
     except Exception as e:
         logger.exception("分析処理中に想定外のエラーが発生しました")
         return AnalysisResponse(
+            schema_version="1.2",
             status="error",
             error=ErrorObject(
                 code=CODE_INTERNAL_ERROR,

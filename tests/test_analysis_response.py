@@ -19,7 +19,7 @@ def test_analysis_response_to_dict():
     )
 
     d = resp.to_dict()
-    assert d["schema_version"] == "1.1"
+    assert d["schema_version"] == "1.2"
     assert d["status"] == "ok"
     assert d["generated_at"] == "2026-03-31T00:00:00Z"
     assert d["scope"]["resolved_root_count"] == 2
