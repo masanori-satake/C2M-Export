@@ -15,7 +15,7 @@ SKILL.md や scripts を修正・更新する場合は、必ず正本を編集�
 
 ## 前提要件
 
-- **Python**: Python 3.8 以上が導入されていること。
+- **Python**: Python 3.11 以上が導入されていること。
 - **リポジトリ**: C2M-Export のソースコードがローカル環境にチェックアウトされており、依存ライブラリがインストールされていること。
   ```bash
   pip install -r requirements.txt

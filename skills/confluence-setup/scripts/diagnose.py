@@ -73,10 +73,10 @@ def _section(title: str) -> None:
 def check_python() -> None:
     _section("1. Python バージョン")
     major, minor = sys.version_info[:2]
-    if (major, minor) >= (3, 8):
-        _ok(f"Python {major}.{minor} (>= 3.8)")
+    if (major, minor) >= (3, 11):
+        _ok(f"Python {major}.{minor} (>= 3.11)")
     else:
-        _fail(f"Python {major}.{minor} は要件 3.8 未満です。3.8 以上を導入してください。")
+        _fail(f"Python {major}.{minor} は要件 3.11 未満です。3.11 以上を導入してください。")
 
 
 def check_deps() -> None:
