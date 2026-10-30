@@ -466,6 +466,10 @@ def run_analysis(
                         target_skeys.append(k)
             collector.collect_space_details(target_skeys)
 
+        if not is_interrupted and interrupt_checker and interrupt_checker():
+            is_interrupted = True
+            interrupted_reason = "signal"
+
         # 3. アセスメント集計
         assessment_options = {
             name: getattr(config, name)

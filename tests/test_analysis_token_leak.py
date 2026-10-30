@@ -111,31 +111,41 @@ def test_analysis_config_does_not_expose_token():
 
 
 def test_token_not_in_checkpoint_file(tmp_path):
-    """チェックポイントファイル（JSONL）内に認証トークンが含まれないことを検証します。"""
-    from c2m_export.analysis.checkpoint import CheckpointStore
-    from c2m_export.assessment.models import PageMeta
+    """分析処理で生成されるチェックポイントファイル（JSONL）内に認証トークンが含まれないことを検証します。"""
+    from c2m_export.analysis.api import run_analysis
+    from c2m_export.analysis.params import AnalysisParams
 
     secret_token = "TOP_SECRET_CHECKPOINT_TOKEN_999"
-    chk_path = tmp_path / "chk.jsonl"
+    chk_dir = tmp_path / "chk_dir"
 
-    store = CheckpointStore(
-        path=chk_path,
-        scope_hash="1234567890abcdef",
-        scope_meta={"root_page_ids": ["100"], "space_keys": ["TEST"]},
-    )
-    store.open_for_write(append=False)
-    page = PageMeta(
-        page_id="100",
-        title="Secret Page",
-        space_key="TEST",
-        level=1,
-        body_bytes=100,
-        last_modified="2026-01-01T00:00:00Z",
-        ancestors_titles=[],
-    )
-    store.append_page(page)
-    store.close()
+    config = AnalysisConfig()
+    config.base_url = "https://confluence.example.com"
+    config.token = secret_token
+    config.root_page_ids = ["100"]
+    config.checkpoint_enabled = True
+    config.checkpoint_dir = str(chk_dir)
 
-    content = chk_path.read_text(encoding="utf-8")
+    params = AnalysisParams(checkpoint_enabled=True, checkpoint_dir=str(chk_dir))
+
+    mock_client = MagicMock()
+    mock_client.get_page.return_value = {
+        "id": "100",
+        "title": "Test Title",
+        "space": {"key": "TEST"},
+        "version": {"when": "2026-01-01T00:00:00Z"},
+        "body": {"storage": {"value": "Test body"}},
+    }
+    mock_client.get_attachments.return_value = []
+    mock_client.get_restrictions.return_value = {}
+    mock_client.get_child_pages.return_value = []
+    mock_client.list_spaces.return_value = []
+
+    # 中断させてチェックポイントを残す
+    run_analysis(params, config, client=mock_client, interrupt_checker=lambda: True)
+
+    chk_files = list(chk_dir.glob("*.jsonl"))
+    assert len(chk_files) == 1
+    content = chk_files[0].read_text(encoding="utf-8")
+
     assert secret_token not in content
     assert "token" not in content.lower()
