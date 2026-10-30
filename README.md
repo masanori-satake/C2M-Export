@@ -86,7 +86,7 @@ Confluence Data Center 9.2 のページツリーを REST API で取得し、AI�
 
 ## セットアップ
 
-Python 3.8 以上が必要です。
+Python 3.11 以上が必要です。
 
 ```cmd
 # 依存関係のインストール

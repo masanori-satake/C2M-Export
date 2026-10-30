@@ -20,7 +20,7 @@ SKILL.md や scripts を修正・更新する場合は、必ず正本を編集�
 
 ## 前提要件
 
-- **Python**: 3.8 以上。
+- **Python**: 3.11 以上。
 - **リポジトリ**: C2M-Export をローカルにチェックアウトし、依存をインストール済みであること。
   ```bash
   pip install -r requirements.txt
@@ -56,7 +56,7 @@ python skills/confluence-setup/scripts/diagnose.py --skip-network
 
 | # | 検査 | 失敗時に疑うこと |
 |---|---|---|
-| 1 | Python バージョン (>= 3.8) | Python の導入・バージョン |
+| 1 | Python バージョン (>= 3.11) | Python の導入・バージョン |
 | 2 | 必須依存 (requests / bs4 / yaml) | `pip install -r requirements.txt` 未実行 |
 | 3 | トークン環境変数の有無 | 変数名違い・再起動していない |
 | 4 | 設定ファイル読み込み (base_url / space_keys / token) | `c2m_config.yaml` の記載・配置 |

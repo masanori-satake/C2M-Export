@@ -396,7 +396,7 @@ PYTHONPATH=. pytest
 ```
 
 静的型検査は mypy で行います（対象や設定は `pyproject.toml` の `[tool.mypy]` を参照）。
-Python 3.8 を対象とし、対応する mypy 1.10 以上 1.15 未満を使用します。型注釈は `typing.List` / `typing.Dict` / `typing.Tuple` などの Python 3.8 互換形式を使用します。
+Python 3.11 を対象とし、対応する mypy 1.10 以上 1.15 未満を使用します。
 
 ```bash
 mypy

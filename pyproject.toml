@@ -2,8 +2,11 @@
 # mypy は ini 形式だと環境によっては cp932 で読まれ日本語コメントで失敗するため、
 # UTF-8 前提で読まれる pyproject.toml 側に設定を集約する。
 
+[project]
+requires-python = ">=3.11"
+
 [tool.mypy]
-python_version = "3.8"
+python_version = "3.11"
 # サードパーティライブラリ（型スタブのないもの）の import エラーを抑制する。
 # 段階導入のため、まずは緩めの設定から始める。
 ignore_missing_imports = true

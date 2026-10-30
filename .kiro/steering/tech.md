@@ -2,7 +2,7 @@
 
 ## 言語・ランタイム
 
-- Python 3.8 以上
+- Python 3.11 以上
 
 ## 依存ライブラリ（requirements.txt / requirements-mcp.txt）
 

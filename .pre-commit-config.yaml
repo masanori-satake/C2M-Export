@@ -23,7 +23,7 @@ repos:
     # ruff-format: 一貫したコードフォーマットを自動適用（可読性・メンテナンス性向上）
     -   id: ruff-format
 
-# mypy: Python 3.8 対応の静的型検査。設定は pyproject.toml を参照。
+# mypy: Python 3.11 対応の静的型検査。設定は pyproject.toml を参照。
 -   repo: https://github.com/pre-commit/mirrors-mypy
     rev: v1.14.1
     hooks:
