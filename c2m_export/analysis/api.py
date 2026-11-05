@@ -228,6 +228,7 @@ def run_analysis(
     config: Any,
     client: Optional[ConfluenceClient] = None,
     interrupt_checker: Optional[Callable[[], bool]] = None,
+    progress_sink: Optional[Callable[[str, float, Optional[int]], None]] = None,
 ) -> AnalysisResponse:
     """共通 1 層 Analysis API メイン関数.
 
@@ -276,7 +277,7 @@ def run_analysis(
         start_time = time.monotonic()
 
         # 時間ベースの進捗ハートビート開始（無音区間を作らない）
-        heartbeat = ProgressHeartbeat(target_logger=logger)
+        heartbeat = ProgressHeartbeat(target_logger=logger, on_tick=progress_sink)
         heartbeat.start()
 
         def _combined_interrupt_checker() -> bool:

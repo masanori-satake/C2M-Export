@@ -20,6 +20,8 @@ class ProgressHeartbeat:
         target_logger: ログ出力先ロガー。省略時は本モジュールのロガー。
         interval_seconds: ハートビートの出力間隔（秒）。既定 5 秒。
         phase: 現在のフェーズ名。`set_phase` で随時更新できる。
+        on_tick: 各ティックで (フェーズ, 経過秒数, 収集済み件数) を受け取る任意のコールバック。
+            非同期ジョブの進捗ファイル書き込みなどに使う。例外は握りつぶす。
     """
 
     def __init__(
@@ -27,12 +29,14 @@ class ProgressHeartbeat:
         target_logger: Optional[logging.Logger] = None,
         interval_seconds: float = 5.0,
         phase: str = "開始",
+        on_tick: Optional[Callable[[str, float, Optional[int]], None]] = None,
     ):
         if interval_seconds <= 0:
             raise ValueError("interval_seconds は 0 より大きい値でなければなりません")
         self._logger = target_logger or logger
         self._interval = float(interval_seconds)
         self._phase = phase
+        self._on_tick = on_tick
         self._counter: Optional[Callable[[], int]] = None
         self._stop_event = threading.Event()
         self._thread: Optional[threading.Thread] = None
@@ -80,9 +84,16 @@ class ProgressHeartbeat:
         while not self._stop_event.wait(self._interval):
             elapsed = time.monotonic() - self._started_at
             message = f"処理継続中: フェーズ={self._phase}, 経過={elapsed:.0f}秒"
+            count: Optional[int] = None
             if self._counter is not None:
                 try:
-                    message += f", 収集済み={self._counter()}件"
+                    count = self._counter()
+                    message += f", 収集済み={count}件"
+                except Exception:
+                    count = None
+            self._logger.info(message)
+            if self._on_tick is not None:
+                try:
+                    self._on_tick(self._phase, elapsed, count)
                 except Exception:
                     pass
-            self._logger.info(message)
