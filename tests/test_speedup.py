@@ -18,10 +18,11 @@ from c2m_export.confluence import ConfluenceClient
 class FakeTreeClient:
     """100 → [101, 102], 101 → [103] のツリーを持つフェイククライアント."""
 
-    def __init__(self, descendants_mode: str = "ok"):
+    def __init__(self, descendants_mode: str = "ok", honor_max_items: bool = True):
         self.children = {"100": ["101", "102"], "101": ["103"], "102": [], "103": []}
         self.child_calls: list = []
         self.descendants_mode = descendants_mode
+        self.honor_max_items = honor_max_items
 
     def get_page(self, page_id, expand="body.storage,space"):
         return {
@@ -42,7 +43,7 @@ class FakeTreeClient:
         self.child_calls.append(page_id)
         return [{"id": c} for c in self.children[page_id]]
 
-    def get_descendants(self, page_id, type_="page", expand=None, limit=25):
+    def get_descendants(self, page_id, type_="page", expand=None, limit=25, interrupt_checker=None, max_items=None):
         if self.descendants_mode == "raise":
             raise RuntimeError("descendant endpoint unavailable")
         if self.descendants_mode == "empty":
@@ -57,6 +58,9 @@ class FakeTreeClient:
                 walk(cid, ancestors + [pid])
 
         walk(page_id, [])
+        # 実クライアントの契約を模倣する（上限超過時は部分結果を返さず送出する）
+        if self.honor_max_items and max_items is not None and len(out) > max_items:
+            raise RuntimeError(f"子孫一覧の件数が上限 ({max_items} 件) を超えました")
         return out
 
 
@@ -90,6 +94,79 @@ def test_prefetch_fallbacks(mode):
     client, inv = _collect(mode)
     assert client.child_calls != []
     assert {p.page_id for p in inv.pages} == {"100", "101", "102", "103"}
+
+
+@pytest.mark.parametrize("honor_max_items", [True, False])
+def test_prefetch_falls_back_when_descendants_exceed_max_pages(honor_max_items):
+    """子孫数が max_pages を超える起点は先読みせず、個別取得で上限まで収集する.
+
+    honor_max_items=True はクライアント側の上限送出、False は Collector 側の
+    事後チェックによるフォールバックをそれぞれ検証する。
+    """
+    client = FakeTreeClient("ok", honor_max_items=honor_max_items)
+    collector = Collector(client, max_pages=2)  # type: ignore[arg-type]
+    with pytest.raises(CollectInterrupted):
+        collector.collect(["100"])
+    assert client.child_calls != []
+    assert [p.page_id for p in collector.raw_inventory.pages] == ["100", "101"]
+
+
+class _PaginatedSession:
+    """descendant エンドポイントのページングを再現するフェイクセッション."""
+
+    def __init__(self):
+        self.request_count = 0
+        self.pages = {
+            0: ([{"id": "a"}, {"id": "b"}], "/rest/api/content/100/descendant/page?start=2"),
+            2: ([{"id": "c"}, {"id": "d"}], "/rest/api/content/100/descendant/page?start=4"),
+            4: ([{"id": "e"}], None),
+        }
+
+    def request(self, method, url, params=None, timeout=None):
+        self.request_count += 1
+        results, next_link = self.pages[params["start"]]
+        payload = {"results": results}
+        if next_link:
+            payload["_links"] = {"next": next_link}
+
+        class _Resp:
+            status_code = 200
+
+            def json(self):
+                return payload
+
+        return _Resp()
+
+
+def _descendant_client():
+    client = ConfluenceClient("https://confluence.example.com", "dummy")
+    session = _PaginatedSession()
+    client.session = session  # type: ignore[assignment]
+    return client, session
+
+
+def test_get_descendants_paginates_all():
+    """打ち切り条件がなければ全ページを取得する."""
+    client, session = _descendant_client()
+    items = client.get_descendants("100", limit=2)
+    assert [i["id"] for i in items] == ["a", "b", "c", "d", "e"]
+    assert session.request_count == 3
+
+
+def test_get_descendants_aborts_on_interrupt():
+    """ページング途中で中断条件が成立したら部分結果を返さず送出する."""
+    client, session = _descendant_client()
+    with pytest.raises(RuntimeError):
+        client.get_descendants("100", limit=2, interrupt_checker=lambda: True)
+    assert session.request_count == 1
+
+
+def test_get_descendants_aborts_over_max_items():
+    """累計件数が上限を超えたら部分結果を返さず送出する."""
+    client, session = _descendant_client()
+    with pytest.raises(RuntimeError):
+        client.get_descendants("100", limit=2, max_items=3)
+    assert session.request_count == 2
 
 
 class FakeOverviewClient:
@@ -193,6 +270,29 @@ def test_request_timeout_default_and_split():
     assert _captured_timeout() == 30
     assert _captured_timeout(connect_timeout=5, read_timeout=15) == (5.0, 15.0)
     assert _captured_timeout(read_timeout=20) == (10.0, 20.0)
+
+
+def test_analysis_config_validates_split_timeouts():
+    """分離 timeout は validate() で検証される（未指定は許可、bool・0以下は拒否）."""
+    from c2m_export.config import AnalysisConfig
+
+    cfg = AnalysisConfig()
+    cfg.base_url = "https://confluence.example.com"
+    cfg.root_page_ids = ["101"]
+    cfg.token = "dummy"
+    cfg.validate()
+
+    cfg.connect_timeout_seconds = 0
+    with pytest.raises(ValueError, match="connect_timeout_seconds"):
+        cfg.validate()
+
+    cfg.connect_timeout_seconds = 5
+    cfg.read_timeout_seconds = True
+    with pytest.raises(ValueError, match="read_timeout_seconds"):
+        cfg.validate()
+
+    cfg.read_timeout_seconds = 30
+    cfg.validate()
 
 
 def test_resolve_roots_uses_light_expand():

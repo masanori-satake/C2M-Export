@@ -546,6 +546,16 @@ class AnalysisConfig:
                 f"現象: max_pages '{self.max_pages}' は無効です。原因: 1 以上の整数でない値が指定されました。対処方法: --max-pages に 1 以上の整数を指定してください。"
             )
 
+        for _name, _opt in (
+            ("connect_timeout_seconds", "--connect-timeout-seconds"),
+            ("read_timeout_seconds", "--read-timeout-seconds"),
+        ):
+            _val = getattr(self, _name)
+            if _val is not None and (not isinstance(_val, int) or isinstance(_val, bool) or _val < 1):
+                raise ValueError(
+                    f"現象: {_name} '{_val}' は無効です。原因: 1 以上の整数でない値が指定されました。対処方法: {_opt} に 1 以上の整数を指定してください。"
+                )
+
         self.base_url = self.base_url.rstrip("/")
 
 

@@ -1,7 +1,7 @@
 import logging
 import threading
 import time
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Callable, Dict, List, Optional, Tuple, Union
 
 import requests
 
@@ -324,9 +324,21 @@ class ConfluenceClient:
         return items
 
     def get_descendants(
-        self, page_id: str, type_: str = "page", expand: Optional[str] = None, limit: int = 25
+        self,
+        page_id: str,
+        type_: str = "page",
+        expand: Optional[str] = None,
+        limit: int = 25,
+        interrupt_checker: Optional[Callable[[], bool]] = None,
+        max_items: Optional[int] = None,
     ) -> List[Dict]:
-        """指定されたページの子孫コンテンツを型指定でフラット列挙する (`GET /rest/api/content/{id}/descendant/{type}`)."""
+        """指定されたページの子孫コンテンツを型指定でフラット列挙する (`GET /rest/api/content/{id}/descendant/{type}`).
+
+        大規模ツリーの先読みで無制限にページングし続けないよう、任意の打ち切り条件を受け付ける。
+        interrupt_checker がページングの途中で True を返した場合、または累計件数が
+        max_items を超えた場合は、部分結果を返さず RuntimeError を送出する
+        （呼び出し側は失敗として扱い、個別取得などへフォールバックすること）。
+        """
         path = f"/rest/api/content/{page_id}/descendant/{type_}"
         items = []
         start = 0
@@ -337,6 +349,11 @@ class ConfluenceClient:
             data = self._request("GET", path, params=params)
             results = data.get("results", []) if isinstance(data, dict) else []
             items.extend(results)
+
+            if interrupt_checker is not None and interrupt_checker():
+                raise RuntimeError("子孫一覧の取得が中断されました")
+            if max_items is not None and len(items) > max_items:
+                raise RuntimeError(f"子孫一覧の件数が上限 ({max_items} 件) を超えました")
 
             next_start = _extract_next_start(data, start, len(results))
             if next_start is None:

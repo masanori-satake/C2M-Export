@@ -282,6 +282,8 @@ class Collector:
         子の並びは子孫一覧内の出現順を保持する。取得に失敗した起点や、
         戻り値が想定外（list でない・空・ID を欠く要素を含む）の起点は
         確定済みに含めず、呼び出し側が従来の個別取得にフォールバックする。
+        先読みが無制限に膨らまないよう、ページング途中の中断判定と、
+        max_pages 指定時の子孫件数上限をクライアント側にも伝える。
         """
         children_map: Dict[str, List[dict]] = {}
         covered: Set[str] = set()
@@ -290,11 +292,24 @@ class Collector:
                 logger.info("収集処理の自己中断シグナルを検知しました。子ページ先読みを停止します。")
                 raise CollectInterrupted("収集処理が中断されました")
             try:
-                descendants = self.client.get_descendants(rid, type_="page", expand="ancestors", limit=200)
+                descendants = self.client.get_descendants(
+                    rid,
+                    type_="page",
+                    expand="ancestors",
+                    limit=200,
+                    interrupt_checker=self.interrupt_checker,
+                    max_items=self.max_pages,
+                )
             except Exception as e:
                 logger.warning(f"起点ページ {rid} の子孫一括取得に失敗しました。個別取得にフォールバックします: {e}")
                 continue
             if not isinstance(descendants, list) or not descendants:
+                continue
+            if self.max_pages is not None and len(descendants) > self.max_pages:
+                # クライアント側で上限が効かなかった場合の防御（上限超過分は個別取得に任せる）
+                logger.info(
+                    f"起点ページ {rid} の子孫数 ({len(descendants)} 件) が上限 ({self.max_pages} 件) を超えるため、先読みを使わず個別取得にフォールバックします"
+                )
                 continue
             local_map: Dict[str, List[dict]] = {}
             local_covered: Set[str] = {rid}
