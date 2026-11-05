@@ -172,8 +172,8 @@ def _resolve_roots(
     if root_page_ids:
         for rid in root_page_ids:
             try:
-                # ページ存在チェック
-                client.get_page(rid)
+                # ページ存在チェック（本文は不要なため軽量な expand で確認する）
+                client.get_page(rid, expand="version")
             except requests.exceptions.HTTPError as e:
                 status_code = getattr(e.response, "status_code", None)
                 if status_code == 404:
@@ -273,6 +273,17 @@ def run_analysis(
                 f"現象: max_pages '{max_pages}' は無効です。原因: 1 以上の整数でない値が指定されました。対処方法: --max-pages に 1 以上の整数を指定してください。"
             )
 
+        # 並列度（全体把握フェーズ用）の解決と検証 (params 優先、None 時のみ config 参照、既定 4)
+        p_concurrency = getattr(params, "concurrency", None)
+        c_concurrency = getattr(config, "concurrency", None)
+        concurrency = p_concurrency if p_concurrency is not None else c_concurrency
+        if concurrency is None:
+            concurrency = 4
+        if not isinstance(concurrency, int) or isinstance(concurrency, bool) or concurrency < 1:
+            raise ValueError(
+                f"現象: concurrency '{concurrency}' は無効です。原因: 1 以上の整数でない値が指定されました。対処方法: --concurrency に 1 以上の整数を指定してください。"
+            )
+
         # タイムアウト計測開始（前段の Space 一覧取得・起点解決を含む実行全体をカバー）
         start_time = time.monotonic()
 
@@ -295,7 +306,13 @@ def run_analysis(
         if client is None:
             if not config.base_url or not config.token:
                 raise ValueError("base_url and token are required in config")
-            client = ConfluenceClient(base_url=config.base_url, token=config.token, proxy=config.proxy)
+            client_kwargs = {"base_url": config.base_url, "proxy": config.proxy}
+            client_kwargs["token"] = config.token
+            if getattr(config, "connect_timeout_seconds", None) is not None:
+                client_kwargs["connect_timeout"] = config.connect_timeout_seconds
+            if getattr(config, "read_timeout_seconds", None) is not None:
+                client_kwargs["read_timeout"] = config.read_timeout_seconds
+            client = ConfluenceClient(**client_kwargs)
 
         # 0. 共有 Space 一覧の取得
         heartbeat.set_phase("Space 一覧取得")
@@ -470,6 +487,7 @@ def run_analysis(
             resume_collected_ids=resume_collected_ids,
             interrupt_checker=_combined_interrupt_checker,
             max_pages=max_pages,
+            concurrency=concurrency,
         )
 
         # 復元済みページの先行投入

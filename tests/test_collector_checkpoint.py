@@ -63,16 +63,20 @@ def test_collector_resume_skip(mock_client):
 
 def test_collector_cooperative_interruption(mock_client):
     """interrupt_checker が True を返すと CollectInterrupted が送出され収集済み分が保持されることを確認."""
-    call_count = 0
-
-    def interrupt_checker():
-        nonlocal call_count
-        call_count += 1
-        return call_count > 1  # 2 回目のループで True
-
+    # 先読み経路でも検証するため、子孫一括取得の成功レスポンスを設定する
+    mock_client.get_descendants.return_value = [{"id": "102", "ancestors": [{"id": "101"}]}]
     mock_client.get_child_pages.side_effect = lambda pid: [{"id": "102"}] if pid == "101" else []
 
+    holder: dict = {}
+
+    def interrupt_checker():
+        # 中断条件は収集済みページ数（保存後の状態）で判定する。
+        # 呼び出し回数ベースだと、先読み等の判定ポイント追加で意味が変わってしまうため。
+        collector = holder.get("collector")
+        return collector is not None and len(collector.raw_inventory.pages) >= 1
+
     collector = Collector(mock_client, interrupt_checker=interrupt_checker)
+    holder["collector"] = collector
 
     with pytest.raises(CollectInterrupted):
         collector.collect(["101"])
@@ -80,3 +84,5 @@ def test_collector_cooperative_interruption(mock_client):
     # 最初の 1 ページ (101) は収集済み raw_inventory に保存されていること
     assert len(collector.raw_inventory.pages) == 1
     assert collector.raw_inventory.pages[0].page_id == "101"
+    # 先読み経路で巡回したため、個別の子ページ取得は使われていないこと
+    mock_client.get_child_pages.assert_not_called()

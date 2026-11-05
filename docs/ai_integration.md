@@ -52,6 +52,8 @@ python -m c2m_export.analyze \
 - `--job-status <job_id>`: ジョブの進捗（状態・フェーズ・収集済み件数・推定総ページ数）を即座に返します。進捗の更新が止まっている場合は `stale: true` が付きます
 - `--job-result <job_id>`: 完了済みジョブについて、結果ファイルへのパスと要約のみを返します（結果の全量はファイル側にあります）
 - `--job-cancel <job_id>`: ジョブに中断を要求します。ワーカーは協調的に停止し、収集済み分は partial として残ります
+- `--concurrency`: 全体把握フェーズ（Space 単位の情報収集）の並列度（既定: 4、1 で直列）。対象 Confluence への負荷を抑えたい場合は小さくしてください。出力内容・順序は並列度によらず同一です
+- `--connect-timeout-seconds` / `--read-timeout-seconds`: API リクエストの接続 / 読み取り timeout を個別に指定します（未指定時は従来どおり単一値 30 秒）
 
 ### Windows (PowerShell / cmd.exe) 実行時の注意事項
 AI エージェントが Windows ターミナル上で本 CLI や Skill を実行する際、以下の点に配慮してください：

@@ -183,6 +183,9 @@ class AnalysisConfig:
         self.timeout_seconds: Optional[int] = None
         self.max_pages: Optional[int] = None
         self.estimate: bool = False
+        self.concurrency: Optional[int] = None
+        self.connect_timeout_seconds: Optional[int] = None
+        self.read_timeout_seconds: Optional[int] = None
         self.detach: bool = False
         self.job_status: Optional[str] = None
         self.job_result: Optional[str] = None
@@ -272,6 +275,18 @@ class AnalysisConfig:
                                 self.max_pages = analysis_sec["max_pages"]
                             if "estimate" in analysis_sec:
                                 self.estimate = bool(analysis_sec["estimate"])
+                            if "concurrency" in analysis_sec and analysis_sec["concurrency"] is not None:
+                                self.concurrency = analysis_sec["concurrency"]
+                            if (
+                                "connect_timeout_seconds" in analysis_sec
+                                and analysis_sec["connect_timeout_seconds"] is not None
+                            ):
+                                self.connect_timeout_seconds = analysis_sec["connect_timeout_seconds"]
+                            if (
+                                "read_timeout_seconds" in analysis_sec
+                                and analysis_sec["read_timeout_seconds"] is not None
+                            ):
+                                self.read_timeout_seconds = analysis_sec["read_timeout_seconds"]
             except Exception as e:
                 print(
                     f"設定ファイル {config_path} の読み込みに失敗しました（現象）。詳細: {e}（原因）。ファイル形式を確認してください（対処方法）"
@@ -357,6 +372,11 @@ class AnalysisConfig:
             action="store_true",
             help="本実行を行わず、対象ページ数と推定所要のみを見積もって返す",
         )
+
+        # 高速化 (spec 0014)
+        parser.add_argument("--concurrency", type=int, help="全体把握フェーズの並列度 (既定: 4、1で直列)")
+        parser.add_argument("--connect-timeout-seconds", type=int, help="API 接続 timeout 秒 (未指定時は従来動作)")
+        parser.add_argument("--read-timeout-seconds", type=int, help="API 読み取り timeout 秒 (未指定時は従来動作)")
 
         # 非同期ジョブ (spec 0013)
         parser.add_argument(
@@ -459,6 +479,12 @@ class AnalysisConfig:
             self.max_pages = cli_args.max_pages
         if cli_args.estimate:
             self.estimate = True
+        if cli_args.concurrency is not None:
+            self.concurrency = cli_args.concurrency
+        if cli_args.connect_timeout_seconds is not None:
+            self.connect_timeout_seconds = cli_args.connect_timeout_seconds
+        if cli_args.read_timeout_seconds is not None:
+            self.read_timeout_seconds = cli_args.read_timeout_seconds
         if cli_args.detach:
             self.detach = True
         if cli_args.job_status:
@@ -519,6 +545,16 @@ class AnalysisConfig:
             raise ValueError(
                 f"現象: max_pages '{self.max_pages}' は無効です。原因: 1 以上の整数でない値が指定されました。対処方法: --max-pages に 1 以上の整数を指定してください。"
             )
+
+        for _name, _opt in (
+            ("connect_timeout_seconds", "--connect-timeout-seconds"),
+            ("read_timeout_seconds", "--read-timeout-seconds"),
+        ):
+            _val = getattr(self, _name)
+            if _val is not None and (not isinstance(_val, int) or isinstance(_val, bool) or _val < 1):
+                raise ValueError(
+                    f"現象: {_name} '{_val}' は無効です。原因: 1 以上の整数でない値が指定されました。対処方法: {_opt} に 1 以上の整数を指定してください。"
+                )
 
         self.base_url = self.base_url.rstrip("/")
 

@@ -76,12 +76,14 @@ def test_run_analysis_checkpoint_interrupted(tmp_path, mock_client):
     cfg = DummyConfig(tmp_path)
     params = AnalysisParams(usecases=["risk"])
 
-    call_count = 0
+    # 先読み経路でも検証するため、子孫一括取得の成功レスポンスを設定する
+    mock_client.get_descendants.return_value = [{"id": "102", "ancestors": [{"id": "101"}]}]
 
+    # 中断条件はページ処理の進行状態で判定する。run_analysis 内部の Collector は
+    # 直接参照できないため、ページごとに必ず呼ばれる添付取得を目印にする
+    # （先読みの有無に影響されず、101 の処理が終わった時点で中断する）。
     def interrupt_checker():
-        nonlocal call_count
-        call_count += 1
-        return call_count > 1
+        return mock_client.get_attachments.call_count >= 1
 
     resp = run_analysis(params, cfg, client=mock_client, interrupt_checker=interrupt_checker)
 

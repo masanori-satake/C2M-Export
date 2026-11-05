@@ -264,6 +264,7 @@ def main() -> None:
             checkpoint_dir=config.checkpoint_dir,
             timeout_seconds=config.timeout_seconds,
             max_pages=config.max_pages,
+            concurrency=config.concurrency,
         )
 
         # 非同期開始（--detach）: ワーカーを別プロセスで起動して即座に返す

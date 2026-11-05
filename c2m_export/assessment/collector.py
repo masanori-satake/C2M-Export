@@ -1,7 +1,8 @@
 """Confluence REST API を用いたメタデータ収集モジュール."""
 
 import logging
-from typing import Callable, List, Optional, Set, Tuple, Union
+from concurrent.futures import ThreadPoolExecutor, wait
+from typing import Callable, Dict, List, Optional, Set, Tuple, Union
 
 from c2m_export.analysis.checkpoint import CheckpointStore, CollectInterrupted
 from c2m_export.analysis.macros import count_macros
@@ -38,6 +39,7 @@ class Collector:
         resume_collected_ids: Optional[Set[str]] = None,
         interrupt_checker: Optional[Callable[[], bool]] = None,
         max_pages: Optional[int] = None,
+        concurrency: int = 4,
     ):
         self.client = client
         self.analyze_restrictions = analyze_restrictions
@@ -53,10 +55,77 @@ class Collector:
         self.resume_collected_ids = set(resume_collected_ids) if resume_collected_ids else set()
         self.interrupt_checker = interrupt_checker
         self.max_pages = max_pages
+        self.concurrency = max(1, concurrency)
         self.raw_inventory = RawInventory()
 
+    def _collect_space_overview_one(self, sp: dict) -> Tuple[Optional[SpaceMeta], List[str]]:
+        """1 Space 分の全体把握情報を収集する（共有状態には触らない）.
+
+        戻り値は (SpaceMeta, 利用できなかった API の種別リスト)。
+        Space キーが無い場合は (None, []) を返す。
+        """
+        unavailable: List[str] = []
+        space_key = sp.get("key", "")
+        if not space_key:
+            return None, unavailable
+
+        name = sp.get("name", space_key)
+        sp_type = sp.get("type", "global")
+        status = sp.get("status", "current")
+        description = (
+            sp.get("description", {}).get("plain", {}).get("value") if isinstance(sp.get("description"), dict) else None
+        )
+
+        # Space labels
+        label_count = 0
+        try:
+            sp_labels = self.client.get_space_labels(space_key)
+            results = sp_labels.get("results", []) if isinstance(sp_labels, dict) else []
+            label_count = len(results)
+        except Exception as e:
+            logger.warning(f"Space {space_key} のラベル取得に失敗しました: {e}")
+            unavailable.append("space_labels")
+
+        # Page count preview
+        page_count_preview: Union[int, None] = None
+        try:
+            root_pages = self.client.get_space_root_pages(space_key)
+            total_preview = len(root_pages)
+            any_success = False
+            for rp in root_pages:
+                rp_id = str(rp.get("id", ""))
+                if rp_id:
+                    try:
+                        cnt_res = self.client.get_descendant_page_count(rp_id)
+                        desc_cnt = cnt_res.get("count", 0) if isinstance(cnt_res, dict) else 0
+                        total_preview += desc_cnt
+                        any_success = True
+                    except Exception as e:
+                        logger.warning(f"ページ {rp_id} の子孫数取得に失敗しました: {e}")
+            if any_success or len(root_pages) == 0:
+                page_count_preview = total_preview
+        except Exception as e:
+            logger.warning(f"Space {space_key} のルートページ取得に失敗しました: {e}")
+            unavailable.append("descendant_count")
+
+        space_meta = SpaceMeta(
+            space_key=space_key,
+            name=name,
+            type=sp_type,
+            status=status,
+            description=description,
+            label_count=label_count,
+            page_count_preview=page_count_preview,
+        )
+        return space_meta, unavailable
+
     def collect_workspace_overview(self, spaces: List[dict], root_ids: List[str]) -> None:
-        """全体把握フェーズの情報を収集し、RawInventory に設定する."""
+        """全体把握フェーズの情報を収集し、RawInventory に設定する.
+
+        Space 単位の処理は Space 間で独立しているため、並列度が 2 以上で
+        対象が複数ある場合は ThreadPoolExecutor で並列実行する。
+        結果は入力順に組み立てるため、出力内容・順序は直列実行と同一になる。
+        """
         space_metas: List[SpaceMeta] = []
         visible_space_keys: List[str] = []
         unavailable_apis: List[str] = []
@@ -67,70 +136,42 @@ class Collector:
                 unavailable_apis=unavailable_apis,
             )
 
-        for sp in spaces:
-            if self.interrupt_checker and self.interrupt_checker():
-                logger.info("収集処理の自己中断シグナルを検知しました。全体把握フェーズを停止します。")
-                raise CollectInterrupted("収集処理が中断されました")
+        keyed_spaces = [sp for sp in spaces if sp.get("key")]
 
-            space_key = sp.get("key", "")
-            if not space_key:
-                continue
-            visible_space_keys.append(space_key)
+        def _absorb(meta: Optional[SpaceMeta], kinds: List[str]) -> None:
+            """1 Space 分の収集結果を入力順に inventory へ反映する."""
+            if meta is not None:
+                visible_space_keys.append(meta.space_key)
+                space_metas.append(meta)
+                self.raw_inventory.spaces.append(meta)
+            for kind in kinds:
+                if kind not in unavailable_apis:
+                    unavailable_apis.append(kind)
 
-            name = sp.get("name", space_key)
-            sp_type = sp.get("type", "global")
-            status = sp.get("status", "current")
-            description = (
-                sp.get("description", {}).get("plain", {}).get("value")
-                if isinstance(sp.get("description"), dict)
-                else None
-            )
-
-            # Space labels
-            label_count = 0
+        if self.concurrency > 1 and len(keyed_spaces) > 1:
+            executor = ThreadPoolExecutor(max_workers=self.concurrency)
             try:
-                sp_labels = self.client.get_space_labels(space_key)
-                results = sp_labels.get("results", []) if isinstance(sp_labels, dict) else []
-                label_count = len(results)
-            except Exception as e:
-                logger.warning(f"Space {space_key} のラベル取得に失敗しました: {e}")
-                if "space_labels" not in unavailable_apis:
-                    unavailable_apis.append("space_labels")
-
-            # Page count preview
-            page_count_preview: Union[int, None] = None
-            try:
-                root_pages = self.client.get_space_root_pages(space_key)
-                total_preview = len(root_pages)
-                any_success = False
-                for rp in root_pages:
-                    rp_id = str(rp.get("id", ""))
-                    if rp_id:
-                        try:
-                            cnt_res = self.client.get_descendant_page_count(rp_id)
-                            desc_cnt = cnt_res.get("count", 0) if isinstance(cnt_res, dict) else 0
-                            total_preview += desc_cnt
-                            any_success = True
-                        except Exception as e:
-                            logger.warning(f"ページ {rp_id} の子孫数取得に失敗しました: {e}")
-                if any_success or len(root_pages) == 0:
-                    page_count_preview = total_preview
-            except Exception as e:
-                logger.warning(f"Space {space_key} のルートページ取得に失敗しました: {e}")
-                if "descendant_count" not in unavailable_apis:
-                    unavailable_apis.append("descendant_count")
-
-            space_meta = SpaceMeta(
-                space_key=space_key,
-                name=name,
-                type=sp_type,
-                status=status,
-                description=description,
-                label_count=label_count,
-                page_count_preview=page_count_preview,
-            )
-            space_metas.append(space_meta)
-            self.raw_inventory.spaces.append(space_meta)
+                futures = [executor.submit(self._collect_space_overview_one, sp) for sp in keyed_spaces]
+                for fut in futures:
+                    # 完了を待つ間も中断要求を検知できるよう、待機を短い間隔で区切って確認する
+                    while True:
+                        if self.interrupt_checker and self.interrupt_checker():
+                            logger.info("収集処理の自己中断シグナルを検知しました。全体把握フェーズを停止します。")
+                            raise CollectInterrupted("収集処理が中断されました")
+                        if fut.done():
+                            break
+                        wait([fut], timeout=0.5)
+                    meta, kinds = fut.result()
+                    _absorb(meta, kinds)
+            finally:
+                executor.shutdown(wait=False, cancel_futures=True)
+        else:
+            for sp in keyed_spaces:
+                if self.interrupt_checker and self.interrupt_checker():
+                    logger.info("収集処理の自己中断シグナルを検知しました。全体把握フェーズを停止します。")
+                    raise CollectInterrupted("収集処理が中断されました")
+                meta, kinds = self._collect_space_overview_one(sp)
+                _absorb(meta, kinds)
 
         # Current user & Memberof
         username: Union[str, None] = None
@@ -240,10 +281,85 @@ class Collector:
                     logger.warning(f"Space {skey} のウォッチャー照会に失敗しました: {e}")
                     self.raw_inventory.space_watcher_failed_keys.append(skey)
 
+    def _prefetch_children(self, root_ids: List[str]) -> Tuple[Dict[str, List[dict]], Set[str]]:
+        """起点ごとの子孫一覧を一括取得し、親子マップと確定済みページID集合を返す.
+
+        子孫一覧（descendant/page、expand=ancestors）から直接の親子関係を復元する。
+        子の並びは子孫一覧内の出現順を保持する。取得に失敗した起点や、
+        戻り値が想定外（list でない・空・ID を欠く要素を含む）の起点は
+        確定済みに含めず、呼び出し側が従来の個別取得にフォールバックする。
+        先読みが無制限に膨らまないよう、ページング途中の中断判定と、
+        max_pages 指定時の子孫件数上限をクライアント側にも伝える。
+        """
+        children_map: Dict[str, List[dict]] = {}
+        covered: Set[str] = set()
+        for rid in root_ids:
+            if self.interrupt_checker and self.interrupt_checker():
+                logger.info("収集処理の自己中断シグナルを検知しました。子ページ先読みを停止します。")
+                raise CollectInterrupted("収集処理が中断されました")
+            try:
+                descendants = self.client.get_descendants(
+                    rid,
+                    type_="page",
+                    expand="ancestors",
+                    limit=200,
+                    interrupt_checker=self.interrupt_checker,
+                    max_items=self.max_pages,
+                )
+            except Exception as e:
+                logger.warning(f"起点ページ {rid} の子孫一括取得に失敗しました。個別取得にフォールバックします: {e}")
+                continue
+            if not isinstance(descendants, list) or not descendants:
+                continue
+            if self.max_pages is not None and len(descendants) > self.max_pages:
+                # クライアント側で上限が効かなかった場合の防御（上限超過分は個別取得に任せる）
+                logger.info(
+                    f"起点ページ {rid} の子孫数 ({len(descendants)} 件) が上限 ({self.max_pages} 件) を超えるため、先読みを使わず個別取得にフォールバックします"
+                )
+                continue
+            local_map: Dict[str, List[dict]] = {}
+            local_covered: Set[str] = {rid}
+            valid = True
+            for item in descendants:
+                if not isinstance(item, dict):
+                    valid = False
+                    break
+                did = str(item.get("id", ""))
+                if not did:
+                    valid = False
+                    break
+                ancestors = item.get("ancestors")
+                if (
+                    not isinstance(ancestors, list)
+                    or not ancestors
+                    or not isinstance(ancestors[-1], dict)
+                    or not str(ancestors[-1].get("id", ""))
+                ):
+                    # 親を特定できない要素があると階層（level / ancestors_titles）を
+                    # 誤って確定してしまうため、起点の先読み全体を無効にする
+                    valid = False
+                    break
+                parent_id = str(ancestors[-1]["id"])
+                local_map.setdefault(parent_id, []).append({"id": did})
+                local_covered.add(did)
+            if not valid:
+                continue
+            for pid, kids in local_map.items():
+                existing = children_map.setdefault(pid, [])
+                existing_ids = {str(k.get("id", "")) for k in existing}
+                for kid in kids:
+                    if str(kid.get("id", "")) not in existing_ids:
+                        existing.append(kid)
+            covered |= local_covered
+        return children_map, covered
+
     def collect(self, root_ids: List[str]) -> RawInventory:
         """指定されたルートページIDリストからDFS巡回し RawInventory を構築する."""
         inventory = self.raw_inventory
         visited_page_ids: Set[str] = set()
+
+        # 子ページの一括先読み（確定できないページは個別取得にフォールバックする）
+        children_map, covered_ids = self._prefetch_children(root_ids)
 
         # (page_id, level, ancestors_titles) のスタック
         stack: List[Tuple[str, int, List[str]]] = [(rid, 1, []) for rid in reversed(root_ids)]
@@ -547,7 +663,10 @@ class Collector:
 
             # 4. 子ページ取得 (未収集ページの発見のために収集済みページも含め実行)
             try:
-                child_pages = self.client.get_child_pages(page_id)
+                if page_id in covered_ids:
+                    child_pages = children_map.get(page_id, [])
+                else:
+                    child_pages = self.client.get_child_pages(page_id)
                 next_ancestors = ancestors_titles + [title]
                 for child in reversed(child_pages):
                     cid = str(child["id"])

@@ -131,6 +131,10 @@ def estimate_analysis(
                 raise ValueError("base_url and token are required in config")
             client_kwargs = {"base_url": config.base_url, "proxy": config.proxy}
             client_kwargs["token"] = config.token
+            if getattr(config, "connect_timeout_seconds", None) is not None:
+                client_kwargs["connect_timeout"] = config.connect_timeout_seconds
+            if getattr(config, "read_timeout_seconds", None) is not None:
+                client_kwargs["read_timeout"] = config.read_timeout_seconds
             client = ConfluenceClient(**client_kwargs)
 
         counting = _CountingClient(client)

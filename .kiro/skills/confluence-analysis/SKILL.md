@@ -145,6 +145,9 @@ python skills/confluence-analysis/scripts/run_analysis.py \
 | `--job-result` | 文字列 | 指定ジョブの結果要約と結果ファイルのパスを返す | なし |
 | `--job-cancel` | 文字列 | 指定ジョブに中断を要求する | なし |
 | `--job-dir` | 文字列 | ジョブの保存先ディレクトリ | `.c2m_analyze_jobs` |
+| `--concurrency` | 整数 | 全体把握フェーズの並列度（負荷を抑えたい場合は 1〜2） | `4` |
+| `--connect-timeout-seconds` | 整数 | API 接続 timeout（秒） | 従来動作 |
+| `--read-timeout-seconds` | 整数 | API 読み取り timeout（秒） | 従来動作 |
 | `--proxy` | 文字列 | HTTP/HTTPS プロキシ URL | なし |
 | `--config` | 文字列 | 設定ファイルのパス | `c2m_config.yaml` |
 | `--token` | 文字列 | Confluence Bearer トークン (環境変数推奨) | なし |
