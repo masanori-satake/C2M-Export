@@ -69,6 +69,7 @@ Confluence Data Center 9.2 のページツリーを REST API で取得し、AI�
 | [権限エクスポート詳細](docs/permission_export.md) | コンテンツ制限収集、集約/分散レポート形式 |
 | [ツリー可視化モード詳細](docs/tree_visualization.md) | 樹形図出力 (text/markdown/json)、付帯情報マーク (🔒/📎N/⚙N)・別表、探索制御 |
 | [AI 連携機能詳細](docs/ai_integration.md) | 分析 CLI (`analyze`)、Agent Skill (`SKILL.md`)、MCP サーバ (`mcp_server.py`) |
+| [スキルの仕組み](docs/skill_mechanism.md) | スキルと分析 CLI の設計意図、状況判断ロジック、同期/非同期の処理フロー、JSON データの管理（Mermaid 図解） |
 | [変換方針・サポート表現](docs/conversion.md) | AI ナレッジ利用最優先方針、Markdown 変換対応表、部分成功・エラー挙動 |
 
 ---

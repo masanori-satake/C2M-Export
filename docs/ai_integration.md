@@ -86,6 +86,8 @@ GitHub Copilot、Kiro、および汎用 Agent Skills で共通して利用可能
 
 ※ SKILL.md を編集・更新する場合は、必ず正本 `skills/confluence-analysis/SKILL.md` を変更した上で他配置先へ同期（上書きコピー）を行ってください。
 
+スキルの構造設計、見積もりに基づく状況判断、同期/非同期の処理フロー、ジョブやチェックポイントの JSON データが取り違いなく管理される仕組みについては、[スキルの仕組み](skill_mechanism.md) を参照してください。
+
 ---
 
 ## 3. MCP サーバ (`c2m_export/mcp_server.py`)
