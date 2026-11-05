@@ -82,3 +82,20 @@ def test_build_command_does_not_append_timeout_for_estimate():
     assert "--estimate" in cmd
     assert "--timeout-seconds" not in cmd
     assert "300" not in cmd
+
+
+def test_build_command_does_not_append_timeout_for_job_queries():
+    """ジョブ操作コマンド（--job-status 等）には既定の timeout を補わない."""
+    module = _load_module()
+    for opt in ("--job-status", "--job-result", "--job-cancel"):
+        cmd = module.build_command([opt, "job-20260101000000-abcdef"])
+        assert "--timeout-seconds" not in cmd
+        assert "300" not in cmd
+
+
+def test_build_command_appends_timeout_for_detach():
+    """--detach ではワーカー側の上限として既定の timeout を補う."""
+    module = _load_module()
+    cmd = module.build_command(["--detach", "--space-key", "DEV"])
+    assert "--detach" in cmd
+    assert cmd[-2:] == ["--timeout-seconds", "300"]

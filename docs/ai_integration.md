@@ -48,6 +48,10 @@ python -m c2m_export.analyze \
 - `--timeout-seconds`: 走査・分析処理の最大実行時間（秒単位）。到達時は安全に中断し部分結果 (`partial`) を出力
 - `--max-pages`: 走査する最大ページ数上限。到達時は安全に中断し部分結果 (`partial`) を出力
 - `--estimate`: 本実行を行わず、対象ページ数・想定リクエスト数・推定所要秒数を `estimate` フィールドで返す事前見積もりモード。本実行の前に規模を確認する用途で、推定所要は実測レイテンシに基づく下限寄りの目安です。推定 120 秒超または 500 ページ超で `is_large: true` となり、スキル既定上限 300 秒を超える見込みの場合は `exceeds_skill_default_timeout: true` が返ります
+- `--detach`: 分析を別プロセス（ワーカー）で開始し、`job_id` を即座に返す非同期モード。進捗はジョブディレクトリ（既定 `.c2m_analyze_jobs/`、`--job-dir` で変更可）内の `progress.json` に書き続けられます
+- `--job-status <job_id>`: ジョブの進捗（状態・フェーズ・収集済み件数・推定総ページ数）を即座に返します。進捗の更新が止まっている場合は `stale: true` が付きます
+- `--job-result <job_id>`: 完了済みジョブについて、結果ファイルへのパスと要約のみを返します（結果の全量はファイル側にあります）
+- `--job-cancel <job_id>`: ジョブに中断を要求します。ワーカーは協調的に停止し、収集済み分は partial として残ります
 
 ### Windows (PowerShell / cmd.exe) 実行時の注意事項
 AI エージェントが Windows ターミナル上で本 CLI や Skill を実行する際、以下の点に配慮してください：

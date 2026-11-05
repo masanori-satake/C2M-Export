@@ -59,6 +59,25 @@ def test_heartbeat_stops_after_context_exit(caplog):
     assert count_later == count_after_exit
 
 
+def test_heartbeat_on_tick_receives_phase_elapsed_and_count():
+    """on_tick コールバックにフェーズ・経過・収集済み件数が渡る（非同期ジョブの進捗書き込み用）."""
+    ticks = []
+    heartbeat = ProgressHeartbeat(
+        interval_seconds=0.05,
+        phase="ページ収集",
+        on_tick=lambda phase, elapsed, count: ticks.append((phase, elapsed, count)),
+    )
+    heartbeat.set_counter(lambda: 7)
+    heartbeat.start()
+    try:
+        assert _wait_for(lambda: len(ticks) >= 2)
+    finally:
+        heartbeat.stop()
+    assert all(phase == "ページ収集" for phase, _, _ in ticks)
+    assert all(count == 7 for _, _, count in ticks)
+    assert all(elapsed >= 0 for _, elapsed, _ in ticks)
+
+
 def test_heartbeat_phase_can_be_updated(caplog):
     """set_phase でフェーズ名が切り替わり、以降のログに反映される."""
     test_logger = logging.getLogger("test.heartbeat.phase")

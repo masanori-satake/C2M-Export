@@ -183,6 +183,13 @@ class AnalysisConfig:
         self.timeout_seconds: Optional[int] = None
         self.max_pages: Optional[int] = None
         self.estimate: bool = False
+        self.detach: bool = False
+        self.job_status: Optional[str] = None
+        self.job_result: Optional[str] = None
+        self.job_cancel: Optional[str] = None
+        self.job_dir: str = ".c2m_analyze_jobs"
+        self.async_worker: bool = False
+        self.job_id: Optional[str] = None
 
     def load(self):
         """設定を読み込む。優先順位は CLI > 環境変数 > 設定ファイル > デフォルト."""
@@ -351,6 +358,23 @@ class AnalysisConfig:
             help="本実行を行わず、対象ページ数と推定所要のみを見積もって返す",
         )
 
+        # 非同期ジョブ (spec 0013)
+        parser.add_argument(
+            "--detach",
+            action="store_true",
+            help="分析を別プロセス（ワーカー）で開始し、job_id を即座に返す",
+        )
+        parser.add_argument("--job-status", type=str, help="指定ジョブの進捗を即座に返す")
+        parser.add_argument("--job-result", type=str, help="指定ジョブの結果要約と結果ファイルのパスを返す")
+        parser.add_argument("--job-cancel", type=str, help="指定ジョブに中断を要求する")
+        parser.add_argument(
+            "--job-dir",
+            type=str,
+            help="ジョブの保存先ディレクトリ (既定: .c2m_analyze_jobs)",
+        )
+        parser.add_argument("--async-worker", action="store_true", help=argparse.SUPPRESS)
+        parser.add_argument("--job-id", type=str, help=argparse.SUPPRESS)
+
         try:
             cli_args = parser.parse_args()
         except SystemExit as e:
@@ -435,6 +459,20 @@ class AnalysisConfig:
             self.max_pages = cli_args.max_pages
         if cli_args.estimate:
             self.estimate = True
+        if cli_args.detach:
+            self.detach = True
+        if cli_args.job_status:
+            self.job_status = cli_args.job_status
+        if cli_args.job_result:
+            self.job_result = cli_args.job_result
+        if cli_args.job_cancel:
+            self.job_cancel = cli_args.job_cancel
+        if cli_args.job_dir:
+            self.job_dir = cli_args.job_dir
+        if cli_args.async_worker:
+            self.async_worker = True
+        if cli_args.job_id:
+            self.job_id = cli_args.job_id
 
     def validate(self):
         """必須設定の有無を確認し、URLの正規化および矛盾チェックを行う."""

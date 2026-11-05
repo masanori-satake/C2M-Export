@@ -64,7 +64,30 @@ python skills/confluence-analysis/scripts/run_analysis.py \
 - `is_large` が `true`（推定 120 秒超または 500 ページ超）の場合は、そのまま本実行せず、対象分割 / usecase の絞り込み / `--no-restrictions` / `--mode summary` のいずれか（または併用）を利用者に提示し、判断を仰いでください。**自動で対象を絞らないでください。**
 - `exceeds_skill_default_timeout` が `true` の場合は、既定上限 300 秒では partial になる見込みです。本実行時に `--timeout-seconds` の明示指定（延長）を提案してください。
 
-見積もり後に本実行します:
+### 大きな対象では非同期実行を使う
+
+見積もりで `is_large` が `true` の場合、本実行は同期ではなく **非同期ジョブ** で開始してください（開始コマンドは即座に返るため、エージェント側のターミナルを長時間占有しません）:
+
+```bash
+# 開始（job_id が即座に返ります。--timeout-seconds はワーカー側の上限として効きます）
+python skills/confluence-analysis/scripts/run_analysis.py \
+  --base-url "https://confluence.example.com" \
+  --space-key "DEV" \
+  --detach
+
+# 進捗確認（30〜60 秒間隔で確認し、phase / processed / estimated_total を利用者へ伝えてください）
+python skills/confluence-analysis/scripts/run_analysis.py --job-status <job_id>
+
+# 完了したら結果の要約だけを取得（全量は result_file にあります。必要な場合のみファイルを読んでください）
+python skills/confluence-analysis/scripts/run_analysis.py --job-result <job_id>
+
+# 中断したい場合（収集済み分は partial として残り、--resume で再開できます）
+python skills/confluence-analysis/scripts/run_analysis.py --job-cancel <job_id>
+```
+
+`--job-status` の `state` が `done` / `partial` / `error` になったら完了です。`stale` が `true` の場合はワーカーが異常終了した可能性があるため、`log_file`（worker.log）を確認してください。
+
+見積もり後に本実行します（同期実行の場合）:
 
 ```bash
 python -m c2m_export.analyze \
@@ -117,6 +140,11 @@ python skills/confluence-analysis/scripts/run_analysis.py \
 | `--timeout-seconds` | 整数 | 走査・分析処理の最大実行時間（秒） | なし (無制限) |
 | `--max-pages` | 整数 | 走査する最大ページ数上限 | なし (無制限) |
 | `--estimate` | フラグ | 本実行を行わず、対象ページ数と推定所要のみを見積もって返す | オフ |
+| `--detach` | フラグ | 分析を別プロセスで開始し、job_id を即座に返す | オフ |
+| `--job-status` | 文字列 | 指定ジョブの進捗を即座に返す | なし |
+| `--job-result` | 文字列 | 指定ジョブの結果要約と結果ファイルのパスを返す | なし |
+| `--job-cancel` | 文字列 | 指定ジョブに中断を要求する | なし |
+| `--job-dir` | 文字列 | ジョブの保存先ディレクトリ | `.c2m_analyze_jobs` |
 | `--proxy` | 文字列 | HTTP/HTTPS プロキシ URL | なし |
 | `--config` | 文字列 | 設定ファイルのパス | `c2m_config.yaml` |
 | `--token` | 文字列 | Confluence Bearer トークン (環境変数推奨) | なし |

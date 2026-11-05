@@ -89,6 +89,16 @@ def _is_estimate_run(argv: List[str]) -> bool:
     return any(arg == "--estimate" or arg.startswith("--estimate=") for arg in argv)
 
 
+_JOB_QUERY_OPTIONS = ("--job-status", "--job-result", "--job-cancel")
+
+
+def _is_job_query(argv: List[str]) -> bool:
+    """ジョブ操作コマンド（status / result / cancel）の指定の有無を返す."""
+    return any(
+        arg in _JOB_QUERY_OPTIONS or any(arg.startswith(opt + "=") for opt in _JOB_QUERY_OPTIONS) for arg in argv
+    )
+
+
 def build_command(argv: List[str]) -> List[str]:
     """子プロセスの起動コマンドを構築する（テスト可能）.
 
@@ -96,10 +106,16 @@ def build_command(argv: List[str]) -> List[str]:
     - 上限が CLI でも設定ファイルでも指定されていない場合にだけ既定値を補う
       （CLI 引数は設定ファイルより優先されるため、無条件に追加すると
       設定ファイルの analysis.timeout_seconds を上書きしてしまう）。
-    - --estimate 実行時は既定値を補わない（見積もりは短時間で終わる独立モード）。
+    - --estimate 実行時とジョブ操作コマンド（--job-status 等）には既定値を補わない
+      （いずれも短時間で終わる独立モード）。
     """
     args = list(argv)
-    if not _is_estimate_run(args) and not _has_explicit_timeout(args) and not _config_timeout_is_set(args):
+    if (
+        not _is_estimate_run(args)
+        and not _is_job_query(args)
+        and not _has_explicit_timeout(args)
+        and not _config_timeout_is_set(args)
+    ):
         args = args + ["--timeout-seconds", str(DEFAULT_TIMEOUT_SECONDS)]
     return [sys.executable, "-u", "-m", "c2m_export.analyze"] + args
 
