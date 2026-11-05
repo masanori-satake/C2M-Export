@@ -129,7 +129,7 @@ MOVE_RENAME は `computed_paths` で再計算した新しい親と、移動先�
 ### 共通分析 API の設定・失敗処理・マスキング
 
 `analysis/api.py` は、設定オブジェクトに存在する `single_file_max_mb`・`path_length_limit`・`blocked_extensions`・`attachment_dir_name` だけを `analyze_inventory` に渡します。未定義の属性は集計関数の既定値に委ね、明示された空の拡張子集合も保持します。
-また、`timeout_seconds`（最大実行秒数）および `max_pages`（新規走査ページ上限数）による実行保護リミットをサポートします。`Collector` は各走査・全体把握・詳細調査フェーズで中断判定を行い、新規ページ取得試行数（`processed_count`）が `max_pages` に到達した際や指定時間を経過した際は `CollectInterrupted` を送出して収集済みデータから `status: "partial"`（終了コード 6）を出力します。レジューム時（`--resume`）はチェックポイントから復元された既存ページ数ではなく今回の実行での取得試行数で上限がカウントされます。
+また、`timeout_seconds`（最大実行秒数）および `max_pages`（新規走査ページ上限数）による実行保護リミットをサポートします。`Collector` は各走査ループ・全体把握・詳細調査フェーズの反復処理において協調的な中断判定（`_combined_interrupt_checker`）を行い、指定時間を経過している場合や新規ページ取得試行数（`processed_count`）が `max_pages` に到達した際に `CollectInterrupted` を送出して収集済みデータから `status: "partial"`（終了コード 6）を出力します。なお、中断判定は各フェーズのループ境界で協調的に行われるため、個々の HTTP 通信中や前処理の最中には指定時間を超過する場合があります。レジューム時（`--resume`）はチェックポイントから復元された既存ページ数ではなく今回の実行での取得試行数で上限がカウントされます。
 `count_macros` の解析・集計例外は Collector が捕捉し、警告ログと `macro_parse_failed_count` に反映します。失敗ページの部分集計は採用せず、ほかのページの収集を継続します。
 `sanitize_text` は引用符・バックスラッシュ・区切りでトークンを止め、Basic の方式名と認証情報をまとめてマスクします。また、URL クエリパラメータに含まれる機密キー (`token`, `access_token`, `api_key`, `secret`, `password` 等) の値も非表示化 (`***REDACTED***`) し、ハッシュフラグメント (`#`) を維持します。このサニタイズ処理は CLI 出力だけでなく MCP サーバの応答オブジェクト (`response.to_dict()`) にも一貫して適用されます。
 

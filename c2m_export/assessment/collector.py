@@ -61,6 +61,12 @@ class Collector:
         visible_space_keys: List[str] = []
         unavailable_apis: List[str] = []
 
+        if self.raw_inventory.visibility is None:
+            self.raw_inventory.visibility = VisibilityMeta(
+                visible_space_keys=visible_space_keys,
+                unavailable_apis=unavailable_apis,
+            )
+
         for sp in spaces:
             if self.interrupt_checker and self.interrupt_checker():
                 logger.info("収集処理の自己中断シグナルを検知しました。全体把握フェーズを停止します。")

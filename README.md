@@ -45,7 +45,7 @@ Confluence Data Center 9.2 のページツリーを REST API で取得し、AI�
 1. **統合エクスポート（結合モード / `cli`）**:
    - ページツリーを再帰的に取得し、全ページを 1 つの Markdown ファイルに結合して出力します（サイズ制限・Zip 圧縮・Web UI 対応）。 [詳細ガイド](docs/export_combined.md)
 2. **分析 CLI（`analyze`）および Agent Skill / MCP サーバ**:
-   - ワークスペースの状況分析結果（移設リスク、古いページ、個別アクセス制限、マクロ利用等）を構造化 JSON として出力します。Agent Skills や MCP サーバとしても機能します。長時間実行や過大走査を防ぐ実行保護オプション（`--timeout-seconds`, `--max-pages`）に対応し、上限到達時は収集済みデータから部分結果（`status: "partial"`, 終了コード 6）を安全に出力します。 [詳細ガイド](docs/ai_integration.md)
+   - ワークスペースの状況分析結果（移設リスク、古いページ、個別アクセス制限、マクロ利用等）を構造化 JSON として出力します。Agent Skills や MCP サーバとしても機能します。長時間実行や過大走査を防ぐ実行保護オプションに対応しています。CLI / Agent Skill では `--timeout-seconds` や `--max-pages` を指定でき、上限到達時は収集済みデータから部分結果を出力して終了コード `6` (`PARTIAL`) で終了します。MCP サーバ（`analyze_confluence` ツール）では引数 `timeout_seconds` および `max_pages` を指定でき、上限到達時は `status: "partial"` を含む辞書応答を返します。 [詳細ガイド](docs/ai_integration.md)
 3. **コンテンツ分析（アセスメントモード / `assess`）**:
    - 添付バイナリをダウンロードせずに高速にメタデータを収集し、規模・構造・移設リスク・権限・鮮度のレポート（Markdown & JSON）を出力します。 [詳細ガイド](docs/assessment.md)
 4. **ファイルシステムエクスポート（ファイルシステムモード / `fsexport`）**:
