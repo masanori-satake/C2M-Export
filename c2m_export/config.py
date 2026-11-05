@@ -179,6 +179,10 @@ class AnalysisConfig:
         self.checkpoint_interval: int = 1
         self.checkpoint_dir: str = ".c2m_analyze_checkpoint"
 
+        # 実行保護リミット設定
+        self.timeout_seconds: Optional[int] = None
+        self.max_pages: Optional[int] = None
+
     def load(self):
         """設定を読み込む。優先順位は CLI > 環境変数 > 設定ファイル > デフォルト."""
         pre_parser = argparse.ArgumentParser(add_help=False)
@@ -254,6 +258,10 @@ class AnalysisConfig:
                                 self.checkpoint_interval = int(analysis_sec["checkpoint_interval"])
                             if "checkpoint_dir" in analysis_sec and analysis_sec["checkpoint_dir"]:
                                 self.checkpoint_dir = str(analysis_sec["checkpoint_dir"])
+                            if "timeout_seconds" in analysis_sec and analysis_sec["timeout_seconds"] is not None:
+                                self.timeout_seconds = analysis_sec["timeout_seconds"]
+                            if "max_pages" in analysis_sec and analysis_sec["max_pages"] is not None:
+                                self.max_pages = analysis_sec["max_pages"]
             except Exception as e:
                 print(
                     f"設定ファイル {config_path} の読み込みに失敗しました（現象）。詳細: {e}（原因）。ファイル形式を確認してください（対処方法）"
@@ -328,6 +336,10 @@ class AnalysisConfig:
         )
         parser.add_argument("--checkpoint-interval", type=int, help="チェックポイントの書き出し間隔 (件数)")
         parser.add_argument("--checkpoint-dir", type=str, help="チェックポイントファイルの保存ディレクトリ")
+
+        # 実行保護リミットオプション
+        parser.add_argument("--timeout-seconds", type=int, help="走査・分析処理の最大実行時間（秒）")
+        parser.add_argument("--max-pages", type=int, help="走査する最大ページ数")
 
         try:
             cli_args = parser.parse_args()
@@ -407,6 +419,11 @@ class AnalysisConfig:
         if cli_args.checkpoint_dir is not None:
             self.checkpoint_dir = cli_args.checkpoint_dir
 
+        if cli_args.timeout_seconds is not None:
+            self.timeout_seconds = cli_args.timeout_seconds
+        if cli_args.max_pages is not None:
+            self.max_pages = cli_args.max_pages
+
     def validate(self):
         """必須設定の有無を確認し、URLの正規化および矛盾チェックを行う."""
         if not self.base_url:
@@ -435,6 +452,22 @@ class AnalysisConfig:
         if not isinstance(self.checkpoint_interval, int) or self.checkpoint_interval < 1:
             raise ValueError(
                 f"現象: checkpoint_interval '{self.checkpoint_interval}' は無効です。原因: 1 以上の整数でない値が指定されました。対処方法: --checkpoint-interval に 1 以上の整数を指定してください。"
+            )
+
+        if self.timeout_seconds is not None and (
+            not isinstance(self.timeout_seconds, int)
+            or isinstance(self.timeout_seconds, bool)
+            or self.timeout_seconds < 1
+        ):
+            raise ValueError(
+                f"現象: timeout_seconds '{self.timeout_seconds}' は無効です。原因: 1 以上の整数でない値が指定されました。対処方法: --timeout-seconds に 1 以上の整数を指定してください。"
+            )
+
+        if self.max_pages is not None and (
+            not isinstance(self.max_pages, int) or isinstance(self.max_pages, bool) or self.max_pages < 1
+        ):
+            raise ValueError(
+                f"現象: max_pages '{self.max_pages}' は無効です。原因: 1 以上の整数でない値が指定されました。対処方法: --max-pages に 1 以上の整数を指定してください。"
             )
 
         self.base_url = self.base_url.rstrip("/")

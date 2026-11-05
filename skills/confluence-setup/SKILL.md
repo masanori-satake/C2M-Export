@@ -1,3 +1,8 @@
+---
+name: confluence-setup
+description: Confluence の接続・認証・設定・プロキシ状況を診断し、C2M-Export が利用可能かトラブルシューティングします。
+---
+
 <!--
 NOTE: 正本は skills/confluence-setup/SKILL.md です。
 各ツールの検出・発火条件（.kiro/skills/: Kiro、.github/skills/: GitHub Copilot、skills/: 汎用 Agent Skills）に合わせて 3 箇所に複製配置されています。
@@ -10,14 +15,6 @@ SKILL.md や scripts を修正・更新する場合は、必ず正本を編集�
 
 `confluence-analysis` Skill が実行時にエラーになる・ハングする・空の結果を返すといった場合、まずこの Skill で原因を切り分けてください。
 
-## このスキルが解決する課題
-
-- トークンを設定したのに認証が通らない（環境変数の反映漏れ・変数名違い）
-- 実行するとハングして返ってこない（プロキシ経路・ファイアウォール）
-- `401/403/404` が返る（認証失敗・権限・base_url 誤り）
-- スペースキーに記号（`~` `@` `/` など）を含む場合の挙動が不安
-- 設定ファイル（`c2m_config.yaml`）が意図どおり読まれているか不明
-
 ## 前提要件
 
 - **Python**: 3.11 以上。
@@ -29,6 +26,26 @@ SKILL.md や scripts を修正・更新する場合は、必ず正本を編集�
   - 推奨: ユーザー環境変数 `C2M_CONFLUENCE_TOKEN`（代替: `CONFLUENCE_TOKEN`）。
   - GitHub Copilot など他ツールと共有する場合も、OS のユーザー環境変数に一度登録しておくと一元管理できます。
   - **注意**: 環境変数は登録時点で起動済みのプロセスには反映されません。登録後は Kiro / ターミナルを再起動してください。
+
+## このスキルが解決する課題
+
+- トークンを設定したのに認証が通らない（環境変数の反映漏れ・変数名違い）
+- 実行するとハングして返ってこない（プロキシ経路・ファイアウォール）
+- `401/403/404` が返る（認証失敗・権限・base_url 誤り）
+- スペースキーに記号（`~` `@` `/` など）を含む場合の挙動が不安
+- 設定ファイル（`c2m_config.yaml`）が意図どおり読まれているか不明
+
+## Windows (PowerShell / cmd.exe) 実行時の注意事項
+
+AI エージェントが Windows ターミナル上で本スキルやコマンドを実行する場合、以下の点に配慮してください：
+
+1. **Linux 固有の構文（`/dev/null` や bash パイプ等）を使用しない**:
+   - 出力を破棄したい場合、PowerShell では `Out-Null` または `> $null`、cmd.exe では `> NUL 2>&1` を使用してください。
+   - スクリプトや CLI コマンド（`python -m c2m_export.*`）は標準出力に結果を、標準エラー出力にログを分離して出力するため、基本的にはリダイレクトを行わず直接実行してください。
+2. **環境変数の指定形式**:
+   - PowerShell: `$env:C2M_CONFLUENCE_TOKEN="your-token"`
+   - cmd.exe: `set C2M_CONFLUENCE_TOKEN=your-token`
+   - bash 形式の `export VAR=val` をそのまま Windows シェルに投入しないように注意してください。
 
 ## 使い方
 

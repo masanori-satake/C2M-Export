@@ -1,6 +1,7 @@
 """共通 1 層 Analysis API 実装モジュール (run_analysis)."""
 
 import logging
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Protocol, Set, Tuple
@@ -69,6 +70,8 @@ class AnalysisConfigProtocol(Protocol):
     all_spaces: bool
     cql: Optional[str]
     deep: bool
+    timeout_seconds: Optional[int]
+    max_pages: Optional[int]
     collect_history: Optional[bool]
     collect_labels: Optional[bool]
     collect_comments: Optional[bool]
@@ -248,6 +251,36 @@ def run_analysis(
         # パラメータ検証
         params.validate()
 
+        # 実行保護リミットの解決と検証 (params 優先、None 時のみ config 参照)
+        p_timeout = getattr(params, "timeout_seconds", None)
+        c_timeout = getattr(config, "timeout_seconds", None)
+        timeout_seconds = p_timeout if p_timeout is not None else c_timeout
+        if timeout_seconds is not None and (
+            not isinstance(timeout_seconds, int) or isinstance(timeout_seconds, bool) or timeout_seconds < 1
+        ):
+            raise ValueError(
+                f"現象: timeout_seconds '{timeout_seconds}' は無効です。原因: 1 以上の整数でない値が指定されました。対処方法: --timeout-seconds に 1 以上の整数を指定してください。"
+            )
+
+        p_max_pages = getattr(params, "max_pages", None)
+        c_max_pages = getattr(config, "max_pages", None)
+        max_pages = p_max_pages if p_max_pages is not None else c_max_pages
+        if max_pages is not None and (not isinstance(max_pages, int) or isinstance(max_pages, bool) or max_pages < 1):
+            raise ValueError(
+                f"現象: max_pages '{max_pages}' は無効です。原因: 1 以上の整数でない値が指定されました。対処方法: --max-pages に 1 以上の整数を指定してください。"
+            )
+
+        # タイムアウト計測開始（前段の Space 一覧取得・起点解決を含む実行全体をカバー）
+        start_time = time.monotonic()
+
+        def _combined_interrupt_checker() -> bool:
+            if interrupt_checker and interrupt_checker():
+                return True
+            if timeout_seconds is not None and (time.monotonic() - start_time) >= timeout_seconds:
+                logger.info(f"実行時間上限 ({timeout_seconds}秒) に達したため、処理を中断します。")
+                return True
+            return False
+
         # 参照時刻共有
         ref_time = datetime.now(timezone.utc)
 
@@ -424,37 +457,46 @@ def run_analysis(
             collect_space_permissions=collect_space_permissions,
             checkpoint_store=checkpoint_store,
             resume_collected_ids=resume_collected_ids,
-            interrupt_checker=interrupt_checker,
+            interrupt_checker=_combined_interrupt_checker,
+            max_pages=max_pages,
         )
 
         # 復元済みページの先行投入
         if restored_pages:
             collector.raw_inventory.pages.extend(restored_pages)
 
-        # 全体把握収集
-        collector.collect_workspace_overview(shared_spaces, resolved_root_ids)
-
         is_interrupted = False
         interrupted_reason: Optional[str] = None
 
-        # DFS 走査
+        # 全体把握収集
         try:
-            inventory = collector.collect(resolved_root_ids)
-        except CollectInterrupted:
-            logger.info("収集処理が中断されました。部分集計 (partial) に移行します。")
+            collector.collect_workspace_overview(shared_spaces, resolved_root_ids)
+        except CollectInterrupted as e:
+            logger.info(f"全体把握フェーズが中断されました ({e})。部分集計 (partial) に移行します。")
             is_interrupted = True
             interrupted_reason = "signal"
-            inventory = collector.raw_inventory
-        except Exception as e:
-            if len(collector.raw_inventory.pages) > 0:
-                logger.error(
-                    f"収集フェーズでエラーが発生しました。収集済み {len(collector.raw_inventory.pages)} 件で部分集計 (partial) を構築します: {e}"
-                )
+
+        # DFS 走査 (未中断時のみ実行)
+        if not is_interrupted:
+            try:
+                inventory = collector.collect(resolved_root_ids)
+            except CollectInterrupted as e:
+                logger.info(f"収集処理が中断されました ({e})。部分集計 (partial) に移行します。")
                 is_interrupted = True
-                interrupted_reason = "error"
+                interrupted_reason = "signal"
                 inventory = collector.raw_inventory
-            else:
-                raise
+            except Exception as e:
+                if len(collector.raw_inventory.pages) > 0:
+                    logger.error(
+                        f"収集フェーズでエラーが発生しました。収集済み {len(collector.raw_inventory.pages)} 件で部分集計 (partial) を構築します: {e}"
+                    )
+                    is_interrupted = True
+                    interrupted_reason = "error"
+                    inventory = collector.raw_inventory
+                else:
+                    raise
+        else:
+            inventory = collector.raw_inventory
 
         # per-space 詳細調査 (未中断時のみ実行)
         if not is_interrupted:
@@ -464,9 +506,14 @@ def run_analysis(
                     k = sp.get("key")
                     if k and k not in target_skeys:
                         target_skeys.append(k)
-            collector.collect_space_details(target_skeys)
+            try:
+                collector.collect_space_details(target_skeys)
+            except CollectInterrupted as e:
+                logger.info(f"詳細調査フェーズが中断されました ({e})。部分集計 (partial) に移行します。")
+                is_interrupted = True
+                interrupted_reason = "signal"
 
-        if not is_interrupted and interrupt_checker and interrupt_checker():
+        if not is_interrupted and _combined_interrupt_checker():
             is_interrupted = True
             interrupted_reason = "signal"
 

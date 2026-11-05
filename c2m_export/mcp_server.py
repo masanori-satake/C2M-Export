@@ -52,6 +52,8 @@ def create_mcp_server() -> Any:
         collect_effective_restrictions: Optional[bool] = None,
         collect_extracted_text: Optional[bool] = None,
         collect_space_permissions: Optional[bool] = None,
+        timeout_seconds: Optional[int] = None,
+        max_pages: Optional[int] = None,
     ) -> Dict[str, Any]:
         """Confluence ワークスペースの状況（移設リスク、古いページ、アクセス制限、圧縮ファイル、添付あり空ページ、マクロ統計）を分析します。レスポンスは schema_version 1.2 に準拠し、status に ok, partial, error を返します。
 
@@ -78,6 +80,8 @@ def create_mcp_server() -> Any:
             collect_effective_restrictions: 実効アクセス制限の個別収集を有効化するかどうか (3値: True/False/None)
             collect_extracted_text: 抽出テキストの個別収集を有効化するかどうか (3値: True/False/None)
             collect_space_permissions: Space 権限情報の個別収集を有効化するかどうか (3値: True/False/None)
+            timeout_seconds: 最大実行時間（秒）
+            max_pages: 最大走査ページ数
         """
         token = os.environ.get("C2M_CONFLUENCE_TOKEN") or os.environ.get("CONFLUENCE_TOKEN") or ""
 
@@ -112,6 +116,10 @@ def create_mcp_server() -> Any:
             config.collect_extracted_text = collect_extracted_text
         if collect_space_permissions is not None:
             config.collect_space_permissions = collect_space_permissions
+        if timeout_seconds is not None:
+            config.timeout_seconds = timeout_seconds
+        if max_pages is not None:
+            config.max_pages = max_pages
 
         effective_stale_days = stale_days
         if stale_years is not None and stale_days == 365:
@@ -132,6 +140,8 @@ def create_mcp_server() -> Any:
             "collect_effective_restrictions": collect_effective_restrictions,
             "collect_extracted_text": collect_extracted_text,
             "collect_space_permissions": collect_space_permissions,
+            "timeout_seconds": timeout_seconds,
+            "max_pages": max_pages,
         }
         if usecases is not None:
             params_kwargs["usecases"] = usecases

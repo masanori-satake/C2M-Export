@@ -117,6 +117,8 @@ def main() -> None:
             resume=config.resume,
             checkpoint_interval=config.checkpoint_interval,
             checkpoint_dir=config.checkpoint_dir,
+            timeout_seconds=config.timeout_seconds,
+            max_pages=config.max_pages,
         )
 
         # run_analysis 実行

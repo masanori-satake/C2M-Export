@@ -26,6 +26,20 @@ SKILL.md や scripts を修正・更新する場合は、必ず正本を編集�
   ```
   ※ トークンをコマンドライン引数（`--token`）で直接渡すと、プロセス一覧やシェル履歴に記載が残るため推奨されません。
 
+## Windows (PowerShell / cmd.exe) 実行時の注意事項
+
+AI エージェントが Windows ターミナル上で本スキルやコマンドを実行する場合、以下の点に配慮してください：
+
+1. **Linux 固有の構文（`/dev/null` や bash パイプ等）を使用しない**:
+   - 出力を破棄したい場合、PowerShell では `Out-Null` または `> $null`、cmd.exe では `> NUL 2>&1` を使用してください。
+   - CLI コマンド（`python -m c2m_export.tree`）は標準出力に結果を、警告やログは標準エラー出力（stderr）に出力します。リダイレクト等で破棄せずそのまま実行してください。
+2. **文字化け防止**:
+   - Windows コンソールで絵文字の描画が崩れる場合は `--ascii` オプションを指定してください。
+3. **環境変数の指定形式**:
+   - PowerShell: `$env:C2M_CONFLUENCE_TOKEN="your-token"`
+   - cmd.exe: `set C2M_CONFLUENCE_TOKEN=your-token`
+   - bash 形式の `export VAR=val` をそのまま投入しないように注意してください。
+
 ## 実行方法
 
 本 Skill は、サブプロセスとして CLI エントリーポイント `python -m c2m_export.tree` または補助スクリプト `python skills/confluence-tree/scripts/run_tree.py` を呼び出して動作します。

@@ -26,6 +26,20 @@ SKILL.md や scripts を修正・更新する場合は、必ず正本を編集�
   ```
   ※ トークンをコマンドライン引数（`--token`）で直接渡すと、プロセス一覧やシェル履歴に記載が残るため推奨されません。
 
+## Windows (PowerShell / cmd.exe) 実行時の注意事項
+
+AI エージェントが Windows ターミナル上で本スキルやコマンドを実行する場合、以下の点に配慮してください：
+
+1. **Linux 固有の構文（`/dev/null` や bash パイプ等）を使用しない**:
+   - 出力を破棄したい場合、PowerShell では `Out-Null` または `> $null`、cmd.exe では `> NUL 2>&1` を使用してください。
+   - CLI コマンド（`python -m c2m_export.analyze`）は標準出力に純粋な JSON のみを、進捗ログや警告は標準エラー出力（stderr）に分離して出力します。パイプやリダイレクトで捨てずにそのまま実行し、終了コードと stdout の JSON を取得してください。
+2. **長時間の実行・ハング回避**:
+   - 大規模スペースや多数のページが存在する場合、`--timeout-seconds <秒数>` や `--max-pages <件数>` を指定してガードレールを設定することを推奨します。上限到達時はそこまでに収集したデータをもとに部分結果（`partial`）が出力されます。
+3. **環境変数の指定形式**:
+   - PowerShell: `$env:C2M_CONFLUENCE_TOKEN="your-token"`
+   - cmd.exe: `set C2M_CONFLUENCE_TOKEN=your-token`
+   - bash 形式の `export VAR=val` をそのまま投入しないように注意してください。
+
 ## 実行方法
 
 本 Skill は、サブプロセスとして CLI エントリーポイント `python -m c2m_export.analyze` または補助スクリプト `python skills/confluence-analysis/scripts/run_analysis.py` を呼び出して動作します。
@@ -80,6 +94,8 @@ python skills/confluence-analysis/scripts/run_analysis.py \
 | `--resume` | フラグ | 既存のチェックポイントから未収集分を再開 | `False` |
 | `--checkpoint-interval` | 整数 | チェックポイント flush 粒度 (件数) | `1` |
 | `--checkpoint-dir` | 文字列 | チェックポイント保存先ディレクトリ | `.c2m_analyze_checkpoint` |
+| `--timeout-seconds` | 整数 | 走査・分析処理の最大実行時間（秒） | なし (無制限) |
+| `--max-pages` | 整数 | 走査する最大ページ数上限 | なし (無制限) |
 | `--proxy` | 文字列 | HTTP/HTTPS プロキシ URL | なし |
 | `--config` | 文字列 | 設定ファイルのパス | `c2m_config.yaml` |
 | `--token` | 文字列 | Confluence Bearer トークン (環境変数推奨) | なし |

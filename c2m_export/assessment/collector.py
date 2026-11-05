@@ -37,6 +37,7 @@ class Collector:
         checkpoint_store: Optional[CheckpointStore] = None,
         resume_collected_ids: Optional[Set[str]] = None,
         interrupt_checker: Optional[Callable[[], bool]] = None,
+        max_pages: Optional[int] = None,
     ):
         self.client = client
         self.analyze_restrictions = analyze_restrictions
@@ -51,6 +52,7 @@ class Collector:
         self.checkpoint_store = checkpoint_store
         self.resume_collected_ids = set(resume_collected_ids) if resume_collected_ids else set()
         self.interrupt_checker = interrupt_checker
+        self.max_pages = max_pages
         self.raw_inventory = RawInventory()
 
     def collect_workspace_overview(self, spaces: List[dict], root_ids: List[str]) -> None:
@@ -59,7 +61,17 @@ class Collector:
         visible_space_keys: List[str] = []
         unavailable_apis: List[str] = []
 
+        if self.raw_inventory.visibility is None:
+            self.raw_inventory.visibility = VisibilityMeta(
+                visible_space_keys=visible_space_keys,
+                unavailable_apis=unavailable_apis,
+            )
+
         for sp in spaces:
+            if self.interrupt_checker and self.interrupt_checker():
+                logger.info("収集処理の自己中断シグナルを検知しました。全体把握フェーズを停止します。")
+                raise CollectInterrupted("収集処理が中断されました")
+
             space_key = sp.get("key", "")
             if not space_key:
                 continue
@@ -108,19 +120,17 @@ class Collector:
                 if "descendant_count" not in unavailable_apis:
                     unavailable_apis.append("descendant_count")
 
-            space_metas.append(
-                SpaceMeta(
-                    space_key=space_key,
-                    name=name,
-                    type=sp_type,
-                    status=status,
-                    description=description,
-                    label_count=label_count,
-                    page_count_preview=page_count_preview,
-                )
+            space_meta = SpaceMeta(
+                space_key=space_key,
+                name=name,
+                type=sp_type,
+                status=status,
+                description=description,
+                label_count=label_count,
+                page_count_preview=page_count_preview,
             )
-
-        self.raw_inventory.spaces = space_metas
+            space_metas.append(space_meta)
+            self.raw_inventory.spaces.append(space_meta)
 
         # Current user & Memberof
         username: Union[str, None] = None
@@ -190,6 +200,10 @@ class Collector:
         space_map = {sp.space_key: sp for sp in self.raw_inventory.spaces}
 
         for skey in space_keys:
+            if self.interrupt_checker and self.interrupt_checker():
+                logger.info("収集処理の自己中断シグナルを検知しました。詳細調査フェーズを停止します。")
+                raise CollectInterrupted("収集処理が中断されました")
+
             sp_meta = space_map.get(skey)
             if sp_meta is None:
                 sp_meta = SpaceMeta(space_key=skey, name=skey, type="global", status="current")
@@ -257,8 +271,15 @@ class Collector:
                         title = pm.title
                         break
             else:
+                # 最大ページ数上限チェック（訪問済み・復元済み除外後、新規ページ取得直前）
+                if self.max_pages is not None and processed_count >= self.max_pages:
+                    logger.info(
+                        f"最大収集ページ数上限 ({self.max_pages} ページ) に達したため、収集処理を切り上げます。"
+                    )
+                    raise CollectInterrupted("最大ページ数上限に到達しました")
+
                 processed_count += 1
-                if processed_count % 50 == 0 or processed_count == 1:
+                if processed_count == 1 or processed_count % 10 == 0:
                     logger.info(f"アセスメント収集進捗: {processed_count} ページ処理中... (現在のID: {page_id})")
 
                 # 1. ページ詳細取得
