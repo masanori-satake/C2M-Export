@@ -55,6 +55,7 @@ AI エージェントが Windows ターミナル上で本 CLI や Skill を実�
    - `analyze` コマンドは標準出力に純粋な JSON のみを、進捗ログや警告は標準エラー出力（stderr）に分離して出力します。パイプやリダイレクトで捨てずにそのまま実行し、終了コードと標準出力の JSON を取得してください。
 2. **長時間の実行・ハング回避**:
    - 大規模スペースや多数のページが存在する場合、`--timeout-seconds <秒数>` や `--max-pages <件数>` を指定してガードレールを設定してください。上限到達時はそこまでに収集したデータをもとに部分結果（`partial`）が出力されます。
+   - Agent Skill の補助スクリプト経由では、`--timeout-seconds` 省略時に既定の上限 300 秒が自動で補われます。また実行中は 5 秒間隔で進捗ハートビート（フェーズ・経過・収集済み件数）が stderr に出力されます。
 3. **環境変数の指定形式**:
    - PowerShell: `$env:C2M_CONFLUENCE_TOKEN="your-token"`
    - cmd.exe: `set C2M_CONFLUENCE_TOKEN=your-token`

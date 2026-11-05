@@ -24,7 +24,7 @@ def _find_repo_root() -> Optional[Path]:
 def main() -> None:
     """CLI エントリーポイントへ引数をそのまま引き継いで実行します。"""
     repo_root = _find_repo_root()
-    cmd = [sys.executable, "-m", "c2m_export.tree"] + sys.argv[1:]
+    cmd = [sys.executable, "-u", "-m", "c2m_export.tree"] + sys.argv[1:]
     env = dict(os.environ)
     if repo_root:
         python_path = env.get("PYTHONPATH", "")

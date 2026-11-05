@@ -82,10 +82,11 @@ class ConfluenceClient:
                 if response.status_code == 200:
                     return response.json()
                 elif 500 <= response.status_code < 600 and i < retries - 1:
+                    wait_seconds = backoff * (2**i)
                     logger.warning(
-                        f"サーバーエラー {response.status_code} が発生しました。再試行中 ({i + 1}/{retries})..."
+                        f"サーバーエラー {response.status_code} が発生しました。{wait_seconds:.0f}秒待って再試行します ({i + 1}/{retries})..."
                     )
-                    time.sleep(backoff * (2**i))
+                    time.sleep(wait_seconds)
                     continue
                 else:
                     response.raise_for_status()
@@ -96,8 +97,9 @@ class ConfluenceClient:
                     and error.response.status_code in (401, 403, 404)
                 ):
                     raise _safe_request_exception(error, "Confluence API リクエストに失敗しました") from None
-                logger.warning(f"リクエストが失敗しました。再試行中 ({i + 1}/{retries})...")
-                time.sleep(backoff * (2**i))
+                wait_seconds = backoff * (2**i)
+                logger.warning(f"リクエストが失敗しました。{wait_seconds:.0f}秒待って再試行します ({i + 1}/{retries})...")
+                time.sleep(wait_seconds)
 
         raise Exception("Confluence API リクエストに失敗しました")
 
