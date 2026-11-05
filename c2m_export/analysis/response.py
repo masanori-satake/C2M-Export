@@ -11,7 +11,7 @@ JSON スキーマ概要:
     "space_keys": ["..."],
     "resolved_root_count": int
   },
-  "workspace": { ... },  # ワークスペース概要（total_spaces, spaces 等）
+  "workspace": { ... },  # ワークスペース概要（space_count, spaces 等）
   "visibility": { ... }, # アクセス可否・匿名アクセス概要（anonymous_access, unavailable_apis 等）
   "environment": { ... },# Confluence 環境情報（confluence_version 等）
   "summary": { ... },  # 既存 assessment summary と同一構造

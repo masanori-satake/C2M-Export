@@ -178,4 +178,4 @@ python skills/confluence-analysis/scripts/run_analysis.py \
 - `6`: 部分成功 (`partial`)
 - `10`: 内部エラー (`INTERNAL_ERROR`)
 
-エラー発生時も、標準出力に `status: "error"` の構造化 JSON (ErrorObject) が出力されます（標準エラー出力には日本語詳細メッセージが出力されます）。エラー時の確認と次のアクションは [references/errors.md](references/errors.md) を参照してください。
+分析実行のエラー発生時も、標準出力に `status: "error"` の構造化 JSON (ErrorObject) が出力されます（標準エラー出力には日本語詳細メッセージが出力されます）。ただしジョブ操作で未知の job_id を指定した場合は、`state: "not_found"` の JSON を終了コード `4` で返します。エラー時の確認と次のアクションは [references/errors.md](references/errors.md) を参照してください。
