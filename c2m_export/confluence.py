@@ -98,7 +98,9 @@ class ConfluenceClient:
                 ):
                     raise _safe_request_exception(error, "Confluence API リクエストに失敗しました") from None
                 wait_seconds = backoff * (2**i)
-                logger.warning(f"リクエストが失敗しました。{wait_seconds:.0f}秒待って再試行します ({i + 1}/{retries})...")
+                logger.warning(
+                    f"リクエストが失敗しました。{wait_seconds:.0f}秒待って再試行します ({i + 1}/{retries})..."
+                )
                 time.sleep(wait_seconds)
 
         raise Exception("Confluence API リクエストに失敗しました")
