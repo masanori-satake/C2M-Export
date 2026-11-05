@@ -114,19 +114,17 @@ class Collector:
                 if "descendant_count" not in unavailable_apis:
                     unavailable_apis.append("descendant_count")
 
-            space_metas.append(
-                SpaceMeta(
-                    space_key=space_key,
-                    name=name,
-                    type=sp_type,
-                    status=status,
-                    description=description,
-                    label_count=label_count,
-                    page_count_preview=page_count_preview,
-                )
+            space_meta = SpaceMeta(
+                space_key=space_key,
+                name=name,
+                type=sp_type,
+                status=status,
+                description=description,
+                label_count=label_count,
+                page_count_preview=page_count_preview,
             )
-
-        self.raw_inventory.spaces = space_metas
+            space_metas.append(space_meta)
+            self.raw_inventory.spaces.append(space_meta)
 
         # Current user & Memberof
         username: Union[str, None] = None

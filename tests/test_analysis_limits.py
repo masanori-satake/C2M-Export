@@ -238,21 +238,22 @@ def test_run_analysis_interrupt_in_overview_and_details():
     # 2. space_details フェーズで中断
     config.collect_space_permissions = True
     config.space_keys = ["SP1", "SP2"]
+    perm_called = False
     flag = False
 
     def interrupt_in_space_details():
         return flag
 
-    orig_get_page = client.get_page.side_effect
+    def get_space_permissions_hook(skey, **kwargs):
+        nonlocal perm_called, flag
+        perm_called = True
+        flag = True  # 詳細調査フェーズに入った直後に中断フラグを立てる
+        return {"results": []}
 
-    def get_page_hook(pid, **kwargs):
-        nonlocal flag
-        flag = True  # DFS 終了後に True になるように設定
-        return orig_get_page(pid, **kwargs)
-
-    client.get_page.side_effect = get_page_hook
+    client.get_space_permissions.side_effect = get_space_permissions_hook
 
     res = run_analysis(params, config, client=client, interrupt_checker=interrupt_in_space_details)
+    assert perm_called is True
     assert res.status == "partial"
     assert res.uncertainties.interrupted is True
 
