@@ -16,7 +16,7 @@
     "resolved_root_count": 10
   },
   "workspace": {
-    "total_spaces": 1,
+    "space_count": 1,
     "spaces": []
   },
   "visibility": {
