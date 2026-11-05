@@ -6,12 +6,14 @@ description: Confluence のワークスペース状況（古いページ、個�
 <!--
 NOTE: 正本は skills/confluence-analysis/SKILL.md です。
 各ツールの検出・発火条件（.kiro/skills/: Kiro、.github/skills/: GitHub Copilot、skills/: 汎用 Agent Skills）に合わせて 3 箇所に複製配置されています。
-SKILL.md や scripts を修正・更新する場合は、必ず正本を編集し、複製先へ同期（上書きコピー）を行ってください。
+SKILL.md・references・scripts を修正・更新する場合は、必ず正本を編集し、複製先へ同期（上書きコピー）を行ってください。
 -->
 
 # Confluence Workspace Analysis Skill
 
 この Skill は、Confluence のページ階層・スペースの状況を分析し、AI ナレッジ化や移行に向けた課題（古いコンテンツ、権限設定、圧縮ファイル、マクロ統計等）を機械可読な JSON で出力します。
+
+本書は実行手順と判断ルールに絞った要点版です。詳細情報は references に分けてあり、各節のポインタから辿れます。
 
 ## 前提要件
 
@@ -26,22 +28,14 @@ SKILL.md や scripts を修正・更新する場合は、必ず正本を編集�
   ```
   ※ トークンをコマンドライン引数（`--token`）で直接渡すと、プロセス一覧やシェル履歴に記載が残るため推奨されません。
 
-## Windows (PowerShell / cmd.exe) 実行時の注意事項
+## Windows (PowerShell / cmd.exe) 実行時の要点
 
-AI エージェントが Windows ターミナル上で本スキルやコマンドを実行する場合、以下の点に配慮してください：
+- **bash 構文を使わない**: `/dev/null` や bash のパイプ・`export` は使えません。環境変数は PowerShell では `$env:VAR="..."`、cmd.exe では `set VAR=...` の形式で指定してください。
+- **出力は捨てない**: CLI の標準出力は純粋な JSON のみ、進捗・警告は stderr に分離されています。リダイレクトで破棄せず、そのまま実行して終了コードと stdout の JSON を取得してください。
+- **実行時間の上限を必ず意識する**: 補助スクリプト経由では、どこからも指定がなければ既定の上限 **300秒** が自動で補われます。直接コマンド（`python -m c2m_export.analyze`）で長時間実行する場合は、利用者への確認なしに無制限で実行せず、`--timeout-seconds` を明示してください。上限到達時は部分結果（`partial`）が返ります。
+- **ハートビートは継続の合図**: 実行中は 5 秒間隔で進捗（現在のフェーズ・経過秒数・収集済み件数）が stderr に出力されます。出続けている間はハングではなく処理継続中です。
 
-1. **Linux 固有の構文（`/dev/null` や bash パイプ等）を使用しない**:
-   - 出力を破棄したい場合、PowerShell では `Out-Null` または `> $null`、cmd.exe では `> NUL 2>&1` を使用してください。
-   - CLI コマンド（`python -m c2m_export.analyze`）は標準出力に純粋な JSON のみを、進捗ログや警告は標準エラー出力（stderr）に分離して出力します。パイプやリダイレクトで捨てずにそのまま実行し、終了コードと stdout の JSON を取得してください。
-2. **長時間の実行・ハング回避**:
-   - 大規模スペースや多数のページが存在する場合、`--timeout-seconds <秒数>` や `--max-pages <件数>` を指定してガードレールを設定することを推奨します。上限到達時はそこまでに収集したデータをもとに部分結果（`partial`）が出力されます。
-   - 補助スクリプト `scripts/run_analysis.py` 経由で実行する場合、実行時間上限がどこからも指定されていなければ既定の上限 **300秒** が自動で補われます。CLI の明示指定（`--timeout-seconds`、省略形 `--timeout` も含む）と、設定ファイルの `analysis.timeout_seconds` がある場合は、そちらが優先され既定値は補われません。上限到達時は `partial` が返るので、結果を受け取ったうえで `--resume` で再開するかを判断してください。直接コマンド（`python -m c2m_export.analyze`）で長時間実行する場合は、利用者への確認なしに無制限で実行せず、上限を明示してください。
-   - 上限は前段処理（Space 一覧取得・起点解決・ワークスペース概要収集）を含む実行全体に適用されます。前段処理はチェックポイントの対象外のため、タイムアウトで中断した場合は再開時に前段処理から再実行されます（収集済みページはチェックポイントから復元され、再取得されません）。前段処理自体が重い環境では、明示指定で上限を長めに設定してください。
-   - 実行中は 5 秒間隔で進捗ハートビート（現在のフェーズ・経過秒数・収集済み件数）が stderr に出力されます。ハートビートが出続けている間は処理継続中です。
-3. **環境変数の指定形式**:
-   - PowerShell: `$env:C2M_CONFLUENCE_TOKEN="your-token"`
-   - cmd.exe: `set C2M_CONFLUENCE_TOKEN=your-token`
-   - bash 形式の `export VAR=val` をそのまま投入しないように注意してください。
+詳細（出力の捨て方、上限の適用範囲と再開時の扱い、環境変数の形式）は [references/windows_notes.md](references/windows_notes.md) を参照してください。
 
 ## 実行方法
 
@@ -108,7 +102,9 @@ python skills/confluence-analysis/scripts/run_analysis.py \
   --limit 50
 ```
 
-## 入力パラメータ（CLI オプション）
+## 主要オプション（抜粋）
+
+通常の調査分析で使うオプションの抜粋です。**全オプションと既定値の確認は [references/options.md](references/options.md)** を参照してください。
 
 | オプション | 型 | 説明 | 既定値 |
 |---|---|---|---|
@@ -119,38 +115,15 @@ python skills/confluence-analysis/scripts/run_analysis.py \
 | `--cql` | 文字列 | 起点検索用または課題抽出用の CQL 文字列 | なし |
 | `--usecase` | 文字列リスト | 分析ユースケース (`risk`, `stale`, `restricted`, `archives`, `empty_with_attachments`, `macros`) | 全 6 種 |
 | `--mode` | 文字列 | 出力モード (`summary`: 集計サマリのみ, `detail`: 個別一覧含む) | `summary` |
-| `--limit` | 整数 | `detail` モード時の個別項目抽出上限件数 | `1000` |
 | `--stale-days` | 整数 | 古いページの判定基準日数 | `365` |
-| `--stale-years` | 浮動小数点/整数 | 古いページの判定基準年数 (`--stale-days` と両方指定時は `--stale-days` 優先) | なし |
-| `--min-body-bytes` | 整数 | 添付あり空ページの判定基準バイト数 | `200` |
-| `--archive-ext` | 文字列リスト | 圧縮形式とみなす拡張子一覧 | `zip 7z rar gz tar bz2 xz tgz lzh cab` |
 | `--restrictions` / `--no-restrictions` | フラグ | アクセス制限（権限）情報の収集可否 | 自動収集 (有効) |
 | `--deep` | フラグ | 詳細調査フェーズの情報を一括で有効化 | `False` |
-| `--collect-history` / `--no-collect-history` | フラグ | ページ更新履歴の個別収集制御 | `deep` に依存 |
-| `--collect-labels` / `--no-collect-labels` | フラグ | ラベル情報の個別収集制御 | `deep` に依存 |
-| `--collect-comments` / `--no-collect-comments` | フラグ | コメント情報の個別収集制御 | `deep` に依存 |
-| `--collect-watchers` / `--no-collect-watchers` | フラグ | ウォッチャー情報の個別収集制御 | `deep` に依存 |
-| `--collect-effective-restrictions` / `--no-collect-effective-restrictions` | フラグ | 実効アクセス制限の個別収集制御 | `deep` に依存 |
-| `--collect-extracted-text` / `--no-collect-extracted-text` | フラグ | 抽出テキストの個別収集制御 | `deep` に依存 |
-| `--collect-space-permissions` / `--no-collect-space-permissions` | フラグ | Space 権限情報の個別収集制御 | `deep` に依存 |
-| `--no-checkpoint` | フラグ | チェックポイント永続化を無効化 | 自動保持 (有効) |
 | `--resume` | フラグ | 既存のチェックポイントから未収集分を再開 | `False` |
-| `--checkpoint-interval` | 整数 | チェックポイント flush 粒度 (件数) | `1` |
-| `--checkpoint-dir` | 文字列 | チェックポイント保存先ディレクトリ | `.c2m_analyze_checkpoint` |
 | `--timeout-seconds` | 整数 | 走査・分析処理の最大実行時間（秒） | なし (無制限) |
 | `--max-pages` | 整数 | 走査する最大ページ数上限 | なし (無制限) |
 | `--estimate` | フラグ | 本実行を行わず、対象ページ数と推定所要のみを見積もって返す | オフ |
 | `--detach` | フラグ | 分析を別プロセスで開始し、job_id を即座に返す | オフ |
-| `--job-status` | 文字列 | 指定ジョブの進捗を即座に返す | なし |
-| `--job-result` | 文字列 | 指定ジョブの結果要約と結果ファイルのパスを返す | なし |
-| `--job-cancel` | 文字列 | 指定ジョブに中断を要求する | なし |
-| `--job-dir` | 文字列 | ジョブの保存先ディレクトリ | `.c2m_analyze_jobs` |
 | `--concurrency` | 整数 | 全体把握フェーズの並列度（負荷を抑えたい場合は 1〜2） | `4` |
-| `--connect-timeout-seconds` | 整数 | API 接続 timeout（秒） | 従来動作 |
-| `--read-timeout-seconds` | 整数 | API 読み取り timeout（秒） | 従来動作 |
-| `--proxy` | 文字列 | HTTP/HTTPS プロキシ URL | なし |
-| `--config` | 文字列 | 設定ファイルのパス | `c2m_config.yaml` |
-| `--token` | 文字列 | Confluence Bearer トークン (環境変数推奨) | なし |
 
 ※ `--space-key`、`--root-page-id`、`--all-spaces`、`--cql` の少なくとも 1 つが必須です。
 
@@ -163,82 +136,12 @@ python skills/confluence-analysis/scripts/run_analysis.py \
 5. `empty_with_attachments`: 添付ファイルは存在するが、本文がほとんど空（既定 200 バイト未満）のページ
 6. `macros`: 使用されている Confluence マクロの統計と手作業修復候補カテゴリ（Markdown 変換時影響）
 
-## 出力 JSON スキーマと結果構造
+## 結果の読み方（要点）
 
-標準出力 (stdout) には、純粋な JSON のみが単独で出力されます。進捗ログや警告は標準エラー出力 (stderr) に分離されます。
-
-```json
-{
-  "schema_version": "1.2",
-  "status": "ok",
-  "generated_at": "2026-03-31T00:00:00Z",
-  "mode": "detail",
-  "scope": {
-    "root_page_ids": [],
-    "space_keys": ["DEV"],
-    "resolved_root_count": 10
-  },
-  "workspace": {
-    "total_spaces": 1,
-    "spaces": []
-  },
-  "visibility": {
-    "anonymous_access": false,
-    "unavailable_apis": []
-  },
-  "environment": {
-    "confluence_version": "9.2.0"
-  },
-  "summary": {
-    "total_pages": 120,
-    "total_attachments": 45,
-    "total_attachment_bytes": 10485760
-  },
-  "usecases": {
-    "stale": {
-      "counts": {
-        "stale_page_count": 15,
-        "stale_threshold_days": 365
-      },
-      "items": [
-        {
-          "page_id": "123456",
-          "title": "古い設計書",
-          "last_modified": "2023-01-01T00:00:00Z",
-          "days_since_modified": 1185
-        }
-      ],
-      "truncated": false,
-      "total_count": 15
-    }
-  },
-  "uncertainties": {
-    "skipped_page_ids": [],
-    "skipped_attachment_refs": [],
-    "restriction_failed_page_ids": [],
-    "size_meta_missing_count": 0,
-    "macro_parse_failed_count": 0,
-    "empty_space_keys": [],
-    "restrictions_disabled": false,
-    "history_failed_count": 0,
-    "label_failed_count": 0,
-    "comment_failed_count": 0,
-    "effective_restriction_failed_count": 0,
-    "extracted_text_failed_count": 0,
-    "content_watcher_failed_count": 0,
-    "space_watcher_failed_count": 0,
-    "space_permission_failed_count": 0,
-    "cql_failed": false,
-    "unavailable_apis": [],
-    "interrupted": false,
-    "interrupted_reason": null,
-    "collected_page_count": 120,
-    "resumed_from_checkpoint": false,
-    "checkpoint_reused_count": 0,
-    "checkpoint_corrupted_line_count": 0
-  }
-}
-```
+- 標準出力は純粋な JSON です。まず `status`（`ok` / `partial` / `error`）と `uncertainties` を確認してください。
+- `status` が `partial` の場合は、`uncertainties.interrupted_reason` と `collected_page_count` を見て、利用者へ「どこまで終わったか」を伝えたうえで `--resume` での再開を提案してください。
+- 取得できなかった情報は `uncertainties` の各失敗フィールドと `unavailable_apis` に集約されています。「データが無い」ことと「取得に失敗した」ことを混同しないでください。
+- 全フィールドの仕様は [references/output_schema.md](references/output_schema.md) を参照してください。
 
 ## 終了コード規約
 
@@ -251,9 +154,3 @@ python skills/confluence-analysis/scripts/run_analysis.py \
 - `10`: 内部エラー (`INTERNAL_ERROR`)
 
 エラー発生時も、標準出力に `status: "error"` の構造化 JSON (ErrorObject) が出力されます（標準エラー出力には日本語詳細メッセージが出力されます）。
-
-## `schema_version` の互換性ポリシー
-
-- 現在のバージョンは `"1.2"` です。
-- キーの追加や非破壊的な変更（マイナー更新）では `schema_version` のメジャー番号は変更されません。
-- 既存キーの削除や型の不互換な変更（メジャー更新）が行われる場合は、`schema_version` がインクリメントされます。
