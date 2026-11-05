@@ -9,7 +9,7 @@
 import logging
 import time
 from datetime import datetime, timezone
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, cast
 
 from c2m_export.analysis.api import ApiError, AuthFailedError, TargetNotFoundError, _resolve_roots
 from c2m_export.analysis.params import AnalysisParams
@@ -148,10 +148,11 @@ def estimate_analysis(
         if all_spaces and list_spaces_failed:
             raise ApiError("全 Space 一覧の取得に失敗しました")
 
-        # 起点解決（本実行と同一の関数を再利用）
+        # 起点解決（本実行と同一の関数を再利用。計数プロキシは透過委譲するため
+        # ConfluenceClient として扱う）
         cql = getattr(params, "cql", None) or getattr(config, "cql", None)
         resolved_root_ids, empty_space_keys, cql_failed = _resolve_roots(
-            counting,
+            cast(ConfluenceClient, counting),
             getattr(config, "root_page_ids", []),
             getattr(config, "space_keys", []),
             all_spaces=all_spaces,
