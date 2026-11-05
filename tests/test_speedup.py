@@ -5,6 +5,7 @@
 """
 
 import threading
+import time
 from unittest.mock import MagicMock
 
 import pytest
@@ -58,6 +59,10 @@ class FakeTreeClient:
                 walk(cid, ancestors + [pid])
 
         walk(page_id, [])
+        if self.descendants_mode == "broken_ancestors":
+            for entry in out:
+                if entry["id"] == "103":
+                    entry["ancestors"] = []
         # 実クライアントの契約を模倣する（上限超過時は部分結果を返さず送出する）
         if self.honor_max_items and max_items is not None and len(out) > max_items:
             raise RuntimeError(f"子孫一覧の件数が上限 ({max_items} 件) を超えました")
@@ -94,6 +99,16 @@ def test_prefetch_fallbacks(mode):
     client, inv = _collect(mode)
     assert client.child_calls != []
     assert {p.page_id for p in inv.pages} == {"100", "101", "102", "103"}
+
+
+def test_prefetch_falls_back_on_unidentifiable_parent():
+    """親を特定できない子孫が混ざる場合は先読み全体を破棄し、個別取得で正しい階層を収集する."""
+    client, inv = _collect("broken_ancestors")
+    assert client.child_calls != []
+    assert {p.page_id for p in inv.pages} == {"100", "101", "102", "103"}
+    by_id = {p.page_id: p for p in inv.pages}
+    assert by_id["103"].level == 3
+    assert by_id["103"].ancestors_titles == ["Title_100", "Title_101"]
 
 
 @pytest.mark.parametrize("honor_max_items", [True, False])
@@ -221,6 +236,29 @@ def test_overview_parallel_interrupt():
     collector = Collector(FakeOverviewClient(), concurrency=4, interrupt_checker=lambda: True)  # type: ignore[arg-type]
     with pytest.raises(CollectInterrupted):
         collector.collect_workspace_overview(spaces, [])
+
+
+class SlowOverviewClient(FakeOverviewClient):
+    """ラベル取得に時間のかかる全体把握用フェイククライアント."""
+
+    def get_space_labels(self, space_key):
+        time.sleep(3)
+        return {"results": []}
+
+
+def test_overview_parallel_interrupt_during_wait():
+    """Space の処理完了を待つ間に来た中断要求も、待機を区切って検知する."""
+    start = time.monotonic()
+
+    def checker():
+        return time.monotonic() - start >= 0.6
+
+    spaces = [{"key": "S1"}, {"key": "S2"}]
+    collector = Collector(SlowOverviewClient(), concurrency=2, interrupt_checker=checker)  # type: ignore[arg-type]
+    with pytest.raises(CollectInterrupted):
+        collector.collect_workspace_overview(spaces, [])
+    # 1 Space 分の処理（3 秒）を待ち切らずに中断できること
+    assert time.monotonic() - start < 2.5
 
 
 def test_thread_local_session():

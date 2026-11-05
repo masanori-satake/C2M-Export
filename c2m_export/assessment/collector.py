@@ -1,7 +1,7 @@
 """Confluence REST API を用いたメタデータ収集モジュール."""
 
 import logging
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, wait
 from typing import Callable, Dict, List, Optional, Set, Tuple, Union
 
 from c2m_export.analysis.checkpoint import CheckpointStore, CollectInterrupted
@@ -139,6 +139,7 @@ class Collector:
         keyed_spaces = [sp for sp in spaces if sp.get("key")]
 
         def _absorb(meta: Optional[SpaceMeta], kinds: List[str]) -> None:
+            """1 Space 分の収集結果を入力順に inventory へ反映する."""
             if meta is not None:
                 visible_space_keys.append(meta.space_key)
                 space_metas.append(meta)
@@ -152,9 +153,14 @@ class Collector:
             try:
                 futures = [executor.submit(self._collect_space_overview_one, sp) for sp in keyed_spaces]
                 for fut in futures:
-                    if self.interrupt_checker and self.interrupt_checker():
-                        logger.info("収集処理の自己中断シグナルを検知しました。全体把握フェーズを停止します。")
-                        raise CollectInterrupted("収集処理が中断されました")
+                    # 完了を待つ間も中断要求を検知できるよう、待機を短い間隔で区切って確認する
+                    while True:
+                        if self.interrupt_checker and self.interrupt_checker():
+                            logger.info("収集処理の自己中断シグナルを検知しました。全体把握フェーズを停止します。")
+                            raise CollectInterrupted("収集処理が中断されました")
+                        if fut.done():
+                            break
+                        wait([fut], timeout=0.5)
                     meta, kinds = fut.result()
                     _absorb(meta, kinds)
             finally:
@@ -322,10 +328,18 @@ class Collector:
                 if not did:
                     valid = False
                     break
-                parent_id = rid
                 ancestors = item.get("ancestors")
-                if isinstance(ancestors, list) and ancestors and isinstance(ancestors[-1], dict):
-                    parent_id = str(ancestors[-1].get("id", "")) or rid
+                if (
+                    not isinstance(ancestors, list)
+                    or not ancestors
+                    or not isinstance(ancestors[-1], dict)
+                    or not str(ancestors[-1].get("id", ""))
+                ):
+                    # 親を特定できない要素があると階層（level / ancestors_titles）を
+                    # 誤って確定してしまうため、起点の先読み全体を無効にする
+                    valid = False
+                    break
+                parent_id = str(ancestors[-1]["id"])
                 local_map.setdefault(parent_id, []).append({"id": did})
                 local_covered.add(did)
             if not valid:
