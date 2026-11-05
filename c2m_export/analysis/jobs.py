@@ -200,9 +200,14 @@ def build_result_summary(jobs_dir: str, job_id: str) -> Optional[Dict[str, Any]]
 
 
 def request_cancel(jobs_dir: str, job_id: str) -> bool:
-    """キャンセルフラグを置く。ジョブが存在すれば True."""
+    """キャンセルフラグを置く。ジョブが存在すれば True.
+
+    存在判定は build_status と揃え、ジョブ記録と進捗のどちらかが
+    読めれば存在するものとして扱う（起動直後などジョブ記録が
+    まだ無い状態でも、状態確認で見えるジョブは中断できるように）。
+    """
     paths = job_file_paths(jobs_dir, job_id)
-    if read_json(paths["job"]) is None:
+    if read_json(paths["job"]) is None and read_json(paths["progress"]) is None:
         return False
     paths["dir"].mkdir(parents=True, exist_ok=True)
     paths["cancel"].write_text(utc_now_iso(), encoding="utf-8")

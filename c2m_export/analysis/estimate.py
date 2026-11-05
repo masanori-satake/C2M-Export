@@ -147,6 +147,15 @@ def estimate_analysis(
         try:
             shared_spaces = counting.list_spaces()
         except Exception as e:
+            # 認証失敗は「一覧取得の失敗」として包まず、本実行経路と
+            # 同じ AUTH_FAILED として伝播させる（再試行可否の判断材料のため）
+            status_code = getattr(getattr(e, "response", None), "status_code", None)
+            if status_code in (401, 403):
+                raise AuthFailedError(
+                    "現象: Confluence API の認証に失敗しました。"
+                    "原因: トークンが無効か権限が不足しています。"
+                    "対処方法: 正しいアクセストークンを指定してください。"
+                )
             list_spaces_failed = True
             logger.warning(f"Space 一覧の取得に失敗しました: {e}")
         if all_spaces and list_spaces_failed:
