@@ -22,6 +22,7 @@ from c2m_export.analysis.extractors import (
 )
 from c2m_export.analysis.macros import summarize_macros
 from c2m_export.analysis.params import DEFAULT_SORTS, AnalysisParams
+from c2m_export.analysis.progress import ProgressHeartbeat
 from c2m_export.analysis.provenance import (
     enrich_empty_with_attachments,
     enrich_restricted,
@@ -247,6 +248,7 @@ def run_analysis(
     Returns:
         AnalysisResponse: 分析結果オブジェクト
     """
+    heartbeat: Optional[ProgressHeartbeat] = None
     try:
         # パラメータ検証
         params.validate()
@@ -273,6 +275,10 @@ def run_analysis(
         # タイムアウト計測開始（前段の Space 一覧取得・起点解決を含む実行全体をカバー）
         start_time = time.monotonic()
 
+        # 時間ベースの進捗ハートビート開始（無音区間を作らない）
+        heartbeat = ProgressHeartbeat(target_logger=logger)
+        heartbeat.start()
+
         def _combined_interrupt_checker() -> bool:
             if interrupt_checker and interrupt_checker():
                 return True
@@ -291,6 +297,8 @@ def run_analysis(
             client = ConfluenceClient(base_url=config.base_url, token=config.token, proxy=config.proxy)
 
         # 0. 共有 Space 一覧の取得
+        heartbeat.set_phase("Space 一覧取得")
+        logger.info("フェーズ開始: Space 一覧取得")
         shared_spaces = []
         list_spaces_failed = False
         list_spaces_error_msg = ""
@@ -367,6 +375,8 @@ def run_analysis(
         checkpoint_dir = str(c_chk_dir if (c_chk_dir and c_chk_dir != ".c2m_analyze_checkpoint") else p_chk_dir)
 
         # 1. 起点解決
+        heartbeat.set_phase("起点解決")
+        logger.info("フェーズ開始: 起点解決")
         resolved_root_ids, empty_space_keys, cql_failed = _resolve_roots(
             client,
             getattr(config, "root_page_ids", []),
@@ -469,6 +479,8 @@ def run_analysis(
         interrupted_reason: Optional[str] = None
 
         # 全体把握収集
+        heartbeat.set_phase("ワークスペース概要収集")
+        logger.info("フェーズ開始: ワークスペース概要収集")
         try:
             collector.collect_workspace_overview(shared_spaces, resolved_root_ids)
         except CollectInterrupted as e:
@@ -477,6 +489,9 @@ def run_analysis(
             interrupted_reason = "signal"
 
         # DFS 走査 (未中断時のみ実行)
+        heartbeat.set_phase("ページ収集")
+        heartbeat.set_counter(lambda: len(collector.raw_inventory.pages))
+        logger.info("フェーズ開始: ページ収集")
         if not is_interrupted:
             try:
                 inventory = collector.collect(resolved_root_ids)
@@ -499,6 +514,7 @@ def run_analysis(
             inventory = collector.raw_inventory
 
         # per-space 詳細調査 (未中断時のみ実行)
+        heartbeat.set_phase("Space 詳細収集")
         if not is_interrupted:
             target_skeys = list(getattr(config, "space_keys", []) or [])
             if shared_spaces:
@@ -518,6 +534,7 @@ def run_analysis(
             interrupted_reason = "signal"
 
         # 3. アセスメント集計
+        heartbeat.set_phase("集計・結果構築")
         assessment_options = {
             name: getattr(config, name)
             for name in ("single_file_max_mb", "path_length_limit", "blocked_extensions", "attachment_dir_name")
@@ -738,3 +755,6 @@ def run_analysis(
                 detail=str(e),
             ),
         )
+    finally:
+        if heartbeat is not None:
+            heartbeat.stop()
