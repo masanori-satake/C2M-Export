@@ -1,6 +1,7 @@
 """共通 1 層 Analysis API 実装モジュール (run_analysis)."""
 
 import logging
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Protocol, Set, Tuple
@@ -250,6 +251,34 @@ def run_analysis(
         # パラメータ検証
         params.validate()
 
+        # 実行保護リミットの解決と検証 (params 優先、None 時のみ config 参照)
+        p_timeout = getattr(params, "timeout_seconds", None)
+        c_timeout = getattr(config, "timeout_seconds", None)
+        timeout_seconds = p_timeout if p_timeout is not None else c_timeout
+        if timeout_seconds is not None and (not isinstance(timeout_seconds, int) or timeout_seconds < 1):
+            raise ValueError(
+                f"現象: timeout_seconds '{timeout_seconds}' は無効です。原因: 1 以上の整数でない値が指定されました。対処方法: --timeout-seconds に 1 以上の整数を指定してください。"
+            )
+
+        p_max_pages = getattr(params, "max_pages", None)
+        c_max_pages = getattr(config, "max_pages", None)
+        max_pages = p_max_pages if p_max_pages is not None else c_max_pages
+        if max_pages is not None and (not isinstance(max_pages, int) or max_pages < 1):
+            raise ValueError(
+                f"現象: max_pages '{max_pages}' は無効です。原因: 1 以上の整数でない値が指定されました。対処方法: --max-pages に 1 以上の整数を指定してください。"
+            )
+
+        # タイムアウト計測開始（前段の Space 一覧取得・起点解決を含む実行全体をカバー）
+        start_time = time.monotonic()
+
+        def _combined_interrupt_checker() -> bool:
+            if interrupt_checker and interrupt_checker():
+                return True
+            if timeout_seconds is not None and (time.monotonic() - start_time) >= timeout_seconds:
+                logger.info(f"実行時間上限 ({timeout_seconds}秒) に達したため、処理を中断します。")
+                return True
+            return False
+
         # 参照時刻共有
         ref_time = datetime.now(timezone.utc)
 
@@ -413,28 +442,6 @@ def run_analysis(
                 checkpoint_store = None
 
         # 2. 収集
-        # タイムアウトおよび最大ページ数の解決 (params 優先、None 時のみ config 参照)
-        p_timeout = getattr(params, "timeout_seconds", None)
-        c_timeout = getattr(config, "timeout_seconds", None)
-        timeout_seconds = p_timeout if p_timeout is not None else c_timeout
-
-        p_max_pages = getattr(params, "max_pages", None)
-        c_max_pages = getattr(config, "max_pages", None)
-        max_pages = p_max_pages if p_max_pages is not None else c_max_pages
-
-        # タイムアウト判定コールバックの合成
-        import time
-
-        start_time = time.monotonic()
-
-        def _combined_interrupt_checker() -> bool:
-            if interrupt_checker and interrupt_checker():
-                return True
-            if timeout_seconds is not None and (time.monotonic() - start_time) >= timeout_seconds:
-                logger.info(f"実行時間上限 ({timeout_seconds}秒) に達したため、処理を中断します。")
-                return True
-            return False
-
         collector = Collector(
             client=client,
             analyze_restrictions=params.analyze_restrictions if params.analyze_restrictions is not None else True,

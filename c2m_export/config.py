@@ -259,9 +259,9 @@ class AnalysisConfig:
                             if "checkpoint_dir" in analysis_sec and analysis_sec["checkpoint_dir"]:
                                 self.checkpoint_dir = str(analysis_sec["checkpoint_dir"])
                             if "timeout_seconds" in analysis_sec and analysis_sec["timeout_seconds"] is not None:
-                                self.timeout_seconds = int(analysis_sec["timeout_seconds"])
+                                self.timeout_seconds = analysis_sec["timeout_seconds"]
                             if "max_pages" in analysis_sec and analysis_sec["max_pages"] is not None:
-                                self.max_pages = int(analysis_sec["max_pages"])
+                                self.max_pages = analysis_sec["max_pages"]
             except Exception as e:
                 print(
                     f"設定ファイル {config_path} の読み込みに失敗しました（現象）。詳細: {e}（原因）。ファイル形式を確認してください（対処方法）"

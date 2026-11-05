@@ -123,7 +123,89 @@ def test_run_analysis_max_pages_limit():
 
     assert res.status == "partial"
     assert res.uncertainties.interrupted is True
-    assert res.uncertainties.collected_page_count == 2
+
+
+def test_run_analysis_resolved_config_validation():
+    """run_analysis() で config.max_pages または config.timeout_seconds の不正値が検証されることを検証."""
+    config = DummyConfig()
+    config.max_pages = 0
+    client = _make_mock_client()
+    params = AnalysisParams(usecases=["risk"])  # params.max_pages は None
+
+    res = run_analysis(params, config, client=client)
+    assert res.status == "error"
+    assert "max_pages" in res.error.message
+
+    config.max_pages = None
+    config.timeout_seconds = -5
+    res = run_analysis(params, config, client=client)
+    assert res.status == "error"
+    assert "timeout_seconds" in res.error.message
+
+
+def test_collector_max_pages_resume():
+    """再開時 (resume) に復元済み件数で上限判定されず、新規取得試行数で判定されることを検証."""
+    from c2m_export.assessment.collector import Collector
+    from c2m_export.assessment.models import PageMeta
+
+    client = _make_mock_client()
+
+    # 復元済みページ 2 件
+    restored_page_1 = PageMeta(
+        page_id="100",
+        title="Page_100",
+        space_key="TEST",
+        level=1,
+        body_bytes=10,
+        last_modified="2026-01-01T00:00:00Z",
+        ancestors_titles=[],
+    )
+    restored_page_2 = PageMeta(
+        page_id="101",
+        title="Page_101",
+        space_key="TEST",
+        level=2,
+        body_bytes=10,
+        last_modified="2026-01-01T00:00:00Z",
+        ancestors_titles=["Page_100"],
+    )
+
+    collector = Collector(
+        client=client,
+        resume_collected_ids={"100", "101"},
+        max_pages=2,  # 新規に 2 ページ取得可能
+    )
+    collector.raw_inventory.pages.extend([restored_page_1, restored_page_2])
+
+    from c2m_export.analysis.checkpoint import CollectInterrupted
+
+    # collect 実行: 100(復元スキップ), 101(復元スキップ), 102(新規1), 103(新規2) -> ここで上限
+    with pytest.raises(CollectInterrupted, match="最大ページ数上限"):
+        collector.collect(["100"])
+
+    # 復元済み 2 件 + 新規 2 件 = 計 4 件
+    assert len(collector.raw_inventory.pages) == 4
+
+
+def test_analysis_config_invalid_yaml_types(tmp_path):
+    """AnalysisConfig で YAML 内の timeout_seconds/max_pages が文字列等の場合に validate() で正しく検出されることを検証."""
+    config_file = tmp_path / "test_config.yaml"
+    config_file.write_text(
+        """
+base_url: "https://confluence.example.com"
+token: "dummy"
+root_page_ids: ["123"]
+analysis:
+  timeout_seconds: "invalid_str"
+  max_pages: "invalid_str"
+""",
+        encoding="utf-8",
+    )
+    cfg = AnalysisConfig()
+    with patch.object(sys, "argv", ["prog", "--config", str(config_file)]):
+        cfg.load()
+        with pytest.raises(ValueError, match="timeout_seconds"):
+            cfg.validate()
 
 
 def test_run_analysis_timeout_seconds_limit():

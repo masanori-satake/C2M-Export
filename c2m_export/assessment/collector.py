@@ -243,11 +243,6 @@ class Collector:
                 logger.info("収集処理の自己中断シグナルを検知しました。収集を停止します。")
                 raise CollectInterrupted("収集処理が中断されました")
 
-            # 最大ページ数上限チェック
-            if self.max_pages is not None and len(inventory.pages) >= self.max_pages:
-                logger.info(f"最大収集ページ数上限 ({self.max_pages} ページ) に達したため、収集処理を切り上げます。")
-                raise CollectInterrupted("最大ページ数上限に到達しました")
-
             page_id, level, ancestors_titles = stack.pop()
 
             if page_id in visited_page_ids:
@@ -264,6 +259,13 @@ class Collector:
                         title = pm.title
                         break
             else:
+                # 最大ページ数上限チェック（訪問済み・復元済み除外後、新規ページ取得直前）
+                if self.max_pages is not None and processed_count >= self.max_pages:
+                    logger.info(
+                        f"最大収集ページ数上限 ({self.max_pages} ページ) に達したため、収集処理を切り上げます。"
+                    )
+                    raise CollectInterrupted("最大ページ数上限に到達しました")
+
                 processed_count += 1
                 if processed_count == 1 or processed_count % 10 == 0:
                     logger.info(f"アセスメント収集進捗: {processed_count} ページ処理中... (現在のID: {page_id})")
