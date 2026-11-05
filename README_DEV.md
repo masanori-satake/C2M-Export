@@ -442,3 +442,4 @@ mypy
 - `tests/test_run_analysis_checkpoint.py`: run_analysis チェックポイントライフサイクル・partial 統合テスト。
 - `tests/test_analyze_config_checkpoint.py`: AnalysisConfig チェックポイント設定解決テスト。
 - `tests/test_analyze_cli_checkpoint.py`: analyze.py シグナル捕捉・partial 出力・終了コード 6 テスト。
+- `tests/test_analysis_limits.py`: AnalysisConfig/AnalysisParams の実行時間・ページ数上限の解決・検証・中断テスト。

@@ -37,6 +37,7 @@ class Collector:
         checkpoint_store: Optional[CheckpointStore] = None,
         resume_collected_ids: Optional[Set[str]] = None,
         interrupt_checker: Optional[Callable[[], bool]] = None,
+        max_pages: Optional[int] = None,
     ):
         self.client = client
         self.analyze_restrictions = analyze_restrictions
@@ -51,6 +52,7 @@ class Collector:
         self.checkpoint_store = checkpoint_store
         self.resume_collected_ids = set(resume_collected_ids) if resume_collected_ids else set()
         self.interrupt_checker = interrupt_checker
+        self.max_pages = max_pages
         self.raw_inventory = RawInventory()
 
     def collect_workspace_overview(self, spaces: List[dict], root_ids: List[str]) -> None:
@@ -241,6 +243,11 @@ class Collector:
                 logger.info("収集処理の自己中断シグナルを検知しました。収集を停止します。")
                 raise CollectInterrupted("収集処理が中断されました")
 
+            # 最大ページ数上限チェック
+            if self.max_pages is not None and len(inventory.pages) >= self.max_pages:
+                logger.info(f"最大収集ページ数上限 ({self.max_pages} ページ) に達したため、収集処理を切り上げます。")
+                raise CollectInterrupted("最大ページ数上限に到達しました")
+
             page_id, level, ancestors_titles = stack.pop()
 
             if page_id in visited_page_ids:
@@ -258,7 +265,7 @@ class Collector:
                         break
             else:
                 processed_count += 1
-                if processed_count % 50 == 0 or processed_count == 1:
+                if processed_count == 1 or processed_count % 10 == 0:
                     logger.info(f"アセスメント収集進捗: {processed_count} ページ処理中... (現在のID: {page_id})")
 
                 # 1. ページ詳細取得

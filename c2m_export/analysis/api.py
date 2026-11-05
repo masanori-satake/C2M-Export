@@ -69,6 +69,8 @@ class AnalysisConfigProtocol(Protocol):
     all_spaces: bool
     cql: Optional[str]
     deep: bool
+    timeout_seconds: Optional[int]
+    max_pages: Optional[int]
     collect_history: Optional[bool]
     collect_labels: Optional[bool]
     collect_comments: Optional[bool]
@@ -411,6 +413,28 @@ def run_analysis(
                 checkpoint_store = None
 
         # 2. 収集
+        # タイムアウトおよび最大ページ数の解決 (params 優先、None 時のみ config 参照)
+        p_timeout = getattr(params, "timeout_seconds", None)
+        c_timeout = getattr(config, "timeout_seconds", None)
+        timeout_seconds = p_timeout if p_timeout is not None else c_timeout
+
+        p_max_pages = getattr(params, "max_pages", None)
+        c_max_pages = getattr(config, "max_pages", None)
+        max_pages = p_max_pages if p_max_pages is not None else c_max_pages
+
+        # タイムアウト判定コールバックの合成
+        import time
+
+        start_time = time.monotonic()
+
+        def _combined_interrupt_checker() -> bool:
+            if interrupt_checker and interrupt_checker():
+                return True
+            if timeout_seconds is not None and (time.monotonic() - start_time) >= timeout_seconds:
+                logger.info(f"実行時間上限 ({timeout_seconds}秒) に達したため、処理を中断します。")
+                return True
+            return False
+
         collector = Collector(
             client=client,
             analyze_restrictions=params.analyze_restrictions if params.analyze_restrictions is not None else True,
@@ -424,7 +448,8 @@ def run_analysis(
             collect_space_permissions=collect_space_permissions,
             checkpoint_store=checkpoint_store,
             resume_collected_ids=resume_collected_ids,
-            interrupt_checker=interrupt_checker,
+            interrupt_checker=_combined_interrupt_checker,
+            max_pages=max_pages,
         )
 
         # 復元済みページの先行投入
@@ -440,8 +465,8 @@ def run_analysis(
         # DFS 走査
         try:
             inventory = collector.collect(resolved_root_ids)
-        except CollectInterrupted:
-            logger.info("収集処理が中断されました。部分集計 (partial) に移行します。")
+        except CollectInterrupted as e:
+            logger.info(f"収集処理が中断されました ({e})。部分集計 (partial) に移行します。")
             is_interrupted = True
             interrupted_reason = "signal"
             inventory = collector.raw_inventory
@@ -466,7 +491,7 @@ def run_analysis(
                         target_skeys.append(k)
             collector.collect_space_details(target_skeys)
 
-        if not is_interrupted and interrupt_checker and interrupt_checker():
+        if not is_interrupted and _combined_interrupt_checker():
             is_interrupted = True
             interrupted_reason = "signal"
 

@@ -45,6 +45,19 @@ python -m c2m_export.analyze \
 - `--resume`: 既存のチェックポイントから未収集分を再開
 - `--checkpoint-interval`: チェックポイント flush 粒度 (件数, 既定: 1)
 - `--checkpoint-dir`: チェックポイント保存先ディレクトリ (既定: `.c2m_analyze_checkpoint`)
+- `--timeout-seconds`: 走査・分析処理の最大実行時間（秒単位）。到達時は安全に中断し部分結果 (`partial`) を出力
+- `--max-pages`: 走査する最大ページ数上限。到達時は安全に中断し部分結果 (`partial`) を出力
+
+### Windows (PowerShell / cmd.exe) 実行時の注意事項
+AI エージェントが Windows ターミナル上で本 CLI や Skill を実行する際、以下の点に配慮してください：
+1. **Linux 固有の構文（`/dev/null` や bash パイプ等）を使用しない**:
+   - 出力を破棄したい場合、PowerShell では `> $null`、cmd.exe では `> NUL 2>&1` を使用してください。
+   - `analyze` コマンドは標準出力に純粋な JSON のみを、進捗ログや警告は標準エラー出力（stderr）に分離して出力します。パイプやリダイレクトで捨てずにそのまま実行し、終了コードと標準出力の JSON を取得してください。
+2. **長時間の実行・ハング回避**:
+   - 大規模スペースや多数のページが存在する場合、`--timeout-seconds <秒数>` や `--max-pages <件数>` を指定してガードレールを設定してください。上限到達時はそこまでに収集したデータをもとに部分結果（`partial`）が出力されます。
+3. **環境変数の指定形式**:
+   - PowerShell: `$env:C2M_CONFLUENCE_TOKEN="your-token"`
+   - cmd.exe: `set C2M_CONFLUENCE_TOKEN=your-token`
 
 ### 中断耐性とレジューム機能
 大規模ワークスペース分析時、1ページ収集ごとに JSONL 形式のチェックポイント（既定: `.c2m_analyze_checkpoint/<scope_hash>.jsonl`）へ自動保存されます。`SIGINT` (Ctrl+C) や通信エラー等で収集処理自体が途中で中断した場合、それまでに収集されたデータで部分集計され `status: "partial"`（終了コード 6）が出力されます（※個別のページ取得失敗をスキップして収集処理を継続しただけの通常ケースでは `status: "partial"` にはならず、`uncertainties` に記録されて `status: "ok"` となります）。次回実行時に `--resume` オプションを指定することで、同一スコープの未収集ページのみから処理を再開できます。正常完了時はチェックポイントファイルは自動削除されます。
@@ -128,6 +141,8 @@ MCP クライアント (Kiro、Claude Desktop 等) に本 MCP サーバを登録
 | `collect_effective_restrictions` | ブール値 | 任意 | 実効アクセス制限の個別収集 | `None` |
 | `collect_extracted_text` | ブール値 | 任意 | 抽出テキストの個別収集 | `None` |
 | `collect_space_permissions` | ブール値 | 任意 | Space 権限情報の個別収集 | `None` |
+| `timeout_seconds` | 整数 | 任意 | 走査・分析処理の最大実行時間（秒） | `None` |
+| `max_pages` | 整数 | 任意 | 走査する最大ページ数上限 | `None` |
 
 ### 動作確認手順
 
