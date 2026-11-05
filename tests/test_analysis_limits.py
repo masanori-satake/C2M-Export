@@ -106,6 +106,13 @@ def test_analysis_params_limits_validation():
     with pytest.raises(ValueError, match="max_pages"):
         AnalysisParams(max_pages=-1).validate()
 
+    # bool 値の拒否
+    with pytest.raises(ValueError, match="timeout_seconds"):
+        AnalysisParams(timeout_seconds=True).validate()
+
+    with pytest.raises(ValueError, match="max_pages"):
+        AnalysisParams(max_pages=True).validate()
+
     # 正常値
     params = AnalysisParams(timeout_seconds=10, max_pages=10)
     params.validate()
@@ -141,6 +148,13 @@ def test_run_analysis_resolved_config_validation():
     res = run_analysis(params, config, client=client)
     assert res.status == "error"
     assert "timeout_seconds" in res.error.message
+
+    # bool 値が config に渡された場合も拒否
+    config.timeout_seconds = None
+    config.max_pages = True
+    res = run_analysis(params, config, client=client)
+    assert res.status == "error"
+    assert "max_pages" in res.error.message
 
 
 def test_collector_max_pages_resume():
@@ -206,6 +220,41 @@ analysis:
         cfg.load()
         with pytest.raises(ValueError, match="timeout_seconds"):
             cfg.validate()
+
+
+def test_run_analysis_interrupt_in_overview_and_details():
+    """全体把握フェーズおよび詳細調査フェーズでの中断が安全に partial 結果を返すことを検証."""
+    config = DummyConfig()
+    config.deep = True
+    client = _make_mock_client()
+    client.list_spaces.return_value = [{"key": "SP1"}, {"key": "SP2"}]
+
+    # 1. overview フェーズで即時中断
+    params = AnalysisParams(usecases=["risk"])
+    res = run_analysis(params, config, client=client, interrupt_checker=lambda: True)
+    assert res.status == "partial"
+    assert res.uncertainties.interrupted is True
+
+    # 2. space_details フェーズで中断
+    config.collect_space_permissions = True
+    config.space_keys = ["SP1", "SP2"]
+    flag = False
+
+    def interrupt_in_space_details():
+        return flag
+
+    orig_get_page = client.get_page.side_effect
+
+    def get_page_hook(pid, **kwargs):
+        nonlocal flag
+        flag = True  # DFS 終了後に True になるように設定
+        return orig_get_page(pid, **kwargs)
+
+    client.get_page.side_effect = get_page_hook
+
+    res = run_analysis(params, config, client=client, interrupt_checker=interrupt_in_space_details)
+    assert res.status == "partial"
+    assert res.uncertainties.interrupted is True
 
 
 def test_run_analysis_timeout_seconds_limit():

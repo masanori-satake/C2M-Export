@@ -62,6 +62,10 @@ class Collector:
         unavailable_apis: List[str] = []
 
         for sp in spaces:
+            if self.interrupt_checker and self.interrupt_checker():
+                logger.info("収集処理の自己中断シグナルを検知しました。全体把握フェーズを停止します。")
+                raise CollectInterrupted("収集処理が中断されました")
+
             space_key = sp.get("key", "")
             if not space_key:
                 continue
@@ -192,6 +196,10 @@ class Collector:
         space_map = {sp.space_key: sp for sp in self.raw_inventory.spaces}
 
         for skey in space_keys:
+            if self.interrupt_checker and self.interrupt_checker():
+                logger.info("収集処理の自己中断シグナルを検知しました。詳細調査フェーズを停止します。")
+                raise CollectInterrupted("収集処理が中断されました")
+
             sp_meta = space_map.get(skey)
             if sp_meta is None:
                 sp_meta = SpaceMeta(space_key=skey, name=skey, type="global", status="current")

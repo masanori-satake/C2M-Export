@@ -454,12 +454,18 @@ class AnalysisConfig:
                 f"現象: checkpoint_interval '{self.checkpoint_interval}' は無効です。原因: 1 以上の整数でない値が指定されました。対処方法: --checkpoint-interval に 1 以上の整数を指定してください。"
             )
 
-        if self.timeout_seconds is not None and (not isinstance(self.timeout_seconds, int) or self.timeout_seconds < 1):
+        if self.timeout_seconds is not None and (
+            not isinstance(self.timeout_seconds, int)
+            or isinstance(self.timeout_seconds, bool)
+            or self.timeout_seconds < 1
+        ):
             raise ValueError(
                 f"現象: timeout_seconds '{self.timeout_seconds}' は無効です。原因: 1 以上の整数でない値が指定されました。対処方法: --timeout-seconds に 1 以上の整数を指定してください。"
             )
 
-        if self.max_pages is not None and (not isinstance(self.max_pages, int) or self.max_pages < 1):
+        if self.max_pages is not None and (
+            not isinstance(self.max_pages, int) or isinstance(self.max_pages, bool) or self.max_pages < 1
+        ):
             raise ValueError(
                 f"現象: max_pages '{self.max_pages}' は無効です。原因: 1 以上の整数でない値が指定されました。対処方法: --max-pages に 1 以上の整数を指定してください。"
             )
