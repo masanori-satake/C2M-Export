@@ -166,13 +166,16 @@ MOVE_RENAME は `computed_paths` で再計算した新しい親と、移動先�
 
 C2M-Export の分析 Skill 定義 (`SKILL.md`) は、GitHub Copilot、Kiro、および汎用 Agent Skills の 3 形態で同一の標準フォーマットを採用しています。各ツールの自動検出・発火条件（`.kiro/skills/`: Kiro、`.github/skills/`: GitHub Copilot、`skills/`: 汎用 Agent Skills）に合わせて 3 箇所に配置しています。
 
-- **正本位置**: `skills/confluence-analysis/SKILL.md` (および `skills/confluence-analysis/scripts/`)
+- **正本位置**: `skills/confluence-analysis/SKILL.md` (および `skills/confluence-analysis/scripts/`、`skills/confluence-analysis/references/`)
 - **複製配置先**:
   - GitHub Copilot プロジェクトスキル: `.github/skills/confluence-analysis/SKILL.md`
   - Kiro スキル: `.kiro/skills/confluence-analysis/SKILL.md`
 
 **運用原則**:
 SKILL.md やスクリプトに対する修正・機能拡張を行う際は、**必ず正本 `skills/confluence-analysis/` 配下のファイルを直接編集**し、編集完了後に複製配置先（`.github/skills/` および `.kiro/skills/`）へ同一ファイルを同期（上書きコピー）してください。正本と複製先の不一致を防ぐため、直接複製先ファイルを編集することは禁止されています。
+
+**SKILL.md の構成（spec 0015）**:
+SKILL.md 本体は実行手順と判断ルールに絞った要点版とし、詳細情報は `references/` に分離しています（オプション全表は `references/options.md`、出力 JSON の全フィールド仕様と互換性ポリシーは `references/output_schema.md`、Windows 実行時の注意事項の詳細は `references/windows_notes.md`）。references も SKILL.md と同じく 3 箇所へ同期します。分離前の本体は推定 5,509 トークンで、分離後は約 3,700 トークンです。情報を追加する際は、毎回の実行で要るものだけを本体に置き、場面限定の詳細は references に置く原則を守ってください。
 
 ### MCP サーバのアーキテクチャ
 
