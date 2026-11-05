@@ -145,6 +145,8 @@ python skills/confluence-analysis/scripts/run_analysis.py \
 5. `empty_with_attachments`: 添付ファイルは存在するが、本文がほとんど空（既定 200 バイト未満）のページ
 6. `macros`: 使用されている Confluence マクロの統計と手作業修復候補カテゴリ（Markdown 変換時影響）
 
+目的別の進め方（推奨パラメータ・コマンド例・結果の見どころ）は [references/usecases.md](references/usecases.md) を参照してください。
+
 ## 結果の読み方（要点）
 
 - 標準出力は純粋な JSON です。まず `status`（`ok` / `partial` / `error`）と `uncertainties` を確認してください。
@@ -176,4 +178,4 @@ python skills/confluence-analysis/scripts/run_analysis.py \
 - `6`: 部分成功 (`partial`)
 - `10`: 内部エラー (`INTERNAL_ERROR`)
 
-エラー発生時も、標準出力に `status: "error"` の構造化 JSON (ErrorObject) が出力されます（標準エラー出力には日本語詳細メッセージが出力されます）。
+エラー発生時も、標準出力に `status: "error"` の構造化 JSON (ErrorObject) が出力されます（標準エラー出力には日本語詳細メッセージが出力されます）。エラー時の確認と次のアクションは [references/errors.md](references/errors.md) を参照してください。
