@@ -63,6 +63,7 @@ def test_collector_resume_skip(mock_client):
 
 def test_collector_cooperative_interruption(mock_client):
     """interrupt_checker が True を返すと CollectInterrupted が送出され収集済み分が保持されることを確認."""
+
     # 中断判定は呼び出し回数ではなく収集状態に基づく（先読み等の判定ポイント追加に影響されないため）。
     # 101 の子ページ取得が終わった時点 = 1 ページ収集済みで中断する。
     def interrupt_checker():
