@@ -76,12 +76,10 @@ def test_run_analysis_checkpoint_interrupted(tmp_path, mock_client):
     cfg = DummyConfig(tmp_path)
     params = AnalysisParams(usecases=["risk"])
 
-    call_count = 0
-
+    # 中断判定は呼び出し回数ではなく収集状態に基づく（先読み等の判定ポイント追加に影響されないため）。
+    # 101 の子ページ取得が終わった時点 = 1 ページ収集済みで中断する。
     def interrupt_checker():
-        nonlocal call_count
-        call_count += 1
-        return call_count > 1
+        return mock_client.get_child_pages.call_count >= 1
 
     resp = run_analysis(params, cfg, client=mock_client, interrupt_checker=interrupt_checker)
 

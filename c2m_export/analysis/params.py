@@ -52,6 +52,7 @@ class AnalysisParams:
     checkpoint_dir: str = ".c2m_analyze_checkpoint"
     timeout_seconds: Optional[int] = None
     max_pages: Optional[int] = None
+    concurrency: Optional[int] = None
 
     def __post_init__(self):
         """インスタンス初期化後の正規化処理."""

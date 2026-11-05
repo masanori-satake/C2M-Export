@@ -63,12 +63,10 @@ def test_collector_resume_skip(mock_client):
 
 def test_collector_cooperative_interruption(mock_client):
     """interrupt_checker が True を返すと CollectInterrupted が送出され収集済み分が保持されることを確認."""
-    call_count = 0
-
+    # 中断判定は呼び出し回数ではなく収集状態に基づく（先読み等の判定ポイント追加に影響されないため）。
+    # 101 の子ページ取得が終わった時点 = 1 ページ収集済みで中断する。
     def interrupt_checker():
-        nonlocal call_count
-        call_count += 1
-        return call_count > 1  # 2 回目のループで True
+        return mock_client.get_child_pages.call_count >= 1
 
     mock_client.get_child_pages.side_effect = lambda pid: [{"id": "102"}] if pid == "101" else []
 

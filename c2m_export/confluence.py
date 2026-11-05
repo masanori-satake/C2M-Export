@@ -1,6 +1,7 @@
 import logging
+import threading
 import time
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple, Union
 
 import requests
 
@@ -57,7 +58,14 @@ class ConfluenceClient:
     Bearer認証、Proxy経由の接続、および一時的なエラーに対するリトライロジックを実装。
     """
 
-    def __init__(self, base_url: str, token: str, proxy: Optional[str] = None):
+    def __init__(
+        self,
+        base_url: str,
+        token: str,
+        proxy: Optional[str] = None,
+        connect_timeout: Optional[float] = None,
+        read_timeout: Optional[float] = None,
+    ):
         self.base_url = base_url
         self.headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
         self.proxies = None
@@ -67,6 +75,33 @@ class ConfluenceClient:
         self.session.headers.update(self.headers)
         if self.proxies:
             self.session.proxies.update(self.proxies)
+        # スレッドローカルセッション（並列実行時に共有セッションを使わないため）
+        self._session_local = threading.local()
+        # リクエスト timeout: 分離指定がある場合のみ (connect, read) タプルにする
+        if connect_timeout is not None or read_timeout is not None:
+            self._request_timeout: Union[float, Tuple[float, float]] = (
+                float(connect_timeout) if connect_timeout is not None else 10.0,
+                float(read_timeout) if read_timeout is not None else 30.0,
+            )
+        else:
+            self._request_timeout = 30
+
+    def _get_session(self) -> requests.Session:
+        """現在のスレッド専用のセッションを返す（無ければ生成する）.
+
+        requests.Session はスレッド安全ではないため、並列実行時は
+        スレッドごとに分離する。メインスレッドでは self.session を使う。
+        """
+        if threading.current_thread() is threading.main_thread():
+            return self.session
+        session = getattr(self._session_local, "session", None)
+        if session is None:
+            session = requests.Session()
+            session.headers.update(self.headers)
+            if self.proxies:
+                session.proxies.update(self.proxies)
+            self._session_local.session = session
+        return session
 
     def _request(
         self, method: str, path: str, params: Optional[Dict] = None, retries: int = 3, backoff: float = 2.0
@@ -78,7 +113,7 @@ class ConfluenceClient:
         url = f"{self.base_url}{path}"
         for i in range(retries):
             try:
-                response = self.session.request(method, url, params=params, timeout=30)
+                response = self._get_session().request(method, url, params=params, timeout=self._request_timeout)
                 if response.status_code == 200:
                     return response.json()
                 elif 500 <= response.status_code < 600 and i < retries - 1:
@@ -490,7 +525,7 @@ class ConfluenceClient:
 
         for i in range(retries):
             try:
-                response = self.session.get(url, stream=True, timeout=60)
+                response = self._get_session().get(url, stream=True, timeout=60)
                 if response.status_code == 200:
                     written_bytes = 0
                     os.makedirs(os.path.dirname(os.path.abspath(dest_file)), exist_ok=True)
