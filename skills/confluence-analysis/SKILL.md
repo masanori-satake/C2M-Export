@@ -58,6 +58,15 @@ python skills/confluence-analysis/scripts/run_analysis.py \
 - `is_large` が `true`（推定 120 秒超または 500 ページ超）の場合は、そのまま本実行せず、対象分割 / usecase の絞り込み / `--no-restrictions` / `--mode summary` のいずれか（または併用）を利用者に提示し、判断を仰いでください。**自動で対象を絞らないでください。**
 - `exceeds_skill_default_timeout` が `true` の場合は、既定上限 300 秒では partial になる見込みです。本実行時に `--timeout-seconds` の明示指定（延長）を提案してください。
 
+### 見積もり結果からの判断（決定表）
+
+| 見積もりの結果 | 実行方法 |
+|---|---|
+| `is_large` が `false` かつ `exceeds_skill_default_timeout` が `false` | そのまま同期実行する |
+| `is_large` が `false` かつ `exceeds_skill_default_timeout` が `true` | `--timeout-seconds` の延長を提案してから同期実行する（または `--detach` に切り替える） |
+| `is_large` が `true` | そのまま本実行しない。対象分割 / usecase の絞り込み / `--no-restrictions` / `--mode summary` を提示して判断を仰ぐ（自動で対象を絞らない）。全対象で実行すると決まった場合は `--detach` で開始する |
+| 見積もり自体が失敗した | 本実行に進まず、起点パラメータ（`--space-key` / `--root-page-id` 等）と権限を確認する |
+
 ### 大きな対象では非同期実行を使う
 
 見積もりで `is_large` が `true` の場合、本実行は同期ではなく **非同期ジョブ** で開始してください（開始コマンドは即座に返るため、エージェント側のターミナルを長時間占有しません）:
@@ -142,6 +151,20 @@ python skills/confluence-analysis/scripts/run_analysis.py \
 - `status` が `partial` の場合は、`uncertainties.interrupted_reason` と `collected_page_count` を見て、利用者へ「どこまで終わったか」を伝えたうえで `--resume` での再開を提案してください。
 - 取得できなかった情報は `uncertainties` の各失敗フィールドと `unavailable_apis` に集約されています。「データが無い」ことと「取得に失敗した」ことを混同しないでください。
 - 全フィールドの仕様は [references/output_schema.md](references/output_schema.md) を参照してください。
+
+## 結果の報告（型）
+
+分析結果を利用者へ報告するときは、次の順序で伝えてください。
+
+- **結論**: `status`（`ok` / `partial` / `error`）と一言要約。
+- **主要数値**: 対象スペース数、総ページ数、添付総数、実行した usecase 別の件数（`summary` と各 usecase の `counts` から）。
+- **不確実性**: `partial` の場合は収集済み件数と中断理由。取得に失敗した情報があれば `uncertainties` の内訳。数値が見積もり由来の場合はその旨。
+- **次のアクション**: `--resume` での再開、追加調査、分割実行などの提案。無ければ「なし」と明記する。
+
+報告のルール:
+
+- `partial` を「完了」と表現しないでください（「途中まで完了」のように状態が伝わる言い方にする）。
+- 取得に失敗した情報・未取得の情報は省略せず、不確実性の項に必ず含めてください。
 
 ## 終了コード規約
 
