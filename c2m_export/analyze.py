@@ -8,6 +8,7 @@ import threading
 from typing import Dict
 
 from c2m_export.analysis.api import run_analysis
+from c2m_export.analysis.estimate import estimate_analysis
 from c2m_export.analysis.params import AnalysisParams
 from c2m_export.analysis.response import (
     CODE_API_ERROR,
@@ -121,8 +122,11 @@ def main() -> None:
             max_pages=config.max_pages,
         )
 
-        # run_analysis 実行
-        response = run_analysis(params, config, interrupt_checker=_interrupted_event.is_set)
+        # 実行（--estimate 指定時は事前見積もりのみを行い、本走査は行わない）
+        if getattr(config, "estimate", False):
+            response = estimate_analysis(params, config, interrupt_checker=_interrupted_event.is_set)
+        else:
+            response = run_analysis(params, config, interrupt_checker=_interrupted_event.is_set)
 
         # 出力文字列のサニタイズ（全出力に対して1回のみ適用）
         json_out = json.dumps(response.to_dict(), ensure_ascii=False, indent=2)

@@ -73,3 +73,12 @@ def test_build_command_appends_default_when_config_has_no_timeout(tmp_path):
     config_file.write_text("analysis:\n  mode: summary\n", encoding="utf-8")
     cmd = module.build_command(["--config", str(config_file)])
     assert cmd[-2:] == ["--timeout-seconds", "300"]
+
+
+def test_build_command_does_not_append_timeout_for_estimate():
+    """--estimate 実行時は既定の timeout を補わない（見積もりは独立モード）."""
+    module = _load_module()
+    cmd = module.build_command(["--estimate", "--space-key", "DEV"])
+    assert "--estimate" in cmd
+    assert "--timeout-seconds" not in cmd
+    assert "300" not in cmd

@@ -182,6 +182,7 @@ class AnalysisConfig:
         # 実行保護リミット設定
         self.timeout_seconds: Optional[int] = None
         self.max_pages: Optional[int] = None
+        self.estimate: bool = False
 
     def load(self):
         """設定を読み込む。優先順位は CLI > 環境変数 > 設定ファイル > デフォルト."""
@@ -262,6 +263,8 @@ class AnalysisConfig:
                                 self.timeout_seconds = analysis_sec["timeout_seconds"]
                             if "max_pages" in analysis_sec and analysis_sec["max_pages"] is not None:
                                 self.max_pages = analysis_sec["max_pages"]
+                            if "estimate" in analysis_sec:
+                                self.estimate = bool(analysis_sec["estimate"])
             except Exception as e:
                 print(
                     f"設定ファイル {config_path} の読み込みに失敗しました（現象）。詳細: {e}（原因）。ファイル形式を確認してください（対処方法）"
@@ -340,6 +343,13 @@ class AnalysisConfig:
         # 実行保護リミットオプション
         parser.add_argument("--timeout-seconds", type=int, help="走査・分析処理の最大実行時間（秒）")
         parser.add_argument("--max-pages", type=int, help="走査する最大ページ数")
+
+        # 事前見積もりモード (spec 0012)
+        parser.add_argument(
+            "--estimate",
+            action="store_true",
+            help="本実行を行わず、対象ページ数と推定所要のみを見積もって返す",
+        )
 
         try:
             cli_args = parser.parse_args()
@@ -423,6 +433,8 @@ class AnalysisConfig:
             self.timeout_seconds = cli_args.timeout_seconds
         if cli_args.max_pages is not None:
             self.max_pages = cli_args.max_pages
+        if cli_args.estimate:
+            self.estimate = True
 
     def validate(self):
         """必須設定の有無を確認し、URLの正規化および矛盾チェックを行う."""

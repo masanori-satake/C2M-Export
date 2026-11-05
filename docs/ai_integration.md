@@ -47,6 +47,7 @@ python -m c2m_export.analyze \
 - `--checkpoint-dir`: チェックポイント保存先ディレクトリ (既定: `.c2m_analyze_checkpoint`)
 - `--timeout-seconds`: 走査・分析処理の最大実行時間（秒単位）。到達時は安全に中断し部分結果 (`partial`) を出力
 - `--max-pages`: 走査する最大ページ数上限。到達時は安全に中断し部分結果 (`partial`) を出力
+- `--estimate`: 本実行を行わず、対象ページ数・想定リクエスト数・推定所要秒数を `estimate` フィールドで返す事前見積もりモード。本実行の前に規模を確認する用途で、推定所要は実測レイテンシに基づく下限寄りの目安です。推定 120 秒超または 500 ページ超で `is_large: true` となり、スキル既定上限 300 秒を超える見込みの場合は `exceeds_skill_default_timeout: true` が返ります
 
 ### Windows (PowerShell / cmd.exe) 実行時の注意事項
 AI エージェントが Windows ターミナル上で本 CLI や Skill を実行する際、以下の点に配慮してください：
