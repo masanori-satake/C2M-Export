@@ -120,12 +120,15 @@ class AnalysisResponse:
     usecases: Dict[str, Any] = field(default_factory=dict)
     uncertainties: Uncertainties = field(default_factory=Uncertainties)
     error: Optional[ErrorObject] = None
+    estimate: Optional[Dict[str, Any]] = None  # 事前見積もり結果 (--estimate 時のみ設定)
 
     def to_dict(self) -> Dict[str, Any]:
         """JSON シリアライズ用の辞書形式へ変換する (errorがNoneの場合は除外)."""
         res = asdict(self)
         if res.get("error") is None:
             res.pop("error", None)
+        if res.get("estimate") is None:
+            res.pop("estimate", None)
 
         # level_distribution のキーが int の場合は str に変換（JSON互換性のため）
         if "summary" in res and isinstance(res["summary"], dict):

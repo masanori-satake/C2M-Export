@@ -49,6 +49,23 @@ AI エージェントが Windows ターミナル上で本スキルやコマン�
 
 ### 基本的なコマンド
 
+**まず事前見積もりを実行してください**（本実行の前に、対象の規模と見込み時間を確認します）:
+
+```bash
+python skills/confluence-analysis/scripts/run_analysis.py \
+  --base-url "https://confluence.example.com" \
+  --space-key "DEV" \
+  --estimate
+```
+
+見積もり結果（`estimate` フィールド）の読み方:
+
+- `target_pages`: 対象ページ総数。`estimated_seconds`: 推定所要秒数（実測レイテンシに基づく下限寄りの目安）。
+- `is_large` が `true`（推定 120 秒超または 500 ページ超）の場合は、そのまま本実行せず、対象分割 / usecase の絞り込み / `--no-restrictions` / `--mode summary` のいずれか（または併用）を利用者に提示し、判断を仰いでください。**自動で対象を絞らないでください。**
+- `exceeds_skill_default_timeout` が `true` の場合は、既定上限 300 秒では partial になる見込みです。本実行時に `--timeout-seconds` の明示指定（延長）を提案してください。
+
+見積もり後に本実行します:
+
 ```bash
 python -m c2m_export.analyze \
   --base-url "https://confluence.example.com" \
@@ -99,6 +116,7 @@ python skills/confluence-analysis/scripts/run_analysis.py \
 | `--checkpoint-dir` | 文字列 | チェックポイント保存先ディレクトリ | `.c2m_analyze_checkpoint` |
 | `--timeout-seconds` | 整数 | 走査・分析処理の最大実行時間（秒） | なし (無制限) |
 | `--max-pages` | 整数 | 走査する最大ページ数上限 | なし (無制限) |
+| `--estimate` | フラグ | 本実行を行わず、対象ページ数と推定所要のみを見積もって返す | オフ |
 | `--proxy` | 文字列 | HTTP/HTTPS プロキシ URL | なし |
 | `--config` | 文字列 | 設定ファイルのパス | `c2m_config.yaml` |
 | `--token` | 文字列 | Confluence Bearer トークン (環境変数推奨) | なし |
