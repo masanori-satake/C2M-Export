@@ -88,6 +88,28 @@ def test_estimate_target_not_found():
     assert resp.error.code == "TARGET_NOT_FOUND"
 
 
+def test_estimate_all_spaces_auth_failure_is_auth_failed():
+    """--all-spaces の見積もりで Space 一覧の認証失敗は AUTH_FAILED になる (spec 0019 F2)."""
+    client = _make_client()
+    response = MagicMock()
+    response.status_code = 401
+    client.list_spaces.side_effect = requests.exceptions.HTTPError(response=response)
+    resp = estimate_analysis(AnalysisParams(all_spaces=True), _make_config(), client)
+    assert resp.status == "error"
+    assert resp.error is not None
+    assert resp.error.code == "AUTH_FAILED"
+
+
+def test_estimate_all_spaces_list_failure_is_api_error():
+    """--all-spaces の見積もりで認証以外の Space 一覧失敗は API_ERROR のまま."""
+    client = _make_client()
+    client.list_spaces.side_effect = RuntimeError("boom")
+    resp = estimate_analysis(AnalysisParams(all_spaces=True), _make_config(), client)
+    assert resp.status == "error"
+    assert resp.error is not None
+    assert resp.error.code == "API_ERROR"
+
+
 def test_normal_response_omits_estimate_field():
     """通常実行のレスポンス JSON には estimate キーが含まれない（後方互換）."""
     assert "estimate" not in AnalysisResponse().to_dict()

@@ -127,3 +127,15 @@ def test_request_cancel_sets_flag(tmp_path):
     status = jobs.build_status(jobs_dir, job_id)
     assert status is not None
     assert status["cancel_requested"] is True
+
+
+def test_request_cancel_with_progress_only(tmp_path):
+    """ジョブ記録が無く進捗だけあるジョブ（起動直後）も中断できる (spec 0019 F1)."""
+    jobs_dir = str(tmp_path)
+    job_id = "job-test-progress-only"
+    paths = jobs.job_file_paths(jobs_dir, job_id)
+    jobs.write_json_atomic(paths["progress"], {"job_id": job_id, "state": "running"})
+    # status では見えるジョブであること
+    assert jobs.build_status(jobs_dir, job_id) is not None
+    assert jobs.request_cancel(jobs_dir, job_id) is True
+    assert paths["cancel"].exists()
