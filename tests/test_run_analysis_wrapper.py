@@ -45,3 +45,31 @@ def test_build_command_respects_equals_style_timeout():
     cmd = module.build_command(["--timeout-seconds=120"])
     assert "--timeout-seconds=120" in cmd
     assert cmd.count("--timeout-seconds") == 0
+
+
+def test_build_command_respects_abbreviated_timeout():
+    """argparse の省略形 --timeout も明示指定として検出する."""
+    module = _load_module()
+    cmd = module.build_command(["--timeout", "60"])
+    assert "--timeout" in cmd and "60" in cmd
+    assert "--timeout-seconds" not in cmd
+    assert "300" not in cmd
+
+
+def test_build_command_respects_config_file_timeout(tmp_path):
+    """設定ファイルに analysis.timeout_seconds があれば既定値を補わない（CLI が設定を上書きしない）."""
+    module = _load_module()
+    config_file = tmp_path / "c2m_config.yaml"
+    config_file.write_text("analysis:\n  timeout_seconds: 900\n", encoding="utf-8")
+    cmd = module.build_command(["--config", str(config_file)])
+    assert "--timeout-seconds" not in cmd
+    assert "300" not in cmd
+
+
+def test_build_command_appends_default_when_config_has_no_timeout(tmp_path):
+    """設定ファイルに timeout_seconds が無ければ既定値を補う."""
+    module = _load_module()
+    config_file = tmp_path / "c2m_config.yaml"
+    config_file.write_text("analysis:\n  mode: summary\n", encoding="utf-8")
+    cmd = module.build_command(["--config", str(config_file)])
+    assert cmd[-2:] == ["--timeout-seconds", "300"]
