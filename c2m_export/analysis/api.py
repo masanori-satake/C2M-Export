@@ -312,6 +312,8 @@ def run_analysis(
                 client_kwargs["connect_timeout"] = config.connect_timeout_seconds
             if getattr(config, "read_timeout_seconds", None) is not None:
                 client_kwargs["read_timeout"] = config.read_timeout_seconds
+            if getattr(config, "descendant_count_read_timeout_seconds", None) is not None:
+                client_kwargs["count_read_timeout"] = config.descendant_count_read_timeout_seconds
             client = ConfluenceClient(**client_kwargs)
 
         # 0. 共有 Space 一覧の取得

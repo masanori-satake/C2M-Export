@@ -26,19 +26,22 @@ def summarize_spaces(spaces: List[SpaceMeta]) -> Dict:
         if sp.status == "archived":
             archived_cnt += 1
 
-        space_list.append(
-            {
-                "space_key": sp.space_key,
-                "name": sp.name,
-                "type": sp.type,
-                "status": sp.status,
-                "description": sp.description,
-                "label_count": sp.label_count,
-                "page_count_preview": sp.page_count_preview,
-                "watcher_count": sp.watcher_count,
-                "permission_entries": sp.permission_entries,
-            }
-        )
+        space_entry = {
+            "space_key": sp.space_key,
+            "name": sp.name,
+            "type": sp.type,
+            "status": sp.status,
+            "description": sp.description,
+            "label_count": sp.label_count,
+            "page_count_preview": sp.page_count_preview,
+            "watcher_count": sp.watcher_count,
+            "permission_entries": sp.permission_entries,
+        }
+        # 子孫数取得の部分失敗がある場合だけ欠けの印を出す (spec 0021)。
+        # 失敗がない通常ケースの出力は従来と同一に保つ。
+        if sp.page_count_preview_partial:
+            space_entry["page_count_preview_partial"] = True
+        space_list.append(space_entry)
 
     return {
         "spaces": space_list,

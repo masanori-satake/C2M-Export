@@ -342,3 +342,40 @@ def test_resolve_roots_uses_light_expand():
     assert empty_space_keys == []
     assert cql_failed is False
     client.get_page.assert_called_once_with("101", expand="version")
+
+
+def _captured_count_timeout(**kwargs):
+    client = ConfluenceClient("https://confluence.example.com", "dummy", **kwargs)
+    fake = _FakeSession()
+    client.session = fake  # type: ignore[assignment]
+    client.get_descendant_page_count("123")
+    return fake.captured_timeout
+
+
+def test_count_read_timeout_applies_only_to_descendant_count():
+    """子孫数取得専用の読み取り timeout は、そのエンドポイントだけに効く (spec 0021)."""
+    # 未指定なら従来どおり
+    assert _captured_count_timeout() == 30
+    # 指定時は接続部を引き継いだ (connect, count_read) タプルになる
+    assert _captured_count_timeout(count_read_timeout=120) == (30.0, 120.0)
+    assert _captured_count_timeout(connect_timeout=5, read_timeout=15, count_read_timeout=120) == (5.0, 120.0)
+    # 通常のリクエストは count_read_timeout の影響を受けない
+    assert _captured_timeout(count_read_timeout=120) == 30
+
+
+def test_analysis_config_validates_descendant_count_timeout():
+    """子孫数取得専用 timeout も validate() で検証される (spec 0021)."""
+    from c2m_export.config import AnalysisConfig
+
+    cfg = AnalysisConfig()
+    cfg.base_url = "https://confluence.example.com"
+    cfg.root_page_ids = ["101"]
+    cfg.token = "dummy"
+    cfg.validate()
+
+    cfg.descendant_count_read_timeout_seconds = 0
+    with pytest.raises(ValueError, match="descendant_count_read_timeout_seconds"):
+        cfg.validate()
+
+    cfg.descendant_count_read_timeout_seconds = 120
+    cfg.validate()

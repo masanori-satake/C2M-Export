@@ -57,11 +57,13 @@ python skills/confluence-analysis/scripts/run_analysis.py \
 - `target_pages`: 対象ページ総数。`estimated_seconds`: 推定所要秒数（実測レイテンシに基づく下限寄りの目安）。
 - `is_large` が `true`（推定 120 秒超または 500 ページ超）の場合は、そのまま本実行せず、対象分割 / usecase の絞り込み / `--no-restrictions` / `--mode summary` のいずれか（または併用）を利用者に提示し、判断を仰いでください。**自動で対象を絞らないでください。**
 - `exceeds_skill_default_timeout` が `true` の場合は、既定上限 300 秒では partial になる見込みです。本実行時に `--timeout-seconds` の明示指定（延長）を提案してください。
+- `may_be_underestimated` が `true` の場合は、一部の起点で子孫数を取得できず、対象を過小に数えています。`is_large` が `false` でも鵜呑みにしないでください。
 
 ### 見積もり結果からの判断（決定表）
 
 | 見積もりの結果 | 実行方法 |
 |---|---|
+| `may_be_underestimated` が `true` | 見積もりは過小の可能性がある。`is_large` の値によらず、大きい可能性を断って判断を仰ぐ（全対象で実行すると決まった場合は `--detach` で開始する） |
 | `is_large` が `false` かつ `exceeds_skill_default_timeout` が `false` | そのまま同期実行する |
 | `is_large` が `false` かつ `exceeds_skill_default_timeout` が `true` | `--timeout-seconds` の延長を提案してから同期実行する（または `--detach` に切り替える） |
 | `is_large` が `true` | そのまま本実行しない。対象分割 / usecase の絞り込み / `--no-restrictions` / `--mode summary` を提示して判断を仰ぐ（自動で対象を絞らない）。全対象で実行すると決まった場合は `--detach` で開始する |

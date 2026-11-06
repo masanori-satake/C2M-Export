@@ -65,6 +65,7 @@ class ConfluenceClient:
         proxy: Optional[str] = None,
         connect_timeout: Optional[float] = None,
         read_timeout: Optional[float] = None,
+        count_read_timeout: Optional[float] = None,
     ):
         self.base_url = base_url
         self.headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
@@ -85,6 +86,20 @@ class ConfluenceClient:
             )
         else:
             self._request_timeout = 30
+        # 子孫数取得専用の timeout (spec 0021): 大きなツリーでは子孫カウントが
+        # 通常より重いため、このエンドポイントだけ読み取り timeout を延ばせる。
+        # 未指定なら None とし、通常の _request_timeout がそのまま使われる。
+        if count_read_timeout is not None:
+            if isinstance(self._request_timeout, tuple):
+                _connect_part = self._request_timeout[0]
+            else:
+                _connect_part = float(self._request_timeout)
+            self._count_request_timeout: Optional[Tuple[float, float]] = (
+                _connect_part,
+                float(count_read_timeout),
+            )
+        else:
+            self._count_request_timeout = None
 
     def _get_session(self) -> requests.Session:
         """現在のスレッド専用のセッションを返す（無ければ生成する）.
@@ -104,16 +119,24 @@ class ConfluenceClient:
         return session
 
     def _request(
-        self, method: str, path: str, params: Optional[Dict] = None, retries: int = 3, backoff: float = 2.0
+        self,
+        method: str,
+        path: str,
+        params: Optional[Dict] = None,
+        retries: int = 3,
+        backoff: float = 2.0,
+        request_timeout: Optional[Union[float, Tuple[float, float]]] = None,
     ) -> Dict:
         """共通のリクエスト処理.
 
         429・5xxエラーやネットワークエラーは指数バックオフで再試行し、401・403・404は即時失敗する。
+        request_timeout を指定すると、この呼び出しだけ通常の timeout を上書きする。
         """
         url = f"{self.base_url}{path}"
+        effective_timeout = request_timeout if request_timeout is not None else self._request_timeout
         for i in range(retries):
             try:
-                response = self._get_session().request(method, url, params=params, timeout=self._request_timeout)
+                response = self._get_session().request(method, url, params=params, timeout=effective_timeout)
                 if response.status_code == 200:
                     return response.json()
                 elif 500 <= response.status_code < 600 and i < retries - 1:
@@ -270,9 +293,13 @@ class ConfluenceClient:
         return self._request("GET", path)
 
     def get_descendant_page_count(self, page_id: str) -> Dict:
-        """指定されたページの子孫ページ総数を取得する (`GET /rest/api/content/{id}/descendant/page/count`)."""
+        """指定されたページの子孫ページ総数を取得する (`GET /rest/api/content/{id}/descendant/page/count`).
+
+        子孫カウントはサーバ側の再帰処理で重くなりやすいため、専用の読み取り
+        timeout (count_read_timeout) が指定されていればそれを適用する (spec 0021)。
+        """
         path = f"/rest/api/content/{page_id}/descendant/page/count"
-        return self._request("GET", path)
+        return self._request("GET", path, request_timeout=self._count_request_timeout)
 
     def scan_content(
         self,

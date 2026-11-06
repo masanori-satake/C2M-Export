@@ -88,10 +88,12 @@ class Collector:
 
         # Page count preview
         page_count_preview: Union[int, None] = None
+        page_count_preview_partial = False
         try:
             root_pages = self.client.get_space_root_pages(space_key)
             total_preview = len(root_pages)
             any_success = False
+            count_failed = 0
             for rp in root_pages:
                 rp_id = str(rp.get("id", ""))
                 if rp_id:
@@ -101,9 +103,17 @@ class Collector:
                         total_preview += desc_cnt
                         any_success = True
                     except Exception as e:
+                        count_failed += 1
                         logger.warning(f"ページ {rp_id} の子孫数取得に失敗しました: {e}")
             if any_success or len(root_pages) == 0:
                 page_count_preview = total_preview
+            # 子孫数取得の失敗は、件数が欠けたまま公開されないよう記録に残す (spec 0021)
+            if count_failed:
+                if any_success:
+                    unavailable.append("descendant_count_partial")
+                    page_count_preview_partial = True
+                else:
+                    unavailable.append("descendant_count")
         except Exception as e:
             logger.warning(f"Space {space_key} のルートページ取得に失敗しました: {e}")
             unavailable.append("descendant_count")
@@ -116,6 +126,7 @@ class Collector:
             description=description,
             label_count=label_count,
             page_count_preview=page_count_preview,
+            page_count_preview_partial=page_count_preview_partial,
         )
         return space_meta, unavailable
 

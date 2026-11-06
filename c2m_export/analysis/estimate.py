@@ -135,6 +135,8 @@ def estimate_analysis(
                 client_kwargs["connect_timeout"] = config.connect_timeout_seconds
             if getattr(config, "read_timeout_seconds", None) is not None:
                 client_kwargs["read_timeout"] = config.read_timeout_seconds
+            if getattr(config, "descendant_count_read_timeout_seconds", None) is not None:
+                client_kwargs["count_read_timeout"] = config.descendant_count_read_timeout_seconds
             client = ConfluenceClient(**client_kwargs)
 
         counting = _CountingClient(client)
@@ -263,6 +265,8 @@ def estimate_analysis(
             "exceeds_skill_default_timeout": estimated_seconds > SKILL_DEFAULT_TIMEOUT_SECONDS,
             "skill_default_timeout_seconds": SKILL_DEFAULT_TIMEOUT_SECONDS,
             "is_large": estimated_seconds > LARGE_ESTIMATED_SECONDS or target_pages > LARGE_TARGET_PAGES,
+            # 子孫数取得に失敗した起点があると対象を過小に数えている (spec 0021)
+            "may_be_underestimated": bool(count_failed_root_ids),
             "large_thresholds": {
                 "estimated_seconds": LARGE_ESTIMATED_SECONDS,
                 "target_pages": LARGE_TARGET_PAGES,

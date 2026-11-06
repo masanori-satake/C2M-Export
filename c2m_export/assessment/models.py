@@ -101,6 +101,8 @@ class SpaceMeta:
     description: Optional[str] = None
     label_count: int = 0
     page_count_preview: Optional[int] = None
+    # 子孫数取得に失敗したルートページがあり、プレビュー件数が一部欠けているか (spec 0021)
+    page_count_preview_partial: bool = False
     watcher_count: Optional[int] = None
     permission_entries: Optional[List[str]] = None
 
