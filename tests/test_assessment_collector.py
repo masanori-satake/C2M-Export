@@ -232,3 +232,34 @@ def test_workspace_output_marks_partial_preview_only_when_partial():
 
     assert "page_count_preview_partial" not in spaces["S1"]
     assert spaces["S2"]["page_count_preview_partial"] is True
+
+
+def test_overview_descendant_count_missing_count_field_is_failure():
+    """count のない応答は 0 件の成功として扱わず、部分失敗として記録される (spec 0021)."""
+
+    def behavior(pid):
+        if pid == "2":
+            return {}
+        return {"count": 5}
+
+    client = _overview_client([{"id": "1"}, {"id": "2"}], behavior)
+    collector = Collector(client)
+    meta, unavailable = collector._collect_space_overview_one({"key": "S1", "name": "Space 1"})
+
+    assert meta is not None
+    assert meta.page_count_preview == 7
+    assert meta.page_count_preview_partial is True
+    assert unavailable == ["descendant_count_partial"]
+
+
+def test_overview_root_page_without_id_is_counted_as_failure():
+    """ID のないルートページは子孫数を数えられないため、部分失敗として記録される (spec 0021)."""
+
+    client = _overview_client([{"id": "1"}, {"title": "no id"}], lambda pid: {"count": 3})
+    collector = Collector(client)
+    meta, unavailable = collector._collect_space_overview_one({"key": "S1", "name": "Space 1"})
+
+    assert meta is not None
+    assert meta.page_count_preview == 5
+    assert meta.page_count_preview_partial is True
+    assert unavailable == ["descendant_count_partial"]

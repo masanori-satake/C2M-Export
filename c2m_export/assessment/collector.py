@@ -99,12 +99,19 @@ class Collector:
                 if rp_id:
                     try:
                         cnt_res = self.client.get_descendant_page_count(rp_id)
-                        desc_cnt = cnt_res.get("count", 0) if isinstance(cnt_res, dict) else 0
+                        desc_cnt = cnt_res.get("count") if isinstance(cnt_res, dict) else None
+                        if not isinstance(desc_cnt, int):
+                            # count のない応答は 0 件として成功扱いにせず、取得失敗として数える
+                            raise ValueError("子孫数を取得できませんでした（応答に count がありません）")
                         total_preview += desc_cnt
                         any_success = True
                     except Exception as e:
                         count_failed += 1
                         logger.warning(f"ページ {rp_id} の子孫数取得に失敗しました: {e}")
+                else:
+                    # ID のないルートページは子孫数を数えられないため、取得失敗として数える
+                    count_failed += 1
+                    logger.warning(f"Space {space_key} のルートページに ID がないため、子孫数を数えられませんでした")
             if any_success or len(root_pages) == 0:
                 page_count_preview = total_preview
             # 子孫数取得の失敗は、件数が欠けたまま公開されないよう記録に残す (spec 0021)

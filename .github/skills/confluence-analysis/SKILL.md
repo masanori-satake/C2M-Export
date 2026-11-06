@@ -61,6 +61,8 @@ python skills/confluence-analysis/scripts/run_analysis.py \
 
 ### 見積もり結果からの判断（決定表）
 
+※ 決定表は上から順に照合し、最初に該当した行を適用してください。
+
 | 見積もりの結果 | 実行方法 |
 |---|---|
 | `may_be_underestimated` が `true` | 見積もりは過小の可能性がある。`is_large` の値によらず、大きい可能性を断って判断を仰ぐ（全対象で実行すると決まった場合は `--detach` で開始する） |
