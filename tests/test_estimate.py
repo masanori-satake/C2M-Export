@@ -74,6 +74,8 @@ def test_estimate_count_failure_is_reported():
     assert resp.status == "ok"
     assert est["count_failed_root_page_ids"] == ["100"]
     assert est["target_pages"] == 1
+    # 失敗した起点は子孫数 0 として数えられるため過小評価フラグが立つ (spec 0021)
+    assert est["may_be_underestimated"] is True
 
 
 def test_estimate_target_not_found():
@@ -115,3 +117,12 @@ def test_normal_response_omits_estimate_field():
     assert "estimate" not in AnalysisResponse().to_dict()
     resp = estimate_analysis(AnalysisParams(), _make_config(), _make_client())
     assert "estimate" in resp.to_dict()
+
+
+def test_estimate_success_has_no_underestimate_flag():
+    """子孫数取得が成功していれば過小評価フラグは立たない (spec 0021)."""
+    resp = estimate_analysis(AnalysisParams(), _make_config(), _make_client())
+    est = resp.estimate
+    assert resp.status == "ok"
+    assert est["count_failed_root_page_ids"] == []
+    assert est["may_be_underestimated"] is False

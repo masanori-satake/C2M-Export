@@ -77,6 +77,11 @@
 }
 ```
 
+## 子孫数取得の失敗と見積もりの過小評価
+
+- 全体把握で、Space 内の一部のルートページの子孫数取得に失敗した場合、`unavailable_apis` に `descendant_count_partial` が含まれ、その Space の要素には `page_count_preview_partial: true` が付きます。この場合の `page_count_preview` は、取得できた分だけの**下限**です。全ルートで失敗した場合は `page_count_preview` が `null` になり、`unavailable_apis` に `descendant_count` が含まれます。
+- 見積もり（`--estimate`）では、子孫数取得に失敗した起点があると `estimate.count_failed_root_page_ids` に起点が列挙され、`estimate.may_be_underestimated` が `true` になります。この場合、`target_pages` や `is_large` は過小に出ている可能性があります。
+
 ## `schema_version` の互換性ポリシー
 
 - 現在のバージョンは `"1.2"` です。

@@ -186,6 +186,7 @@ class AnalysisConfig:
         self.concurrency: Optional[int] = None
         self.connect_timeout_seconds: Optional[int] = None
         self.read_timeout_seconds: Optional[int] = None
+        self.descendant_count_read_timeout_seconds: Optional[int] = None
         self.detach: bool = False
         self.job_status: Optional[str] = None
         self.job_result: Optional[str] = None
@@ -287,6 +288,13 @@ class AnalysisConfig:
                                 and analysis_sec["read_timeout_seconds"] is not None
                             ):
                                 self.read_timeout_seconds = analysis_sec["read_timeout_seconds"]
+                            if (
+                                "descendant_count_read_timeout_seconds" in analysis_sec
+                                and analysis_sec["descendant_count_read_timeout_seconds"] is not None
+                            ):
+                                self.descendant_count_read_timeout_seconds = analysis_sec[
+                                    "descendant_count_read_timeout_seconds"
+                                ]
             except Exception as e:
                 print(
                     f"設定ファイル {config_path} の読み込みに失敗しました（現象）。詳細: {e}（原因）。ファイル形式を確認してください（対処方法）"
@@ -377,6 +385,11 @@ class AnalysisConfig:
         parser.add_argument("--concurrency", type=int, help="全体把握フェーズの並列度 (既定: 4、1で直列)")
         parser.add_argument("--connect-timeout-seconds", type=int, help="API 接続 timeout 秒 (未指定時は従来動作)")
         parser.add_argument("--read-timeout-seconds", type=int, help="API 読み取り timeout 秒 (未指定時は従来動作)")
+        parser.add_argument(
+            "--descendant-count-read-timeout-seconds",
+            type=int,
+            help="子孫数取得 API 専用の読み取り timeout 秒 (未指定時は通常の読み取り timeout)",
+        )
 
         # 非同期ジョブ (spec 0013)
         parser.add_argument(
@@ -485,6 +498,8 @@ class AnalysisConfig:
             self.connect_timeout_seconds = cli_args.connect_timeout_seconds
         if cli_args.read_timeout_seconds is not None:
             self.read_timeout_seconds = cli_args.read_timeout_seconds
+        if cli_args.descendant_count_read_timeout_seconds is not None:
+            self.descendant_count_read_timeout_seconds = cli_args.descendant_count_read_timeout_seconds
         if cli_args.detach:
             self.detach = True
         if cli_args.job_status:
@@ -549,6 +564,7 @@ class AnalysisConfig:
         for _name, _opt in (
             ("connect_timeout_seconds", "--connect-timeout-seconds"),
             ("read_timeout_seconds", "--read-timeout-seconds"),
+            ("descendant_count_read_timeout_seconds", "--descendant-count-read-timeout-seconds"),
         ):
             _val = getattr(self, _name)
             if _val is not None and (not isinstance(_val, int) or isinstance(_val, bool) or _val < 1):

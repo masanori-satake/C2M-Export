@@ -40,6 +40,7 @@ confluence-analysis スキル（`python -m c2m_export.analyze` および補助�
 | `--concurrency` | 整数 | 全体把握フェーズの並列度（負荷を抑えたい場合は 1〜2） | `4` |
 | `--connect-timeout-seconds` | 整数 | API 接続 timeout（秒） | 従来動作 |
 | `--read-timeout-seconds` | 整数 | API 読み取り timeout（秒） | 従来動作 |
+| `--descendant-count-read-timeout-seconds` | 整数 | 子孫数取得 API 専用の読み取り timeout（秒）。大きなツリーで子孫数取得が timeout する場合に延長する | 従来動作 |
 | `--proxy` | 文字列 | HTTP/HTTPS プロキシ URL | なし |
 | `--config` | 文字列 | 設定ファイルのパス | `c2m_config.yaml` |
 | `--token` | 文字列 | Confluence Bearer トークン (環境変数推奨) | なし |

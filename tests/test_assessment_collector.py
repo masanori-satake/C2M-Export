@@ -155,3 +155,111 @@ def test_collector_extracted_text_uses_attachment_id():
 
     # API 呼び出しの第2引数が attachment_id ('att_999') であり、ファイル名 ('sample_document.pdf') ではないことを検証
     client.get_attachment_extracted_text.assert_called_once_with("100", "att_999")
+
+
+def _overview_client(root_pages, count_behavior):
+    """全体把握の子孫数取得だけを差し替えたモッククライアントを作る."""
+    client = MagicMock()
+    client.get_space_labels.return_value = {"results": []}
+    client.get_space_root_pages.return_value = root_pages
+    client.get_descendant_page_count.side_effect = count_behavior
+    return client
+
+
+def test_overview_descendant_count_partial_failure_is_recorded():
+    """一部のルートで子孫数取得に失敗したら部分失敗として記録される (spec 0021)."""
+
+    def behavior(pid):
+        if pid == "2":
+            raise RuntimeError("boom")
+        return {"count": 5}
+
+    client = _overview_client([{"id": "1"}, {"id": "2"}], behavior)
+    collector = Collector(client)
+    meta, unavailable = collector._collect_space_overview_one({"key": "S1", "name": "Space 1"})
+
+    assert meta is not None
+    # ルート 2 件 + 成功した子孫数 5 件。失敗したルート分は欠けたまま公開される
+    assert meta.page_count_preview == 7
+    assert meta.page_count_preview_partial is True
+    assert unavailable == ["descendant_count_partial"]
+
+
+def test_overview_descendant_count_all_failures_are_recorded():
+    """全ルートで子孫数取得に失敗したらプレビューは None で descendant_count が記録される (spec 0021)."""
+
+    def behavior(pid):
+        raise RuntimeError("boom")
+
+    client = _overview_client([{"id": "1"}], behavior)
+    collector = Collector(client)
+    meta, unavailable = collector._collect_space_overview_one({"key": "S1", "name": "Space 1"})
+
+    assert meta is not None
+    assert meta.page_count_preview is None
+    assert meta.page_count_preview_partial is False
+    assert unavailable == ["descendant_count"]
+
+
+def test_overview_descendant_count_success_has_no_partial_marks():
+    """子孫数取得が全て成功すれば従来どおり何も記録されない (spec 0021)."""
+    client = _overview_client([{"id": "1"}], lambda pid: {"count": 3})
+    collector = Collector(client)
+    meta, unavailable = collector._collect_space_overview_one({"key": "S1", "name": "Space 1"})
+
+    assert meta is not None
+    assert meta.page_count_preview == 4
+    assert meta.page_count_preview_partial is False
+    assert unavailable == []
+
+
+def test_workspace_output_marks_partial_preview_only_when_partial():
+    """workspace 出力の page_count_preview_partial は部分失敗の Space にだけ現れる (spec 0021)."""
+    from c2m_export.analysis.workspace import summarize_spaces
+    from c2m_export.assessment.models import SpaceMeta
+
+    ok = SpaceMeta(space_key="S1", name="a", type="global", status="current", page_count_preview=10)
+    partial = SpaceMeta(
+        space_key="S2",
+        name="b",
+        type="global",
+        status="current",
+        page_count_preview=7,
+        page_count_preview_partial=True,
+    )
+    out = summarize_spaces([ok, partial])
+    spaces = {s["space_key"]: s for s in out["spaces"]}
+
+    assert "page_count_preview_partial" not in spaces["S1"]
+    assert spaces["S2"]["page_count_preview_partial"] is True
+
+
+def test_overview_descendant_count_missing_count_field_is_failure():
+    """count のない応答は 0 件の成功として扱わず、部分失敗として記録される (spec 0021)."""
+
+    def behavior(pid):
+        if pid == "2":
+            return {}
+        return {"count": 5}
+
+    client = _overview_client([{"id": "1"}, {"id": "2"}], behavior)
+    collector = Collector(client)
+    meta, unavailable = collector._collect_space_overview_one({"key": "S1", "name": "Space 1"})
+
+    assert meta is not None
+    assert meta.page_count_preview == 7
+    assert meta.page_count_preview_partial is True
+    assert unavailable == ["descendant_count_partial"]
+
+
+def test_overview_root_page_without_id_is_counted_as_failure():
+    """ID のないルートページは子孫数を数えられないため、部分失敗として記録される (spec 0021)."""
+
+    client = _overview_client([{"id": "1"}, {"title": "no id"}], lambda pid: {"count": 3})
+    collector = Collector(client)
+    meta, unavailable = collector._collect_space_overview_one({"key": "S1", "name": "Space 1"})
+
+    assert meta is not None
+    assert meta.page_count_preview == 5
+    assert meta.page_count_preview_partial is True
+    assert unavailable == ["descendant_count_partial"]
