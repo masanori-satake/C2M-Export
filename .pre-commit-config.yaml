@@ -16,7 +16,7 @@ repos:
 # 既存コードのスタイルを尊重し、バグに直結しやすいエラー系ルール（E9, F）に絞って有効化。
 # 詳細な設定は ruff.toml を参照。
 -   repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.17.3
+    rev: v0.17.4
     hooks:
     -   id: ruff
         args: [--fix]
