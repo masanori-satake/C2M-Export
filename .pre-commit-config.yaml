@@ -5,12 +5,15 @@ repos:
     -   id: trailing-whitespace
     -   id: end-of-file-fixer
     -   id: check-yaml
+    -   id: check-json
     -   id: check-added-large-files
     # Python スクリプトの健全性チェック
     -   id: check-ast                # Python ファイルが構文的に妥当か（パース可能か）を確認
     -   id: check-merge-conflict     # マージコンフリクトの残骸を検出
     -   id: debug-statements         # pdb 等のデバッグ用ステートメントの残しを検出
     -   id: check-docstring-first    # docstring がコードより前に置かれているかを確認
+    -   id: mixed-line-ending
+        args: [--fix=lf]
 
 # Ruff: 高速な Python リンター。
 # 既存コードのスタイルを尊重し、バグに直結しやすいエラー系ルール（E9, F）に絞って有効化。
